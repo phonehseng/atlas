@@ -1,0 +1,10 @@
+# Build output (published as release downloads instead)
+dist/
+
+# Test install credentials (generated locally by test/start-test.ps1)
+test/test-install.json
+
+__pycache__/
+*.pyc
+*.part
+*.tmp

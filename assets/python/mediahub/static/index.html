@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Hub</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236d5dfc'/><path d='M12 9l12 7-12 7z' fill='white'/></svg>">
+<style>
+  :root {
+    --bg: #f4f5f8; --panel: #ffffff; --panel-2: #f0f1f5; --text: #1b1d24; --muted: #6a6f7d; --line: #e2e4ea;
+    --accent: #6d5dfc; --ok: #1f9d55; --warn: #c27c0e; --err: #d43c3c; --setup: #2f7fd8; --side: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111318; --panel: #191c23; --panel-2: #20242d; --text: #e7e9ee; --muted: #9298a6; --line: #2a2f3a;
+            --accent: #8b7dff; --ok: #3fbf72; --warn: #e5a23a; --err: #f06262; --setup: #5aa2f0; --side: #15171d; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  a { color: var(--accent); }
+  .layout { display: grid; grid-template-columns: 220px 1fr; height: 100vh; }
+  nav { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; overflow-y: auto; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; padding: 4px 8px 14px; }
+  .brand i { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; }
+  .brand i::after { content: ""; border-left: 9px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+  .navsec { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 12px 10px 4px; }
+  .navbtn { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; color: var(--text);
+            padding: 7px 10px; border-radius: 8px; cursor: pointer; font: inherit; text-align: left; }
+  .navbtn:hover { background: var(--panel-2); }
+  .navbtn.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+  .navbtn .count { margin-left: auto; background: var(--err); color: #fff; border-radius: 10px; font-size: 11px; padding: 0 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.error, .dot.down { background: var(--err); }
+  .dot.setup { background: var(--setup); }
+  main { overflow: hidden; position: relative; }
+  .view { position: absolute; inset: 0; overflow-y: auto; padding: 22px 26px 40px; display: none; }
+  .view.active { display: block; }
+  .view.frame { padding: 0; overflow: hidden; }
+  .view.frame iframe { width: 100%; height: 100%; border: 0; background: var(--panel); }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+  .banner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; margin-bottom: 18px;
+            background: var(--panel); border: 1px solid var(--line); }
+  .banner .big { font-size: 17px; font-weight: 650; }
+  .banner.ok { border-left: 4px solid var(--ok); } .banner.warn { border-left: 4px solid var(--warn); } .banner.error { border-left: 4px solid var(--err); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  .chip { background: var(--panel-2); border-radius: 20px; padding: 3px 10px; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .app { cursor: pointer; transition: border-color .15s; }
+  .app:hover { border-color: var(--accent); }
+  .app .top { display: flex; align-items: center; gap: 8px; }
+  .app .name { font-weight: 650; }
+  .app .role { color: var(--muted); font-size: 12px; }
+  .app .sum { margin-top: 6px; font-size: 13px; min-height: 19px; }
+  .pill { margin-left: auto; font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--panel-2); color: var(--muted); }
+  .pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.error, .pill.down { color: var(--err); } .pill.setup { color: var(--setup); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+  .problems { margin-bottom: 22px; }
+  .prob { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  .prob:last-child { border-bottom: 0; }
+  .prob .who { font-weight: 600; white-space: nowrap; }
+  .prob .txt { flex: 1; }
+  .lvl { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 6px; flex: none; margin-top: 1px; }
+  .lvl.error { background: color-mix(in srgb, var(--err) 18%, transparent); color: var(--err); }
+  .lvl.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .lvl.info { background: var(--panel-2); color: var(--muted); }
+  button.act { border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 8px;
+               padding: 5px 11px; cursor: pointer; font: inherit; font-size: 13px; }
+  button.act:hover { border-color: var(--accent); }
+  button.act.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { padding: 7px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
+  .list li:last-child { border-bottom: 0; }
+  .list .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .bar { width: 90px; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; flex: none; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .empty { color: var(--muted); padding: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .logbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: inherit; }
+  .logs { font: 12px/1.5 Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .logs div { white-space: pre-wrap; word-break: break-word; padding: 2px 0; border-bottom: 1px dashed var(--line); }
+  .logs .error { color: var(--err); } .logs .warn { color: var(--warn); }
+  .logs b { color: var(--muted); font-weight: 600; margin-right: 6px; }
+  .search { display: flex; gap: 8px; margin-bottom: 16px; }
+  .search input { flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+                  padding: 10px 14px; font: inherit; font-size: 15px; }
+  .search input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
+  .posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .poster { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .poster .img { aspect-ratio: 2/3; background: var(--panel-2) center/cover no-repeat; position: relative; }
+  .poster .badge { position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
+                   background: rgba(0,0,0,.72); color: #fff; }
+  .poster .badge.av { background: var(--ok); } .poster .badge.dl { background: var(--accent); }
+  .poster .meta { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .poster .ttl { font-weight: 600; font-size: 13px; line-height: 1.3; }
+  .poster .meta button { margin-top: auto; }
+  .thumb { width: 34px; height: 51px; border-radius: 5px; background: var(--panel-2) center/cover no-repeat; flex: none; }
+  .addrs { margin-bottom: 22px; }
+  .addrs h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .addrs h2 .chip { font-weight: 400; }
+  .addr { display: grid; grid-template-columns: minmax(150px, 1fr) 1.3fr 1.1fr; gap: 6px 14px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: start; }
+  .addr:last-of-type { border-bottom: 0; }
+  .addr.head { color: var(--muted); font-size: 12px; font-weight: 600; padding-top: 0; }
+  .addr .lbl { display: none; color: var(--muted); font-size: 11px; }
+  .url { display: flex; gap: 6px; align-items: center; font: 13px/1.6 Consolas, monospace; flex-wrap: wrap; }
+  .url a { color: var(--text); text-decoration: none; } .url a:hover { color: var(--accent); text-decoration: underline; }
+  .url + .url { color: var(--muted); }
+  button.copy { border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); border-radius: 6px;
+                padding: 0 7px; font: 11px/18px inherit; font-family: system-ui, sans-serif; cursor: pointer; }
+  button.copy:hover { border-color: var(--accent); color: var(--text); }
+  .feed li { align-items: flex-start; }
+  .feed .t { white-space: normal; }
+  .bell { margin: 14px 10px 0; font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .toast { position: fixed; bottom: 18px; right: 18px; background: var(--text); color: var(--bg); padding: 10px 14px;
+           border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .95; }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    nav { display: flex; align-items: center; overflow-x: auto; gap: 4px; padding: 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+    #appnav { display: contents; }  /* app buttons join the one scrolling row instead of stacking */
+    nav .bell { margin: 0 6px; white-space: nowrap; flex: none; }
+    .brand, .navsec { display: none; }
+    .navbtn { width: auto; white-space: nowrap; }
+    .view { padding: 16px; }
+    .addr { grid-template-columns: 1fr; }
+    .addr.head { display: none; }
+    .addr .lbl { display: block; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav id="nav">
+    <div class="brand"><i></i>Media Hub</div>
+    <button class="navbtn active" data-view="overview"><span class="dot" id="dot-overview"></span>Overview<span class="count" id="probcount" hidden></span></button>
+    <button class="navbtn" data-view="request"><span class="dot ok"></span>Request</button>
+    <button class="navbtn" data-view="activity"><span class="dot ok"></span>Activity</button>
+    <button class="navbtn" data-view="downloads"><span class="dot ok"></span>Downloads</button>
+    <button class="navbtn" data-view="logs"><span class="dot ok"></span>Errors &amp; logs</button>
+    <div class="navsec">Apps</div>
+    <div id="appnav"></div>
+    <label class="bell"><input type="checkbox" id="notif"> Desktop notifications</label>
+    <div class="bell" id="whoami" hidden></div>
+  </nav>
+  <main id="main">
+    <section class="view active" id="view-overview">
+      <h1>Overview</h1>
+      <p class="sub" id="updated">Loading…</p>
+      <div class="banner" id="banner"><span class="big">Checking everything…</span></div>
+      <div class="actions">
+        <button class="act primary" data-action="healthcheck">Run health check</button>
+        <button class="act" data-action="search-missing" data-arg="sonarr">Search missing episodes</button>
+        <button class="act" data-action="search-missing" data-arg="radarr">Search missing movies</button>
+        <button class="act" data-action="retry-imports">Retry failed imports</button>
+        <button class="act" data-action="recyclarr">Re-sync quality profiles</button>
+      </div>
+      <div class="card problems" id="problems"></div>
+      <div class="grid" id="apps"></div>
+      <div class="card addrs" id="addrs"><h2>Server addresses</h2><div class="empty">Loading…</div></div>
+      <div class="cols">
+        <div class="card"><h2>Downloading</h2><ul class="list" id="queue"></ul></div>
+        <div class="card"><h2>Requests</h2><ul class="list feed" id="requests"></ul></div>
+        <div class="card"><h2>Activity</h2><ul class="list feed" id="feed"></ul></div>
+        <div class="card"><h2>Recently sorted</h2><ul class="list" id="imports"></ul></div>
+        <div class="card"><h2>Now playing</h2><ul class="list" id="playing"></ul></div>
+      </div>
+    </section>
+    <section class="view" id="view-request">
+      <h1>Request</h1>
+      <p class="sub">Search for a movie or show and request it. Sonarr/Radarr fetch it in 4K where available, it's sorted into Jellyfin, and English subtitles are added for anime.</p>
+      <form class="search" id="searchform"><input id="q" placeholder="Search movies & TV…" autocomplete="off"><button class="act primary">Search</button></form>
+      <p class="sub" id="searchsub">Trending right now</p>
+      <div class="posters" id="results"></div>
+    </section>
+    <section class="view" id="view-activity">
+      <h1>Activity</h1>
+      <p class="sub">Everything Sonarr, Radarr, Prowlarr and Seerr report, newest first.</p>
+      <div class="card"><ul class="list feed" id="feedfull"></ul></div>
+    </section>
+    <section class="view" id="view-downloads">
+      <h1>Downloads</h1>
+      <p class="sub" id="dlsub">qBittorrent</p>
+      <div class="card"><table><thead><tr><th>Name</th><th>Category</th><th>Progress</th><th>Speed</th><th>ETA</th><th>Seeds/Peers</th><th>State</th></tr></thead><tbody id="torrents"></tbody></table></div>
+    </section>
+    <section class="view" id="view-logs">
+      <h1>Errors &amp; logs</h1>
+      <p class="sub">Warnings and errors from every app's log, newest at the bottom.</p>
+      <div class="logbar">
+        <select id="logapp"><option value="">All apps</option></select>
+        <select id="loglevel"><option value="warn">Warnings &amp; errors</option><option value="error">Errors only</option><option value="all">Everything (one app)</option></select>
+        <button class="act" id="logrefresh">Refresh</button>
+      </div>
+      <div class="logs" id="logs"><div>Loading…</div></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const STATUS_TEXT = {ok: "Healthy", warn: "Warning", error: "Error", down: "Down", setup: "Needs setup"};
+const frames = {};
+let state = null;
+// Opened from another device: on a Windows PC only some apps answer from outside; on a Linux server every app
+// except the local-only helpers does. They live at this host, not localhost.
+const REMOTE = !["localhost", "127.0.0.1", "::1", "[::1]"].includes(location.hostname);
+const canOpen = a => !REMOTE || a.remote || (state && state.platform === "docker" && !a.local_only);
+const appUrl = a => a.link ? `${location.protocol}//${location.hostname}:${a.port}${a.link}` : "";
+
+function show(view) {
+  document.querySelectorAll(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  let el = document.getElementById("view-" + view);
+  if (!el && view.startsWith("app-")) {
+    // Embed the app's own UI; keep the frame alive so switching tabs is instant.
+    const app = state.apps.find(a => "app-" + a.id === view);
+    if (!app || !app.embed || !canOpen(app)) return show("overview");  // e.g. a remembered tab that can't load here
+    el = document.createElement("section");
+    el.className = "view frame"; el.id = "view-" + view;
+    el.innerHTML = `<iframe src="${location.protocol}//${location.hostname}:${app.port}/" title="${esc(app.name)}"></iframe>`;
+    $("#main").appendChild(el);
+  }
+  el.classList.add("active");
+  if (view === "logs") loadLogs();
+  if (view === "activity") loadEvents();
+  if (view === "request" && !$("#results").children.length) search("");
+  try { localStorage.setItem("hub-view", view); } catch {}
+}
+
+function renderNav() {
+  const nav = $("#appnav");
+  // Apps that can't be embedded open in their own browser tab (marked ↗).
+  nav.innerHTML = state.apps.filter(a => (a.embed || a.link) && canOpen(a)).map(a => a.embed
+    ? `<button class="navbtn" data-view="app-${a.id}"><span class="dot ${a.status}"></span>${esc(a.name)}</button>`
+    : `<button class="navbtn" data-ext="${esc(appUrl(a))}" title="Opens in a new tab"><span class="dot ${a.status}"></span>${esc(a.name)}<span class="muted" style="margin-left:auto">↗</span></button>`).join("");
+  const sel = $("#logapp");
+  if (sel.options.length === 1)
+    state.apps.forEach(a => sel.insertAdjacentHTML("beforeend", `<option value="${a.id}">${esc(a.name)}</option>`));
+  const cur = document.querySelector(".view.active")?.id?.replace("view-", "");
+  document.querySelectorAll(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.view === cur));
+}
+
+function fmtSpeed(b) { return b > 0 ? (b / 1048576).toFixed(1) + " MB/s" : "—"; }
+function fmtEta(s) { if (!s || s >= 8640000) return "—"; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h}h ${m}m` : `${m}m`; }
+function ago(t) { const s = (Date.now() / 1000) - t; return s < 90 ? "just now" : s < 5400 ? Math.round(s / 60) + " min ago" : s < 129600 ? Math.round(s / 3600) + " h ago" : Math.round(s / 86400) + " d ago"; }
+
+function render() {
+  const apps = state.apps;
+  const problems = [...state.system.problems.map(p => ({...p, who: "System"})),
+                    ...apps.flatMap(a => (a.problems || []).map(p => ({...p, who: a.name})))];
+  const errors = problems.filter(p => p.level === "error").length;
+  const setup = apps.filter(a => a.status === "setup");
+
+  $("#updated").textContent = "Updated " + new Date(state.time * 1000).toLocaleTimeString() + " · refreshes every 10 seconds";
+  const level = errors ? "error" : problems.length || setup.length ? "warn" : "ok";
+  const headline = errors ? `${errors} problem${errors > 1 ? "s" : ""} need attention`
+    : setup.length ? `Almost there — ${setup.length} app${setup.length > 1 ? "s" : ""} still need setup`
+    : problems.length ? `Running, with ${problems.length} warning${problems.length > 1 ? "s" : ""}` : "Everything is running smoothly";
+  $("#banner").className = "banner " + level;
+  $("#banner").innerHTML = `<span class="dot ${level}"></span><span class="big">${headline}</span>
+    <div class="chips">${state.system.vpn === null ? "" : `<span class="chip"><span class="dot ${state.system.vpn ? "ok" : "warn"}"></span>VPN ${state.system.vpn ? "connected" : "off"}</span>`}
+    <span class="chip">${state.system.disk.free_gb.toLocaleString()} GB free</span></div>`;
+  $("#dot-overview").className = "dot " + level;
+  const pc = $("#probcount"); pc.hidden = !errors; pc.textContent = errors;
+
+  const setupNote = setup.length ? [{level: "info", who: "Setup", text: `${setup.map(a => a.name).join(", ")} — run Media Stack Setup again and finish that step.`}] : [];
+  const all = [...problems.sort((a, b) => (a.level === "error" ? 0 : 1) - (b.level === "error" ? 0 : 1)), ...setupNote];
+  $("#problems").innerHTML = all.length ? all.map(p => {
+    const [act, arg] = (p.action || "").split(":");
+    const btn = p.action ? `<button class="act" data-action="${esc(act)}" data-arg="${esc(arg || "")}">${act === "restart" ? "Restart" : "Retry"}</button>` : "";
+    const link = p.link ? ` <a href="${esc(p.link)}" target="_blank" rel="noopener">How to fix</a>` : "";
+    return `<div class="prob"><span class="lvl ${p.level}">${p.level === "info" ? "SETUP" : p.level.toUpperCase()}</span><span class="who">${esc(p.who)}</span><span class="txt">${esc(p.text)}${link}</span>${btn}</div>`;
+  }).join("") : `<div class="prob"><span class="lvl info">OK</span><span class="txt">No problems reported by any app.</span></div>`;
+
+  $("#apps").innerHTML = apps.map(a => `
+    <div class="card app" data-open="${a.embed && canOpen(a) ? "app-" + a.id : ""}" data-link="${canOpen(a) ? esc(appUrl(a)) : ""}" title="${!canOpen(a) ? "Only available on the PC" : a.embed ? "Open inside the hub" : a.link ? "Opens in a new tab" : ""}">
+      <div class="top"><span class="dot ${a.status}"></span><span class="name">${esc(a.name)}</span><span class="pill ${a.status}">${STATUS_TEXT[a.status] || a.status}</span></div>
+      <div class="role">${esc(a.role)}${a.version ? " · v" + esc(a.version) : ""}</div>
+      <div class="sum">${esc(a.summary || "")}</div>
+    </div>`).join("");
+
+  const by = id => apps.find(a => a.id === id) || {};
+  const queue = [...(by("sonarr").queue || []).map(q => ({...q, src: "TV"})), ...(by("radarr").queue || []).map(q => ({...q, src: "Movie"}))];
+  const manual = (by("qbittorrent").torrents || []).filter(t => t.progress < 100 && !["sonarr", "radarr"].includes(t.category));
+  const qhtml = [...queue.map(q => `<li><span class="lvl info">${q.src}</span><span class="t" title="${esc(q.title)}">${esc(q.title)}</span><span class="bar"><i style="width:${q.progress}%"></i></span><span class="muted">${q.progress}%</span></li>`),
+                 ...manual.map(t => `<li><span class="lvl info">${esc(t.category || "manual")}</span><span class="t" title="${esc(t.name)}">${esc(t.name)}</span><span class="bar"><i style="width:${t.progress}%"></i></span><span class="muted">${t.progress}%</span></li>`)];
+  $("#queue").innerHTML = qhtml.join("") || `<li class="empty">Nothing downloading.</li>`;
+
+  const reqs = by("seerr").requests || [];
+  $("#requests").innerHTML = reqs.length ? reqs.map(r => `<li>${thumb(r.poster)}
+      <span class="t"><b>${esc(r.title)}</b>${r.year ? ` (${esc(r.year)})` : ""}<br><span class="muted">${r.type === "tv" ? "TV" : "Movie"}${r.by ? " · " + esc(r.by) : ""}</span></span>
+      ${r.pending ? `<button class="act primary" data-req="${r.id}" data-verb="approve">Approve</button><button class="act" data-req="${r.id}" data-verb="decline">Decline</button>`
+                  : `<span class="muted">${esc(r.status)}</span>`}</li>`).join("")
+    : `<li class="empty">${by("seerr").status === "setup" ? "Seerr needs setup." : "No requests yet — use the Request tab."}</li>`;
+
+  const imp = (by("mediasorter").recent || []).slice(0, 10);
+  $("#imports").innerHTML = imp.length ? imp.map(i => `<li><span class="lvl ${i.status === "done" ? "info" : i.status === "ignored" ? "info" : "error"}">${esc(i.status)}</span><span class="t" title="${esc(i.name)}">${esc(i.name)}</span><span class="muted">${ago(i.time)}</span></li>`).join("")
+    : `<li class="empty">Nothing sorted yet.</li>`;
+
+  const np = by("jellyfin").nowPlaying || [];
+  $("#playing").innerHTML = np.length ? np.map(s => `<li><span class="t">${esc(s.series ? s.series + " — " : "")}${esc(s.title)}</span><span class="muted">${esc(s.user)} · ${esc(s.client)}${s.transcoding ? " · transcoding" : ""}</span></li>`).join("")
+    : `<li class="empty">Nobody is watching right now.</li>`;
+
+  const qb = by("qbittorrent");
+  $("#dlsub").textContent = "qBittorrent · " + (qb.summary || "");
+  $("#torrents").innerHTML = (qb.torrents || []).map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.category || "—")}</td>
+    <td><span class="bar" style="display:inline-block"><i style="width:${t.progress}%"></i></span> ${t.progress}%</td><td>${fmtSpeed(t.dlspeed)}</td><td>${fmtEta(t.eta)}</td><td>${t.seeds}/${t.peers}</td><td>${esc(t.state)}</td></tr>`).join("")
+    || `<tr><td colspan="7" class="empty">${qb.status === "setup" ? "qBittorrent isn't set up yet — run its step in Media Stack Setup." : "No torrents."}</td></tr>`;
+  renderNav();
+}
+
+fetch("/api/me").then(r => r.json()).then(m => {
+  if (m.user) { const w = $("#whoami"); w.hidden = false; w.innerHTML = `Signed in as ${esc(m.user)} · <a href="/logout">Sign out</a>`; }
+}).catch(() => {});
+
+let loadedUi = null;
+async function refresh() {
+  try {
+    const res = await fetch("/api/status");
+    if (res.status === 401) { location.href = "/login"; return; }  // session expired (phone)
+    state = await res.json();
+    // The hub was updated since this tab loaded: reload to get the new page.
+    if (loadedUi && state.ui && state.ui !== loadedUi) { location.reload(); return; }
+    loadedUi = loadedUi || state.ui;
+    render();
+  } catch (e) { $("#updated").textContent = "Can't reach the hub service — is the Media Hub running?"; }
+}
+
+async function loadLogs() {
+  const app = $("#logapp").value, level = $("#loglevel").value;
+  if (level === "all" && !app) { $("#logs").innerHTML = "<div>Pick one app to see its full log.</div>"; return; }
+  const data = await (await fetch(`/api/logs?app=${encodeURIComponent(app)}&level=${level}`)).json();
+  $("#logs").innerHTML = data.lines.length ? data.lines.map(l => `<div class="${l.level}"><b>${esc(l.app)}</b>${esc(l.line)}</div>`).join("") : "<div>No warnings or errors. 🎉</div>";
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+// Server addresses: what to type on a phone/TV. Tailscale name works anywhere; the home IP only on the same network.
+function urlCell(u, label, extra) {
+  if (!u) return `<div><span class="lbl">${label}</span><span class="muted">${extra || "—"}</span></div>`;
+  return `<div><span class="lbl">${label}</span><div class="url"><a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>
+    <button class="copy" data-copy="${esc(u)}">Copy</button></div>${extra || ""}</div>`;
+}
+async function loadAddresses() {
+  try {
+    const d = await (await fetch("/api/addresses")).json(), ts = d.tailscale || {};
+    const chip = ts.name ? `<span class="chip"><span class="dot ${ts.online ? "ok" : "error"}"></span>Tailscale ${ts.online ? "connected" : "offline"} · ${esc(ts.name)} · ${esc(ts.ip || "")}</span>`
+                         : `<span class="chip"><span class="dot error"></span>Tailscale not running</span>`;
+    $("#addrs").innerHTML = `<h2>Server addresses ${chip}</h2>
+      <div class="addr head"><div>App</div><div>Anywhere (Tailscale on)</div><div>At home (same network)</div></div>` +
+      d.services.map(s => `<div class="addr"><div><b>${esc(s.name)}</b><div class="muted">${esc(s.use)}</div></div>
+        ${urlCell(s.anywhere, "Anywhere (Tailscale on)", s.anywhere_ip ? `<div class="url"><span>or ${esc(s.anywhere_ip)}</span><button class="copy" data-copy="${esc(s.anywhere_ip)}">Copy</button></div>` : "")}
+        ${urlCell(s.home, "At home (same network)", s.home ? "" : "Tailscale only")}</div>`).join("") +
+      `<p class="muted" style="margin:10px 0 0">The device needs the Tailscale app switched on for the "Anywhere" addresses. If the name doesn't connect, use the number underneath.</p>`;
+  } catch (e) { $("#addrs").innerHTML = `<h2>Server addresses</h2><div class="empty">Couldn't look up addresses.</div>`; }
+}
+function copyText(t) {
+  // navigator.clipboard only exists on https/localhost; over Tailscale (plain http) fall back to a hidden textarea.
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+  const ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); return Promise.resolve();
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button.copy"); if (!b) return;
+  copyText(b.dataset.copy).then(() => toast("Copied " + b.dataset.copy), () => toast("Couldn't copy — select the address instead"));
+});
+loadAddresses(); setInterval(loadAddresses, 60000);
+
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 3000); }
+function thumb(src) { return src ? `<span class="thumb" style="background-image:url('${esc(src)}')"></span>` : ""; }
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  return r.json();
+}
+
+// Activity: events pushed to the hub by Sonarr, Radarr, Prowlarr and Seerr.
+async function loadEvents() {
+  try {
+    const ev = await (await fetch("/api/events?limit=80")).json();
+    const li = e => `<li><span class="lvl ${e.level === "info" ? "info" : e.level}">${esc(e.source)}</span>${thumb(e.image)}
+      <span class="t"><b>${esc(e.title)}</b>${e.message ? `<br><span class="muted">${esc(e.message)}</span>` : ""}</span><span class="muted">${ago(e.time)}</span></li>`;
+    const none = `<li class="empty">No activity yet — requests, downloads, imports and problems show up here as they happen.</li>`;
+    $("#feed").innerHTML = ev.slice(0, 8).map(li).join("") || none;
+    $("#feedfull").innerHTML = ev.map(li).join("") || none;
+  } catch {}
+}
+
+// Request: search Seerr (TMDB) and request straight from the hub.
+async function search(q) {
+  $("#searchsub").textContent = q ? `Results for “${q}”` : "Trending right now";
+  $("#results").innerHTML = `<p class="empty">Searching…</p>`;
+  const d = await (await fetch(`/api/seerr/search?q=${encodeURIComponent(q)}`)).json();
+  if (!d.ok) { $("#results").innerHTML = `<p class="empty">${esc(d.message)}</p>`; return; }
+  $("#results").innerHTML = d.results.map(r => `<div class="poster">
+      <div class="img" style="background-image:url('${esc(r.poster || "")}')">${r.status ? `<span class="badge ${r.status === "Available" ? "av" : r.status === "Downloading" ? "dl" : ""}">${esc(r.status)}</span>` : ""}</div>
+      <div class="meta"><span class="ttl">${esc(r.title)}</span><span class="muted">${r.type === "tv" ? "TV show" : "Movie"}${r.year ? " · " + esc(r.year) : ""}</span>
+      ${r.status ? "" : `<button class="act primary" data-request="${r.type}:${r.id}">Request</button>`}</div></div>`).join("")
+    || `<p class="empty">Nothing found for “${esc(q)}”.</p>`;
+}
+$("#searchform").onsubmit = e => { e.preventDefault(); search($("#q").value.trim()); };
+
+// Desktop notifications toggle (stored by the hub service).
+fetch("/api/settings").then(r => r.json()).then(s => {
+  $("#notif").checked = s.notifications;
+  if (!s.can_notify) $("#notif").closest("label").hidden = true;  // Linux server: no desktop to notify
+}).catch(() => {});
+$("#notif").onchange = e => post("/api/settings", {notifications: e.target.checked})
+  .then(() => toast(e.target.checked ? "Desktop notifications on" : "Desktop notifications off"));
+
+document.addEventListener("click", async e => {
+  const nav = e.target.closest("[data-view]"); if (nav) return show(nav.dataset.view);
+  const ext = e.target.closest("[data-ext]"); if (ext) return window.open(ext.dataset.ext, "_blank", "noopener");
+  const card = e.target.closest("[data-open]");
+  if (card && !e.target.closest("button")) {
+    if (card.dataset.open) return show(card.dataset.open);
+    if (card.dataset.link) return window.open(card.dataset.link, "_blank", "noopener");
+  }
+  const reqBtn = e.target.closest("[data-request]");
+  if (reqBtn) {
+    reqBtn.disabled = true; reqBtn.textContent = "Requesting…";
+    const [type, id] = reqBtn.dataset.request.split(":");
+    const r = await post("/api/seerr/request", {type, id});
+    toast(r.message);
+    reqBtn.textContent = r.ok ? "Requested" : "Request"; reqBtn.disabled = r.ok;
+    setTimeout(refresh, 3000);
+    return;
+  }
+  const decide = e.target.closest("[data-req]");
+  if (decide) {
+    decide.disabled = true;
+    const r = await post(`/api/seerr/${decide.dataset.req}/${decide.dataset.verb}`);
+    toast(r.message); refresh();
+    return;
+  }
+  const act = e.target.closest("[data-action]");
+  if (act) {
+    act.disabled = true;
+    try {
+      const r = await (await fetch(`/api/action/${act.dataset.action}?arg=${encodeURIComponent(act.dataset.arg || "")}`, {method: "POST"})).json();
+      toast(r.message);
+    } catch { toast("That didn't work — check Errors & logs."); }
+    act.disabled = false;
+    setTimeout(refresh, 4000);
+  }
+});
+$("#logrefresh").onclick = loadLogs; $("#logapp").onchange = loadLogs; $("#loglevel").onchange = loadLogs;
+
+refresh().then(() => { let v = null; try { v = localStorage.getItem("hub-view"); } catch {} if (v && v !== "overview" && state) show(v); });
+setInterval(refresh, 10000);
+loadEvents(); setInterval(loadEvents, 10000);
+</script>
+</body>
+</html>

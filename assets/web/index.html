@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Stack Setup</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236d5dfc'/><path d='M12 9l12 7-12 7z' fill='white'/></svg>">
+<style>
+  :root { --bg: #f5f6fa; --panel: #fff; --panel-2: #f0f1f6; --text: #1d2130; --muted: #6b7185; --line: #e3e5ee;
+          --accent: #6d5dfc; --ok: #1f9d55; --warn: #c27c0e; --err: #d43c3c; --side: #fff; color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --panel: #181b22; --panel-2: #20242d; --text: #e8eaf0; --muted: #9aa1b2; --line: #2a2f3a;
+            --accent: #8b7dff; --ok: #3fbf72; --warn: #e5a23a; --err: #f06262; --side: #15171d; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  a { color: var(--accent); }
+  code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: var(--panel-2); border-radius: 5px; }
+  code { padding: 1px 5px; word-break: break-all; }
+  pre { padding: 10px 12px; overflow-x: auto; line-height: 1.45; }
+  .layout { display: grid; grid-template-columns: 270px 1fr; min-height: 100vh; }
+  nav { background: var(--side); border-right: 1px solid var(--line); padding: 16px 10px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; padding: 0 8px 4px; }
+  .brand i { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); display: inline-grid; place-items: center; }
+  .brand i:after { content: ""; border-left: 9px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+  .meta { color: var(--muted); font-size: 12px; padding: 0 8px 10px; word-break: break-all; }
+  .meta .test { color: var(--warn); font-weight: 600; }
+  .grp { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 14px 8px 4px; }
+  .sbtn { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; background: none; color: var(--text); text-align: left;
+          padding: 6px 8px; border-radius: 8px; cursor: pointer; font: inherit; }
+  .sbtn:hover { background: var(--panel-2); }
+  .sbtn.cur { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 600; }
+  .sbtn .opt { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 400; }
+  .ico { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 700;
+         border: 2px solid var(--line); color: transparent; }
+  .ico.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .ico.skipped { border-style: dashed; color: var(--muted); }
+  .ico.failed { background: var(--err); border-color: var(--err); color: #fff; }
+  .ico.running { border-color: var(--accent); border-top-color: transparent; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .navfoot { padding: 16px 8px 4px; }
+  main { padding: 28px 34px 60px; max-width: 900px; }
+  .eyebrow { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  h1 { font-size: 24px; margin: 2px 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .chip { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 20px; background: var(--panel-2); color: var(--muted); }
+  .chip.done { color: var(--ok); } .chip.failed { color: var(--err); } .chip.running { color: var(--accent); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .guide p:first-child { margin-top: 0; } .guide p:last-child { margin-bottom: 0; }
+  .guide ul.apps li { margin-bottom: 3px; }
+  .todo { border-left: 4px solid var(--warn); padding: 8px 12px; background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 6px; }
+  form .f { margin-bottom: 14px; }
+  label.l { display: block; font-weight: 600; margin-bottom: 5px; }
+  .help { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  input[type=text], input[type=password], select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+          background: var(--panel); color: var(--text); font: inherit; }
+  input:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
+  .check { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; }
+  .check input { margin-top: 3px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button.b { border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 9px; padding: 8px 16px;
+             font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+  button.b:hover, a.b:hover { border-color: var(--accent); }
+  button.b.p { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.b:disabled { opacity: .5; cursor: default; }
+  a.b { border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 9px; padding: 8px 16px; font-weight: 600; text-decoration: none; }
+  .blocked { color: var(--warn); font-weight: 600; margin: 0 0 12px; }
+  .msg { padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
+  .msg.err { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+  .msg.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+  .log { font: 12.5px/1.55 ui-monospace, Consolas, monospace; max-height: 380px; overflow-y: auto; }
+  .log div { padding: 2px 0; white-space: pre-wrap; word-break: break-word; }
+  .log .ok { color: var(--ok); } .log .warn { color: var(--warn); } .log .fail { color: var(--err); font-weight: 700; }
+  .log .action { color: var(--accent); font-weight: 700; } .log .done { color: var(--ok); font-weight: 700; }
+  .log .info { color: var(--text); opacity: .85; }
+  .prog { margin: 8px 0; display: none; }
+  .prog .t { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; }
+  .bye { text-align: center; padding: 80px 20px; }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 18px 16px 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout" id="app">
+  <nav>
+    <div class="brand"><i></i>Media Stack Setup</div>
+    <div class="meta" id="meta"></div>
+    <div id="stepnav"></div>
+    <div class="navfoot"><button class="b" id="quit">Close setup</button></div>
+  </nav>
+  <main id="main"><p>Loading…</p></main>
+</div>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const params = new URLSearchParams(location.search);
+let token = params.get("t") || sessionStorage.getItem("setup-token") || "";
+if (params.get("t")) { sessionStorage.setItem("setup-token", token); history.replaceState(null, "", location.pathname); }
+
+let state = null, current = null, job = null, jobFrom = 0, jobStep = null, lastError = "";
+
+async function api(path, body) {
+  const opt = { headers: { "X-Setup-Token": token } };
+  if (body !== undefined) { opt.method = "POST"; opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+  return data;
+}
+
+const ICON = { done: "✓", failed: "!", skipped: "–", running: "", todo: "" };
+const STATUS = { done: "Done", failed: "Needs attention", skipped: "Skipped", running: "Working…", todo: "" };
+
+async function load(keepCurrent) {
+  try { state = await api("/api/state"); }
+  catch (e) { $("#main").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  $("#meta").innerHTML = (state.root ? esc(state.root) : "No folder chosen yet") +
+    (state.test ? `<br><span class="test">${esc(state.test)}</span>` : "") + `<br>Version ${esc(state.version)}`;
+  if (!keepCurrent || !state.steps.find(s => s.id === current)) {
+    const next = state.steps.find(s => s.status !== "done" && s.status !== "skipped");
+    current = (next || state.steps[state.steps.length - 1]).id;
+  }
+  renderNav();
+  renderStep();
+  if (state.job && !job) follow(state.job.id, state.job.step);
+}
+
+function renderNav() {
+  let html = "", group = "";
+  for (const s of state.steps) {
+    if (s.group !== group) { group = s.group; html += `<div class="grp">${esc(group)}</div>`; }
+    html += `<button class="sbtn ${s.id === current ? "cur" : ""}" data-step="${s.id}">
+      <span class="ico ${s.status}">${ICON[s.status] || ""}</span>${esc(s.title)}${s.optional ? '<span class="opt">optional</span>' : ""}</button>`;
+  }
+  $("#stepnav").innerHTML = html;
+}
+
+function field(f) {
+  const id = "f-" + f.name, v = f.default ?? "";
+  if (f.type === "checkbox")
+    return `<div class="f"><label class="check"><input type="checkbox" id="${id}" name="${f.name}" ${v === "true" ? "checked" : ""}>
+      <span>${esc(f.label)}${f.help ? `<div class="help">${esc(f.help)}</div>` : ""}</span></label></div>`;
+  let input;
+  if (f.type === "select") {
+    input = `<select id="${id}" name="${f.name}">` + (f.options || []).map(o =>
+      `<option value="${esc(o.value)}" ${o.value === v ? "selected" : ""}>${esc(o.label)}</option>`).join("") + `</select>`;
+    if (!(f.options || []).length) input = `<select id="${id}" name="${f.name}" disabled><option>Nothing found - press Refresh</option></select>`;
+  } else {
+    input = `<input type="${f.type === "password" ? "password" : "text"}" id="${id}" name="${f.name}" value="${esc(v)}"
+      ${f.type === "password" ? 'autocomplete="new-password"' : 'autocomplete="off"'} spellcheck="false">`;
+  }
+  return `<div class="f" data-field="${f.name}"><label class="l" for="${id}">${esc(f.label)}</label>${input}${f.help ? `<div class="help">${esc(f.help)}</div>` : ""}</div>`;
+}
+
+function renderStep() {
+  const s = state.steps.find(x => x.id === current);
+  const idx = state.steps.indexOf(s);
+  const running = job && jobStep === s.id;
+  const busy = !!job;
+  const status = running ? "running" : s.status;
+  let h = `<div class="eyebrow">Step ${idx + 1} of ${state.steps.length} · ${esc(s.group)}</div>
+    <h1>${esc(s.title)} ${STATUS[status] ? `<span class="chip ${status}">${STATUS[status]}</span>` : ""}</h1>`;
+  if (s.status === "failed" && s.message && !running) h += `<div class="msg err">${esc(s.message)}</div>`;
+  if (lastError) h += `<div class="msg err">${esc(lastError)}</div>`;
+  if (s.intro) h += `<div class="card guide">${s.intro}</div>`;
+  if (s.blocked) h += `<p class="blocked">First finish: ${esc(s.blocked)}</p>`;
+
+  const fields = (s.fields || []).slice();
+  if (s.password) fields.push({ name: "__password", label: "Your admin password", type: "password",
+    help: "Setup was restarted, so it needs your admin password again for this step." });
+  h += `<div class="card"><form id="form" onsubmit="return false">${fields.map(field).join("")}<div class="btns">`;
+  const label = s.status === "done" ? "Run again" : (s.button || "Continue");
+  h += `<button class="b ${s.status === "done" ? "" : "p"}" id="run" ${busy || s.blocked ? "disabled" : ""}>${esc(label)}</button>`;
+  if (s.optional && s.status !== "done" && s.status !== "skipped") h += `<button class="b" id="skip" ${busy ? "disabled" : ""}>Skip</button>`;
+  if (s.id === "vpn" || s.id === "welcome") h += `<button class="b" id="refresh" ${busy ? "disabled" : ""}>Refresh</button>`;
+  if ((s.status === "done" || s.status === "skipped") && idx < state.steps.length - 1) h += `<button class="b p" id="next" ${busy ? "disabled" : ""}>Next →</button>`;
+  h += `</div></form>
+    <div class="prog" id="prog"><div class="t" id="progt"></div><div class="bar"><i id="progbar"></i></div></div>
+    <div class="log" id="log"></div></div>`;
+  if (s.status === "done" && (s.after || (s.links || []).length)) {
+    h += `<div class="card guide"><div class="eyebrow" style="margin-bottom:8px">What to do next</div>${s.after || ""}`;
+    if ((s.links || []).length) h += `<div class="btns" style="margin-top:12px">${s.links.map(l => `<a class="b" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}</div>`;
+    h += `</div>`;
+  }
+  if (s.id === "finish" && (state.addresses || []).length) {
+    h += `<div class="card"><div class="eyebrow" style="margin-bottom:8px">Where to open things</div><table>
+      <tr><th>App</th><th>At home</th><th>Away (Tailscale)</th></tr>` + state.addresses.map(a =>
+      `<tr><td><b>${esc(a.name)}</b><div class="help">${esc(a.use)}</div></td><td><code>${esc(a.here)}</code></td><td>${a.remote ? `<code>${esc(a.remote)}</code>` : "–"}</td></tr>`).join("") +
+      `</table></div>`;
+  }
+  $("#main").innerHTML = h;
+  if (running) replayLog();
+  $("#run").onclick = () => run(s);
+  if ($("#skip")) $("#skip").onclick = () => skip(s);
+  if ($("#refresh")) $("#refresh").onclick = () => { lastError = ""; load(true); };
+  if ($("#next")) $("#next").onclick = () => { current = state.steps[idx + 1].id; lastError = ""; renderNav(); renderStep(); window.scrollTo(0, 0); };
+}
+
+function values() {
+  const out = {};
+  document.querySelectorAll("#form input, #form select").forEach(el => {
+    if (!el.name || el.name === "__password") return;
+    out[el.name] = el.type === "checkbox" ? String(el.checked) : el.value;
+  });
+  return out;
+}
+
+async function run(s) {
+  lastError = "";
+  const pw = $("#f-__password");
+  try {
+    const r = await api("/api/run", { step: s.id, values: values(), password: pw ? pw.value : "" });
+    logLines = [];
+    follow(r.job, s.id);
+  } catch (e) { lastError = e.message; renderStep(); }
+}
+
+async function skip(s) {
+  try { await api("/api/skip", { step: s.id }); await load(false); } catch (e) { lastError = e.message; renderStep(); }
+}
+
+let logLines = [];
+function linkify(text) {
+  return esc(text).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+}
+function showLine(l) {
+  const log = $("#log");
+  if (!log) return;
+  if (l.kind === "progress") {
+    $("#prog").style.display = l.pct >= 100 ? "none" : "block";
+    $("#progt").textContent = l.text;
+    $("#progbar").style.width = (l.pct || 0) + "%";
+    return;
+  }
+  const d = document.createElement("div");
+  d.className = l.kind;
+  const prefix = { ok: "✓ ", warn: "⚠ ", fail: "✗ ", action: "→ ", done: "✓ " }[l.kind] || "  ";
+  d.innerHTML = esc(prefix) + linkify(l.text);
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+function replayLog() { logLines.forEach(showLine); }
+
+async function follow(id, step) {
+  job = id; jobStep = step; jobFrom = 0; logLines = [];
+  if (current !== step) { current = step; }
+  renderNav(); renderStep();
+  while (job === id) {
+    let data;
+    try { data = await api(`/api/job?id=${id}&from=${jobFrom}`); }
+    catch (e) { await new Promise(r => setTimeout(r, 2000)); continue; }
+    for (const l of data.lines) { logLines.push(l); jobFrom = l.n + 1; if (current === step) showLine(l); }
+    if (data.done) break;
+  }
+  const keep = logLines;
+  job = null; jobStep = null;
+  await load(true);
+  if (current === step) { logLines = keep; replayLog(); logLines = []; }
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-step]");
+  if (!b) return;
+  current = b.dataset.step; lastError = "";
+  renderNav(); renderStep();
+  window.scrollTo(0, 0);
+});
+
+$("#quit").onclick = async () => {
+  if (job && !confirm("A step is still running. Close setup anyway? It will be stopped.")) return;
+  try { await api("/api/quit", {}); } catch (e) {}
+  document.body.innerHTML = `<div class="bye"><h1>Setup closed</h1><p>You can close this tab. Run the program again any time to continue,
+    add the optional apps, or update everything (run a step again).</p></div>`;
+};
+
+if (!token) $("#main").innerHTML = `<div class="msg err">Open the address the setup program printed (it contains a one-time key).</div>`;
+else load(false);
+</script>
+</body>
+</html>
