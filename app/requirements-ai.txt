@@ -1,0 +1,16 @@
+# Optional: the media index (scene search, sensitive-content ranges, chapter and intro detection).
+# Without these, Marquee works as usual and /api/index/install can fetch the same pinned wheels itself.
+numpy==2.5.4
+onnxruntime-directml==1.24.4
+tokenizers==0.23.3
+# Optional: the local assistant (voice). The app can also install these on first use (/api/assistant/install),
+# as the pinned wheels listed in marquee/wheels.py (no pip needed, also in the packaged app).
+sounddevice>=0.4.6
+webrtcvad-wheels>=2.0.14
+faster-whisper>=1.0
+# CUDA 12 / cuDNN 9 runtime so faster-whisper runs on NVIDIA GPUs (float16); without them it uses the CPU (int8)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*
+nvidia-cuda-nvrtc-cu12
+# Optional: wake-word spotter (the default "Hey Marquee" detection needs nothing extra)
+# openwakeword>=0.6

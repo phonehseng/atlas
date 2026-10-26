@@ -1,16 +1,58 @@
-# Media Stack Setup
+# Marquee
 
-One program that builds a complete, automated home media server, one guided step at a time. Every step
-explains what it's about to install, installs it, connects it to everything already installed, and tells
-you what to do next.
+A Netflix-style home theatre for your own films and shows, and one guided installer that builds the whole
+media server behind it.
 
-Request a film or show from your phone, and a few minutes later it's in Jellyfin, named properly, with English
-subtitles for anime, ready on your TV. It takes whatever copy is available first and keeps upgrading it (films
-up to 4K, shows up to 1080p), and if a request is stuck, the Media Hub tells you why and fixes what it can.
+- **Marquee** (Windows): rows of posters instead of folders, previews that play when you rest on a poster, and a
+  player that plays your files directly (4K HDR, every audio track, full anime subtitles) with nothing in between
+  to buffer. Requests, recommendations, your phone and the server's health live in the same app.
+- **The installer**: one small program (about 11 MB) that installs and connects everything else, one explained
+  step at a time: Jellyfin, Seerr, Sonarr, Radarr, Prowlarr, qBittorrent behind a VPN, subtitles, backups,
+  Tailscale and more. You pick the parts on a checklist.
+
+Request a film or show from your phone, and a few minutes later it's in your library, named properly, with
+English subtitles for anime. It takes whatever copy is available first and keeps upgrading it (films up to 4K,
+shows up to 1080p), and if a request is stuck, Marquee tells you why and fixes what it can.
 
 - **Windows 10/11**: apps are installed natively and run in the background (Task Scheduler), no Docker needed.
-- **Linux** (PCs, servers, Raspberry Pi 4/5 with a 64-bit OS): apps run as Docker containers.
-  *Preview: the Linux version is newer and less tested than the Windows one.*
+- **Linux** (PCs, servers, Raspberry Pi 4/5 with a 64-bit OS): apps run as Docker containers, with the Media Hub
+  as the dashboard (Marquee is Windows-only for now). *Preview: the Linux version is newer and less tested.*
+
+## Marquee, the app
+
+**Browsing**
+- Home is rows, not folders: continue watching, next up, My List, because-you-watched, sequels and recommended
+  requests, genres, and "Just arrived" downloads before Jellyfin has even imported them.
+- Liquid-glass posters show what's yours (clear), what you can request (dark) and what's on its way (white).
+- Title pages like a streaming service: a 1080p preview with subtitles, IMDb and Rotten Tomatoes scores, cast,
+  seasons and episodes, trailers, collections, and your own 5-star rating.
+- A taste profile that learns from what you finish, rate and say ("Is this for you?" on every title), started by
+  a first-launch question or your Letterboxd, and fully visible and editable in Settings.
+- **Ask Marquee**: a chat that recommends, opens titles, plays the next episode, requests "seasons 5-8 of Doctor
+  Who" (you confirm first) and explains why something isn't working.
+
+**Playing**
+- mpv inside the window: hardware decoding, Dolby Atmos / DTS:X passthrough, NVIDIA RTX Video Super Resolution
+  and RTX HDR, Anime4K for anime, night mode, dialogue boost and AI voice isolation, stable volume.
+- YouTube-style controls: red progress bar with thumbnails, hold for 2x, 0.5-3x speed without pitch change,
+  frame stepping, chapters, bookmarks, a clip tool, picture-in-picture you can resize from any corner.
+- Skip intro/credits, and when the credits roll the video shrinks to a corner with what to watch next.
+- **Ask Atlas** (press A): "who's that actor?", "is that the guy from The Walking Dead?", "is there a jumpscare
+  soon?", "go to the part where...". It looks at the picture and checks the soundtrack ahead; answers appear
+  quietly at the top while the film keeps playing.
+- Keeps playing with Jellyfin down: everything on your PC plays from a local copy of the library.
+
+**Around it**
+- Requests with a quality picker and size estimate, "smart" season-by-season requests, a storage limit and
+  optional clean-up of watched or forgotten titles (they stay in your history).
+- **Marquee Mobile**: browse and stream to your phone over Tailscale, or use it as a remote.
+- **Your stack**: the Media Hub's dashboard inside Marquee, with Fix buttons.
+- Share a clip or file to your own Google Drive as a private link.
+- Updates itself from this page's releases (automatic, notify or off) and rolls back if an update won't start.
+
+AI is optional and local-first: Atlas (a local assistant on the same PC), any OpenAI-compatible key, or the
+**built-in AI** (a small model downloaded on demand, no account). **Classic** mode turns all of it off and uses
+hand-written lines and rules instead. Details and the developer guide: [app/README.md](app/README.md).
 
 ## What's in the stack
 
@@ -77,11 +119,9 @@ later. Sizes are rough (programs only, not media).
 Skipper, Recyclarr, Bazarr, MediaSorter, Unpackerr, Cleanuparr, the Media Hub with nightly backups, Tailscale
 and (on Windows) Marquee.
 
-## Marquee
+## Marquee or Media Hub only
 
-Marquee is the stack's desktop app for Windows: a Netflix-style player for your Jellyfin library that plays
-the files directly, requests through Seerr, and the Media Hub's dashboard (*Your stack*) in one window, with
-Marquee Mobile for watching on a phone over Tailscale. On *Choose your stack*, pick **Use Marquee as your stack
+On *Choose your stack*, pick **Use Marquee as your stack
 app (recommended)** or **Media Hub only** (the browser dashboard, with Jellyfin as the player). The installer
 downloads Marquee, adds Start menu and desktop shortcuts, and fills in its settings for the stack, so the
 first launch only asks for your Jellyfin password. The Media Hub keeps running in the background either way.
@@ -93,7 +133,8 @@ Get the file for your computer from the [Releases](../../releases) page:
 
 | File | For |
 |---|---|
-| `MediaStackSetup.exe` | Windows 10/11 (64-bit), about 11 MB |
+| `MediaStackSetup.exe` | Windows 10/11 (64-bit), about 11 MB: installs the stack and Marquee |
+| `Marquee-windows-x64.zip` | Marquee on its own, for an existing Jellyfin server: unzip and run `Marquee.exe` |
 | `MediaStackSetup-linux-x64` | Linux on Intel/AMD |
 | `MediaStackSetup-linux-arm64` | Linux on ARM (Raspberry Pi 4/5, ARM servers) |
 
@@ -139,6 +180,9 @@ with a newer release. It never touches settings or media, and ends with a summar
 
 ## Building from source
 
+The installer is the Go program at the top of this repository; Marquee is in [`app/`](app) (Python, see its
+README).
+
 Needs [Go](https://go.dev/dl/) 1.27 or newer; no C compiler.
 
 ```bash
@@ -165,6 +209,10 @@ Command-line options (run with `--help`):
 --no-browser        don't open a browser
 --update            open "Update my stack" straight away
 ```
+
+## Licence
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 ## Disclaimer
 

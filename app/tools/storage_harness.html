@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storage harness</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/storage.css">
+  <style>
+    .hz { padding: 20px var(--gutter); display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
+    .hz-bar { position: sticky; top: 0; z-index: 50; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px var(--gutter); }
+    .hz-bar b { margin-right: auto; }
+    .hz-box { width: min(860px, 100%); border-radius: var(--r-xl); background: var(--glass-solid); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); padding: 22px 24px; display: grid; gap: 16px; }
+    .hz-box h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+    pre.hz-out { white-space: pre-wrap; font-size: 12px; color: var(--muted); background: var(--sage); border-radius: 12px; padding: 10px; max-height: 220px; overflow: auto; }
+  </style>
+</head>
+<body>
+<div id="sprite"></div>
+<div class="hz-bar glass">
+  <b>Storage harness</b>
+  <button class="btn small ghost" data-h="theme">Toggle theme</button>
+  <button class="btn small ghost" data-h="delete-movie">Delete sheet: film</button>
+  <button class="btn small ghost" data-h="delete-ep">Delete sheet: episode</button>
+  <button class="btn small ghost" data-h="dry">Request dry run</button>
+  <button class="btn small ghost" data-h="toast">Event toasts</button>
+</div>
+<div class="hz">
+  <div class="hz-box"><h3>Request sheet · film (quality picker)</h3><div id="q-movie"></div></div>
+  <div class="hz-box"><h3>Request sheet · show, Smart season mode</h3>
+    <div class="opt-group"><h4>Seasons</h4><div class="opt-row" id="smodes"></div></div>
+    <div id="q-tv"></div><pre class="hz-out" id="out" hidden></pre></div>
+  <div class="hz-box"><h3>Details page · smart line</h3><div id="smart"></div></div>
+  <div id="leaving"></div>
+  <div class="settings" id="settings"></div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script>
+// The icon sprite comes from the real index.html, so the harness draws exactly what the app draws.
+fetch('/').then(r => r.text()).then(t => { const m = t.match(/<svg[^>]*display:none[\s\S]*?<\/svg>/); if (m) document.getElementById('sprite').innerHTML = m[0]; });
+try { document.documentElement.dataset.theme = localStorage.getItem('mqs-harness-theme') || 'dark'; } catch (e) {}
+</script>
+<script src="/storage.js"></script>
+<script>
+const P = new URLSearchParams(location.search);
+const MOVIE = +(P.get('movie') || 550), SHOW = +(P.get('show') || 1396);
+const MS = window.MarqueeStorage;
+const qm = MS.mountQuality(document.getElementById('q-movie'), { kind: 'movie', tmdb: MOVIE });
+let mode = 'smart';
+const qt = MS.mountQuality(document.getElementById('q-tv'), { kind: 'tv', tmdb: SHOW, seasons: 'smart' });
+fetch(`/api/requests/details/tv/${SHOW}`).then(r => r.json()).then(d => {
+  const sm = MS.seasonModes(d.item || {}, null);
+  mode = sm.default;
+  const box = document.getElementById('smodes');
+  const draw = () => box.innerHTML = sm.modes.map(m => `<button class="opt" data-mode="${m.v}" aria-pressed="${m.v === mode}" title="${m.title || ''}">${m.label}</button>`).join('');
+  draw();
+  box.onclick = e => { const b = e.target.closest('[data-mode]'); if (!b) return; mode = b.dataset.mode; draw(); qt.setSeasons(mode === 'pick' ? [1, 2] : mode); };
+});
+MS.smartLine(document.getElementById('smart'), +(P.get('smart') || 61852)).then(() => {
+  const el = document.getElementById('smart');
+  if (!el.innerHTML) el.innerHTML = '<p class="mqs-note">Not a smart show in this profile (register one with a dry run first).</p>';
+});
+MS.leavingSoonRow().then(row => { if (row) document.getElementById('leaving').append(row); else document.getElementById('leaving').innerHTML = '<p class="mqs-note">Leaving soon: nothing (no cleanup rule on, or nothing due within 7 days).</p>'; });
+MS.mountSettings(document.getElementById('settings'));
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-h]');
+  if (!b) return;
+  const h = b.dataset.h;
+  if (h === 'theme') { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; try { localStorage.setItem('mqs-harness-theme', t); } catch (x) {} }
+  if (h === 'delete-movie') MS.deleteSheet({ id: P.get('film') || '57a660fc10db3c6fcb8e4530d2831739', name: P.get('filmname') || 'Dune', type: 'Movie' });
+  if (h === 'delete-ep') MS.deleteSheet({ id: P.get('ep'), name: P.get('epname') || 'Episode', type: 'Episode' });
+  if (h === 'dry') {
+    const v = qt.value();
+    const r = await fetch('/api/storage/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'tv', id: SHOW, ...v, season_mode: mode, seasons: mode === 'smart' ? undefined : mode, dry_run: true }) }).then(r => r.json());
+    const out = document.getElementById('out'); out.hidden = false; out.textContent = JSON.stringify(r, null, 1);
+  }
+  if (h === 'toast') { MS.onEvent('smart-request', { message: 'Season 2 of Breaking Bad requested - it\'ll be ready before you finish season 1' }); setTimeout(() => MS.onEvent('storage-leaving', { message: 'Fury leaves tomorrow to save space. Tap Keep to hold on to it.' }), 600); }
+});
+</script>
+</body>
+</html>

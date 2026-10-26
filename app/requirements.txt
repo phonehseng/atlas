@@ -1,0 +1,11 @@
+﻿pywebview>=6.2
+python-mpv>=1.0
+requests>=2.31
+flask>=3.0
+waitress>=3.0
+pythonnet>=3.0
+websocket-client>=1.7
+qrcode>=7.4
+guessit>=3.8
+watchdog>=4.0
+pillow>=10

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Marquee</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="taste.css">
+  <link rel="stylesheet" href="chat.css">
+  <link rel="stylesheet" href="launchpad.css">
+  <link rel="stylesheet" href="storage.css">
+  <link rel="stylesheet" href="stack.css">
+  <link rel="stylesheet" href="update.css">
+  <script>
+    /* Paint in the remembered theme before anything draws, so there is no flash. */
+    try { document.documentElement.dataset.theme = localStorage.getItem('marquee-theme') || 'dark'; } catch (e) {}
+  </script>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9.2-9.4C1.7 7.4 3.8 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.2 0 5.3 2.9 4.2 6.1C19.5 15.4 12 20 12 20Z"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-dice" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7Z" fill="currentColor" stroke="none"/><path d="M19 15.5c.25 1.8.95 2.5 2.75 2.75-1.8.25-2.5.95-2.75 2.75-.25-1.8-.95-2.5-2.75-2.75 1.8-.25 2.5-.95 2.75-2.75Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.8"/><path d="M10.5 18.5h3"/></symbol>
+  <symbol id="i-cloud-off" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .8-7.9A6 6 0 0 0 6.2 9.3 4.4 4.4 0 0 0 7 18Z"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-muted" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5V18a2.5 2.5 0 0 0 2.5 2.5h9A2.5 2.5 0 0 0 19 18v-5.5"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/></symbol>
+</defs></svg>
+
+<div class="ambient" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><div class="ambient-img" id="ambient-img"></div></div>
+
+<header class="topbar" id="topbar" hidden>
+  <div class="topbar-inner glass">
+    <a class="brand" href="#/home" aria-label="Marquee home"><span class="brand-mark"><img src="icon.svg" alt="" width="30" height="30"></span>marquee<span class="brand-dot">.</span></a>
+    <nav class="nav" id="nav" aria-label="Sections">
+      <i class="nav-pill" id="nav-pill" aria-hidden="true"></i>
+      <a href="#/home" data-route="home">Home</a>
+      <a href="#/mylist" data-route="mylist">My List</a>
+      <a href="#/movies" data-route="movies">Movies</a>
+      <a href="#/shows" data-route="shows">Shows</a>
+      <a href="#/anime" data-route="anime">Anime</a>
+      <a href="#/requests" data-route="requests">Requests</a>
+      <a href="#/chat" data-route="chat">Chat</a>
+      <a href="#/stack" data-route="stack">Your stack</a>
+    </nav>
+    <span class="offline-pill" id="offline-pill" hidden title="Downloaded titles still play."><i class="dot"></i>Jellyfin is away · playing from your PC</span>
+    <div class="top-actions">
+      <button class="icon-btn nav-menu-btn" data-action="nav-menu" aria-label="Menu" aria-expanded="false" aria-controls="nav-menu"><svg width="20" height="20"><use href="#i-menu"/></svg></button>
+      <button class="icon-btn" data-action="surprise" title="Surprise me: play something you haven't seen" aria-label="Surprise me"><svg width="20" height="20"><use href="#i-dice"/></svg></button>
+      <button class="icon-btn" data-action="search" title="Search (/)" aria-label="Search"><svg width="20" height="20"><use href="#i-search"/></svg></button>
+      <a class="icon-btn" href="#/settings" data-route="settings" title="Settings" aria-label="Settings"><svg width="20" height="20"><use href="#i-gear"/></svg></a>
+      <a class="user-chip" href="#/settings" id="user-chip" title="Account and settings"><span class="avatar" id="user-avatar">?</span><span id="user-name"></span></a>
+    </div>
+  </div>
+</header>
+
+<nav class="nav-menu glass" id="nav-menu" hidden aria-label="Sections">
+  <a href="#/home" data-route="home">Home</a>
+  <a href="#/mylist" data-route="mylist">My List</a>
+  <a href="#/movies" data-route="movies">Movies</a>
+  <a href="#/shows" data-route="shows">Shows</a>
+  <a href="#/anime" data-route="anime">Anime</a>
+  <a href="#/requests" data-route="requests">Requests</a>
+  <a href="#/chat" data-route="chat">Chat</a>
+  <a href="#/stack" data-route="stack">Your stack</a>
+  <a href="#/settings" data-route="settings">Settings</a>
+  <button data-action="surprise">Surprise me</button>
+</nav>
+
+<main id="view" class="view" tabindex="-1"></main>
+
+<div class="layer search-layer" id="search" hidden role="dialog" aria-modal="true" aria-label="Search">
+  <div class="scrim" data-action="close-search"></div>
+  <div class="search-panel">
+    <div class="search-bar glass">
+      <svg width="22" height="22"><use href="#i-search"/></svg>
+      <input id="search-input" type="search" autocomplete="off" spellcheck="false" placeholder="Search films, shows, episodes…" aria-label="Search">
+      <kbd>Esc</kbd>
+      <button class="icon-btn small" data-action="close-search" aria-label="Close search"><svg width="18" height="18"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<div class="layer modal-layer" id="modal" hidden role="dialog" aria-modal="true" aria-label="Details">
+  <div class="scrim" data-action="close-modal"></div>
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<div class="layer sheet-layer" id="sheet" hidden role="dialog" aria-modal="true" aria-label="Request">
+  <div class="scrim" data-action="close-sheet"></div>
+  <div class="sheet" id="sheet-box"></div>
+</div>
+
+<div class="layer person-layer" id="person" hidden role="dialog" aria-modal="true" aria-label="Person">
+  <div class="scrim" data-action="close-person"></div>
+  <div class="person-sheet glass" id="person-box"></div>
+</div>
+
+<div class="pop-layer" id="pop-layer" aria-hidden="true"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="taste.js"></script>
+<script src="chat.js"></script>
+<script src="launchpad.js"></script>
+<script src="storage.js"></script>
+<script src="stack.js"></script>
+<script src="update.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

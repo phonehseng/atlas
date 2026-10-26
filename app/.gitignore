@@ -1,0 +1,11 @@
+﻿.venv/
+.devhome/
+vendor/mpv/
+vendor/mpv-dev.7z
+build/
+dist/
+__pycache__/
+*.pyc
+tools/dev.ps1
+*.spec
+*.spec.bak

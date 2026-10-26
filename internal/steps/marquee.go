@@ -20,10 +20,10 @@ import (
 //	MarqueeSHA256 = lowercase hex of the zip
 //	MarqueeSize   = the zip's size in bytes
 const (
-	MarqueeVersion = ""
-	MarqueeURL     = ""
-	MarqueeSHA256  = ""
-	MarqueeSize    = 0
+	MarqueeVersion = "1.4.0"
+	MarqueeURL     = "https://github.com/phonehseng/marquee/releases/download/v1.4.0/Marquee-windows-x64.zip"
+	MarqueeSHA256  = "eec82b7e8363c8972a0e45e544f81da367d9bd8f8606d051f7e12b6002cd0037"
+	MarqueeSize    = 75335041
 )
 
 // Overrides for testing a local build:
