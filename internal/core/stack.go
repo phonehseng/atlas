@@ -21,7 +21,7 @@ import (
 var BasePorts = map[string]int{
 	"jellyfin": 8096, "qbittorrent": 8080, "prowlarr": 9696, "sonarr": 8989, "radarr": 7878,
 	"bazarr": 6767, "seerr": 5055, "cleanuparr": 11011, "autobrr": 7474, "jfago": 8056,
-	"requestrr": 4545, "byparr": 8191, "trawl": 8190, "hub": 8585,
+	"requestrr": 4545, "byparr": 8191, "trawl": 8190, "hub": 8585, "lidarr": 8686, "qui": 7476,
 }
 
 // Libraries are the four media folders. Sonarr owns TV Shows + Anime, Radarr owns Movies + Anime Movies.
@@ -30,8 +30,8 @@ var Libraries = []struct{ Key, Folder string }{
 }
 
 // DownloadCategories are qBittorrent categories: the first four are for manual downloads (sorted by
-// MediaSorter), sonarr/radarr are the ones Sonarr and Radarr use.
-var DownloadCategories = []string{"movies", "tv", "anime", "other", "sonarr", "radarr"}
+// MediaSorter), sonarr/radarr/lidarr are the ones Sonarr, Radarr and Lidarr use.
+var DownloadCategories = []string{"movies", "tv", "anime", "other", "sonarr", "radarr", "lidarr"}
 
 // StepState records how a wizard step ended.
 type StepState struct {

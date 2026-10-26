@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"runtime"
+	"strings"
 	"time"
 
 	"mediastack/internal/core"
@@ -13,6 +14,11 @@ import (
 func init() {
 	step(&Step{ID: "jellyfin", Title: "Jellyfin", Group: "Watch", Button: "Install Jellyfin",
 		Needs: []string{"account"}, Password: true, Run: runJellyfin,
+		Fields: func(c *Ctx) []Field {
+			return []Field{{Name: "introskipper", Type: "checkbox", Default: "true",
+				Label: "Add a \"Skip Intro\" button (the Intro Skipper plugin)",
+				Help:  "Finds the intro and credits of every episode and offers to skip them, like Netflix."}}
+		},
 		Links: func(st *core.Stack) []Link { return []Link{linkTo(st, "jellyfin", "Open Jellyfin")} }})
 }
 
@@ -147,9 +153,83 @@ func runJellyfin(c *Ctx) error {
 	if err := st.SetKey("jellyfin", key); err != nil {
 		return err
 	}
+	if c.In["introskipper"] != "false" {
+		if err := introSkipper(c, s); err != nil {
+			c.J.Warn("Intro Skipper wasn't added (%v) - Jellyfin works without it; run this step again to retry", err)
+		}
+	}
 	s.Post("/Library/Refresh", nil, nil)
 	c.J.OK("Jellyfin is ready")
 	return nil
+}
+
+const introSkipperRepo = "https://intro-skipper.org/manifest.json"
+
+// introSkipper adds the Intro Skipper plugin (a "Skip Intro" button) from its own plugin repository, then
+// restarts Jellyfin to load it. The repository serves the build that matches the Jellyfin asking.
+func introSkipper(c *Ctx, s *core.API) error {
+	var plugins []struct{ Name string }
+	if err := s.Get("/Plugins", &plugins); err != nil {
+		return err
+	}
+	for _, p := range plugins {
+		if p.Name == "Intro Skipper" {
+			c.J.Info("Intro Skipper is already installed")
+			return nil
+		}
+	}
+	var repos []struct {
+		Name    string
+		URL     string `json:"Url"`
+		Enabled bool
+	}
+	if err := s.Get("/Repositories", &repos); err != nil {
+		return err
+	}
+	list := []core.M{}
+	have := false
+	for _, r := range repos {
+		have = have || strings.EqualFold(r.URL, introSkipperRepo)
+		list = append(list, core.M{"Name": r.Name, "Url": r.URL, "Enabled": r.Enabled})
+	}
+	if !have {
+		list = append(list, core.M{"Name": "Intro Skipper", "Url": introSkipperRepo, "Enabled": true})
+		if err := s.Post("/Repositories", list, nil); err != nil {
+			return err
+		}
+	}
+	var pkgs []struct {
+		Name     string
+		GUID     string `json:"guid"`
+		Versions []struct {
+			Version       string
+			RepositoryURL string `json:"repositoryUrl"`
+		}
+	}
+	if err := s.Get("/Packages", &pkgs); err != nil {
+		return err
+	}
+	for _, p := range pkgs {
+		if p.Name != "Intro Skipper" || len(p.Versions) == 0 {
+			continue
+		}
+		v := p.Versions[0]
+		q := url.Values{"assemblyGuid": {p.GUID}, "version": {v.Version}, "repositoryUrl": {v.RepositoryURL}}
+		if err := s.Post("/Packages/Installed/"+url.PathEscape(p.Name)+"?"+q.Encode(), nil, nil); err != nil {
+			return err
+		}
+		c.J.Info("Restarting Jellyfin to load Intro Skipper %s...", v.Version)
+		time.Sleep(10 * time.Second) // the download finishes in the background
+		s.Post("/System/Restart", nil, nil)
+		time.Sleep(10 * time.Second)
+		pub := core.NewAPI(c.St.URL("jellyfin"), nil)
+		if err := core.Retry(c, 4*time.Minute, func() error { return pub.Get("/System/Info/Public", nil) }); err != nil {
+			return err
+		}
+		c.J.OK("Intro Skipper added: episodes get a \"Skip Intro\" button once it has scanned them (a scheduled task)")
+		return nil
+	}
+	return fmt.Errorf("the Intro Skipper repository has no build for this Jellyfin version yet")
 }
 
 func addLibrary(c *Ctx, s *core.API, name, kind string, keys []string) error {

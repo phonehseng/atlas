@@ -250,6 +250,14 @@ def arr_check(app_id, k, api="v3"):
         missing = get(app_id, f"/api/{api}/wanted/missing", headers=h, params={"pageSize": 1})
         info["missing"] = missing.get("totalRecords", 0)
         info["summary"] = f"{len(recs)} downloading · {info['missing']} missing"
+    if app_id == "lidarr":
+        if any("No indexers available" in p["text"] for p in problems):
+            problems[:] = [p for p in problems if "No indexers available" not in p["text"]] + [{
+                "level": "warn", "text": "Lidarr has no music indexers yet. Add a site with music in Prowlarr "
+                                         "(Indexers > Add); it syncs over by itself once it returns music results."}]
+        recs = get(app_id, "/api/v1/queue", headers=h, params={"pageSize": 50}).get("records", [])
+        artists = get(app_id, "/api/v1/artist", headers=h, timeout=15)
+        info["summary"] = f"{len(recs)} downloading · {len(artists)} artist{'s' if len(artists) != 1 else ''}"
     if app_id == "prowlarr":
         idx = get(app_id, "/api/v1/indexer", headers=h)
         enabled = [i for i in idx if i.get("enable")]
@@ -297,7 +305,7 @@ def check_seerr(k):
         if r.get("status") == 2:  # approved: show how far the download has got instead
             status = MEDIA_STATUS.get(media.get("status"), "Approved")
         info["requests"].append({"id": r.get("id"), "type": r.get("type"), "status": status,
-                                 "pending": r.get("status") == 1, **t,
+                                 "pending": r.get("status") == 1, "tmdb": media.get("tmdbId"), **t,
                                  "by": (r.get("requestedBy") or {}).get("displayName"), "is4k": r.get("is4k")})
     if c.get("pending"):
         info["problems"].append({"level": "warn", "text": f"{c['pending']} request(s) waiting for your approval in Seerr."})
@@ -326,6 +334,12 @@ def check_qbittorrent(k):
                       "seeds": t["num_seeds"], "peers": t["num_leechs"]}
                      for t in sorted(torrents, key=lambda t: (t["progress"] >= 1, -t["added_on"]))[:40]],
     }
+
+
+def check_qui(k):
+    if get("qui", "/api/auth/check-setup").get("setupRequired"):
+        return {"status": "setup", "summary": "Run the Qui step in Media Stack Setup", "problems": []}
+    return {"summary": "qBittorrent manager & seeding rules", "problems": []}
 
 
 def check_bazarr(k):
@@ -435,8 +449,8 @@ def check_mediasorter(k):
 CHECKS = {
     "jellyfin": check_jellyfin, "seerr": check_seerr,
     "sonarr": lambda k: arr_check("sonarr", k), "radarr": lambda k: arr_check("radarr", k),
-    "prowlarr": lambda k: arr_check("prowlarr", k, "v1"),
-    "qbittorrent": check_qbittorrent, "bazarr": check_bazarr, "cleanuparr": check_cleanuparr,
+    "prowlarr": lambda k: arr_check("prowlarr", k, "v1"), "lidarr": lambda k: arr_check("lidarr", k, "v1"),
+    "qbittorrent": check_qbittorrent, "qui": check_qui, "bazarr": check_bazarr, "cleanuparr": check_cleanuparr,
     "autobrr": check_autobrr, "jfago": check_jfago, "requestrr": check_requestrr, "trawl": check_trawl,
     "byparr": check_byparr, "unpackerr": check_unpackerr, "mediasorter": check_mediasorter,
     "recyclarr": check_recyclarr, "gluetun": check_gluetun,
@@ -496,8 +510,37 @@ def system_checks():
     if vpn_up is False:
         problems.append({"level": "warn", "text": "The VPN is disconnected - torrents are paused until it connects "
                                                   "(qBittorrent only uses the VPN)."})
+    leak = vpn_leak()
+    if leak and leak.get("status") in ("leak", "warn"):
+        problems.append({"level": "error" if leak["status"] == "leak" else "warn", "text": "VPN leak check: " + leak["text"]})
     return {"disk": {"free_gb": round(free_gb), "total_gb": round(du.total / 2**30)}, "vpn": vpn_up,
-            "problems": problems}
+            "vpncheck": leak, "problems": problems}
+
+
+def vpn_leak():
+    """The last VPN leak check (vpncheck.py), refreshed every 10 minutes by vpn_leak_loop."""
+    try:
+        return json.loads((STATE / "vpncheck.json").read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def vpn_leak_loop():
+    import vpncheck
+    time.sleep(60)
+    last = None
+    while True:
+        try:
+            r = vpncheck.check(cfg(), force=True)
+            if r["status"] == "leak" and last != "leak":
+                add_event("vpncheck", "VpnLeak", "error", "VPN leak: torrents are using your home address", r["text"],
+                          toast=True)
+            elif last == "leak" and r["status"] == "ok":
+                add_event("vpncheck", "VpnLeak", "info", "VPN leak fixed", r["text"])
+            last = r["status"]
+        except Exception as e:
+            print("vpn check failed:", e)
+        time.sleep(600)
 
 
 _status_lock = threading.Lock()
@@ -624,7 +667,7 @@ _db_lock = threading.Lock()
 
 
 def hub_settings():
-    defaults = {"notifications": not DOCKER, "watchdog": True}
+    defaults = {"notifications": not DOCKER, "watchdog": True, "phone": False}
     try:
         return {**defaults, **json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))}
     except Exception:
@@ -638,7 +681,30 @@ def events_db():
     return con
 
 
+def push_phone(title, message, image=None, force=False):
+    """Phone notifications through ntfy (free app, no account): the hub posts to a private, hard-to-guess
+    topic that the phone subscribes to. Only titles and short messages are sent."""
+    s = hub_settings()
+    if not ((s.get("phone") or force) and s.get("ntfy_topic")):
+        return False
+
+    def send():
+        try:
+            body = {"topic": s["ntfy_topic"], "title": title, "message": message or title, "tags": ["tv"]}
+            if image and image.startswith("http"):
+                body["attach"] = image
+            name = cfg().get("tailscale_name")
+            if name:
+                body["click"] = f"http://{name}:{CFG['hub']['public_port']}"
+            requests.post(s.get("ntfy_server") or "https://ntfy.sh", json=body, timeout=15).raise_for_status()
+        except Exception as e:
+            print("phone notification failed:", e)
+    threading.Thread(target=send, daemon=True).start()
+    return True
+
+
 def notify(title, message, image=None):
+    push_phone(title, message, image)
     if DOCKER or not hub_settings()["notifications"]:
         return
 
@@ -691,6 +757,10 @@ def parse_arr(source, p):
     if source == "sonarr":
         media = p.get("series") or {}
         name = " ".join(x for x in (media.get("title"), ep_label(p.get("episodes"))) if x)
+    elif source == "lidarr":
+        media = p.get("artist") or {}
+        albums = ", ".join(a.get("title", "") for a in p.get("albums") or [])
+        name = " - ".join(x for x in (media.get("name"), albums) if x)
     else:
         media = p.get("movie") or p.get("remoteMovie") or {}
         name = media.get("title", "")
@@ -768,7 +838,7 @@ def ensure_in_jellyfin(source, title, folder, file_path):
 @app.post("/api/hook/<source>")
 def hook(source):
     p = request.get_json(force=True, silent=True) or {}
-    if source in ("sonarr", "radarr", "prowlarr"):
+    if source in ("sonarr", "radarr", "prowlarr", "lidarr"):
         add_event(source, *parse_arr(source, p))
         if source in ("sonarr", "radarr") and p.get("eventType") == "Download":
             media = p.get("series") or p.get("movie") or {}
@@ -784,6 +854,9 @@ def hook(source):
         msg = p.get("message", "") + (f" (by {who})" if who and who not in p.get("message", "") else "")
         add_event("seerr", p.get("notification_type", "?"), level, f"{label}: {p.get('subject', '')}", msg.strip(),
                   p.get("image") or None, toast)
+    elif source == "backup":
+        needs = bool(p.get("attention"))
+        add_event(source, "Backup", "warn" if needs else "info", p.get("title", "Backup"), p.get("message", ""), None, needs)
     elif source == "healthcheck":
         # Quiet when all is well; a desktop notification only when something needs the user.
         needs = bool(p.get("attention"))
@@ -807,9 +880,20 @@ def events():
 def settings_route():
     s = hub_settings()
     if request.method == "POST":
-        s.update({k: bool(v) for k, v in (request.get_json(force=True) or {}).items() if k in ("notifications", "watchdog")})
+        s.update({k: bool(v) for k, v in (request.get_json(force=True) or {}).items()
+                  if k in ("notifications", "watchdog", "phone")})
+        if s.get("phone") and not s.get("ntfy_topic"):
+            s["ntfy_topic"] = "mediahub-" + secrets.token_hex(8)  # the topic name is the only key: keep it long
         SETTINGS_FILE.write_text(json.dumps(s), encoding="utf-8")
     return jsonify({**s, "can_notify": not DOCKER})
+
+
+@app.post("/api/phone/test")
+def phone_test():
+    ok = push_phone("Media Hub test", "Phone notifications work. You'll get 'ready to watch' and problem alerts here.",
+                    force=True)
+    return jsonify(ok=ok, message="Test sent - it should arrive on your phone in a few seconds" if ok
+                   else "Turn phone notifications on first")
 
 
 # --------------------------------------------------------------------------- watchdog
@@ -1031,6 +1115,68 @@ def seerr_request():
         return jsonify(ok=False, message=str(e))
 
 
+@app.get("/api/requests")
+def request_doctor():
+    """The request doctor's last report: why each unfinished request isn't here yet."""
+    try:
+        data = json.loads((STATE / "requests.json").read_text(encoding="utf-8"))
+    except Exception:
+        data = {"time": None, "items": []}
+    data["running"] = (STATE / "requestdoctor.lock").exists()
+    return jsonify(data)
+
+
+def run_script(name, *args):
+    """Run one of MediaSorter's scripts in the background (inside this container on Linux)."""
+    if DOCKER:
+        mod = __import__(name)
+
+        def go():
+            old = sys.argv
+            sys.argv = [name, *args]
+            try:
+                mod.main()
+            except BaseException as e:
+                print(f"{name} failed:", e)
+            finally:
+                sys.argv = old
+        threading.Thread(target=go, daemon=True).start()
+    else:
+        subprocess.Popen([sys.executable, str(SORTER / f"{name}.py"), *args], creationflags=stackconf.NO_WINDOW)
+
+
+@app.get("/api/backups")
+def backups():
+    import backup
+    try:
+        items = backup.list_backups(cfg())
+    except Exception as e:
+        return jsonify(ok=False, message=str(e), backups=[])
+    return jsonify(ok=True, backups=items, can_restore=is_local() or DOCKER)
+
+
+@app.post("/api/backups/restore")
+def backup_restore():
+    """Restoring stops and restarts apps (on Windows the hub too), so there it runs as its own one-off
+    scheduled task. Windows: only from the server itself."""
+    import backup
+    c = cfg()
+    if not (is_local() or DOCKER):
+        return jsonify(ok=False, message="Restoring is only possible on the server PC itself"), 403
+    name = (request.get_json(force=True) or {}).get("name", "")
+    if name not in {b["name"] for b in backup.list_backups(c)}:
+        return jsonify(ok=False, message="No such backup"), 404
+    if DOCKER:
+        run_script("backup", "restore", name)
+    else:
+        task = stackconf.task_name(c, "Restore")
+        pyw = Path(sys.executable).with_name("pythonw.exe")  # no console window
+        stackconf.schtasks("/Create", "/F", "/TN", task, "/SC", "ONCE", "/ST", "00:00",
+                           "/TR", f'"{pyw if pyw.exists() else sys.executable}" "{SORTER / "backup.py"}" restore {name}')
+        stackconf.schtasks("/Run", "/TN", task)
+    return jsonify(ok=True, message=f"Restoring {name}: apps restart in a minute (a safety backup is made first)")
+
+
 @app.post("/api/seerr/<int:req_id>/<verb>")
 def seerr_decide(req_id, verb):
     if verb not in ("approve", "decline"):
@@ -1076,6 +1222,12 @@ def action(action):
     if action == "healthcheck":
         run_healthcheck()
         return jsonify(ok=True, message="Health check started - results appear in Activity in a minute or two")
+    if action == "requests" and k.get("seerr"):
+        run_script("requestdoctor", "--quiet")
+        return jsonify(ok=True, message="Checking every request - this takes a few minutes")
+    if action == "backup":
+        run_script("backup")
+        return jsonify(ok=True, message="Backing up every app's settings - takes a few seconds")
     if action == "retry-imports":
         (Path(c["state_dir"]) / "retry.flag").touch()  # MediaSorter's watcher picks this up within 15 s
         return jsonify(ok=True, message="Re-trying failed imports")
@@ -1122,10 +1274,26 @@ def hourly_healthcheck():
         time.sleep(3600)
 
 
+def nightly_backup():
+    """Linux: the hub makes the nightly settings backup (Windows has a scheduled task for it)."""
+    while True:
+        now = time.localtime()
+        wait = ((3 * 60 + 30) - (now.tm_hour * 60 + now.tm_min)) % (24 * 60) or 24 * 60
+        time.sleep(wait * 60)
+        try:
+            import backup
+            backup.main()
+        except BaseException as e:
+            print("backup failed:", e)
+
+
 if __name__ == "__main__":
     from waitress import serve
     if DOCKER:
         threading.Thread(target=hourly_healthcheck, daemon=True).start()
+        threading.Thread(target=nightly_backup, daemon=True).start()
+    if "qbittorrent" in CFG.get("apps", {}):
+        threading.Thread(target=vpn_leak_loop, daemon=True).start()
     threading.Thread(target=watchdog_loop, daemon=True, name="watchdog").start()
     # All interfaces, but guard() decides who gets in.
     serve(app, host="0.0.0.0", port=int(CFG["hub"]["listen_port"]), threads=8)

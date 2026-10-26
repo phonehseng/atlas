@@ -61,23 +61,26 @@ func runSeerr(c *Ctx) error {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
-	pick := func(id, want string) (profile, error) {
+	pick := func(id string, wants ...string) (profile, error) {
 		var ps []profile
 		if err := c.Arr(id).Get("/qualityprofile", &ps); err != nil {
 			return profile{}, err
 		}
-		for _, p := range ps {
-			if p.Name == want {
-				return p, nil
+		for _, want := range wants {
+			for _, p := range ps {
+				if p.Name == want {
+					return p, nil
+				}
 			}
 		}
 		if len(ps) == 0 {
 			return profile{}, fmt.Errorf("%s has no quality profiles", id)
 		}
-		c.J.Warn("%s has no %q profile (was the quality-profile step skipped?) - using %q", platform.Get(id).Name, want, ps[0].Name)
+		c.J.Warn("%s has no %q profile (was the quality-profile step skipped?) - using %q", platform.Get(id).Name, wants[0], ps[0].Name)
 		return ps[0], nil
 	}
-	tv, err := pick("sonarr", "Remux 2160p (Combined)")
+	// Films go up to 4K; shows stop at 1080p (the "1080p" profile; older installs named it "WEB-1080p").
+	tv, err := pick("sonarr", "1080p", "WEB-1080p", "Remux 2160p (Combined)")
 	if err != nil {
 		return err
 	}
@@ -115,7 +118,7 @@ func runSeerr(c *Ctx) error {
 			return fmt.Errorf("connecting Seerr to %s: %w", kind, err)
 		}
 	}
-	c.J.OK("Seerr sends TV/anime to Sonarr and movies to Radarr, 4K first")
+	c.J.OK("Seerr sends shows to Sonarr (%q, anime %q) and films to Radarr (%q)", tv.Name, animeTV.Name, mv.Name)
 
 	// Japanese animated films -> Anime Movies folder with the anime profile (TMDB genre 16 = Animation).
 	var rules []struct {

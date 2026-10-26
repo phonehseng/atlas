@@ -20,6 +20,52 @@ func init() {
 	step(&Step{ID: "qbittorrent", Title: "qBittorrent", Group: "Download", Button: "Install qBittorrent",
 		Needs: []string{"vpn"}, Password: true, Run: runQbittorrent,
 		Links: func(st *core.Stack) []Link { return []Link{linkTo(st, "qbittorrent", "Open qBittorrent's web page")} }})
+	step(&Step{ID: "qui", Title: "Qui (torrents & seeding rules)", Group: "Download", Optional: true, Button: "Install Qui",
+		Needs: []string{"qbittorrent"}, Password: true, Run: runQui, Links: links("qui")})
+}
+
+// runQui installs Qui, a faster qBittorrent interface with per-tracker seeding rules, and connects it.
+func runQui(c *Ctx) error {
+	st := c.St
+	if err := c.Deploy("qui", "/api/auth/check-setup"); err != nil {
+		return err
+	}
+	q := core.NewAPI(st.URL("qui")+"/api", map[string]string{"X-Requested-With": "XMLHttpRequest"}) // Qui's CSRF check
+	var setup struct {
+		SetupRequired bool `json:"setupRequired"`
+	}
+	if err := q.Get("/auth/check-setup", &setup); err != nil {
+		return err
+	}
+	creds := core.M{"username": st.AdminUser, "password": c.Pass()}
+	if setup.SetupRequired {
+		if err := q.Post("/auth/setup", creds, nil); err != nil {
+			return fmt.Errorf("creating Qui's login: %w", err)
+		}
+	}
+	if err := q.Post("/auth/login", creds, nil); err != nil {
+		return core.UserAction("Qui didn't accept the admin login (" + err.Error() + ")")
+	}
+	var instances []struct{ Name string }
+	if err := q.Get("/instances", &instances); err != nil {
+		return err
+	}
+	for _, i := range instances {
+		if i.Name == "qBittorrent" {
+			c.J.OK("Qui already manages qBittorrent")
+			return nil
+		}
+	}
+	user, pass := "", ""
+	if st.Docker() {
+		user, pass = st.AdminUser, c.Pass() // containers can't use qBittorrent's "no login from this computer"
+	}
+	if err := q.Post("/instances", core.M{"name": "qBittorrent", "host": st.AppURL("qbittorrent"),
+		"username": user, "password": pass}, nil); err != nil {
+		return fmt.Errorf("connecting Qui to qBittorrent: %w", err)
+	}
+	c.J.OK("Qui manages qBittorrent (sign in with your admin login). Seeding rules per tracker: Qui > Automations")
+	return nil
 }
 
 // ---------------------------------------------------------------------------------------------- VPN

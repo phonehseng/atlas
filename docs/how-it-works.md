@@ -18,8 +18,12 @@
            data/media/...  ──► Jellyfin ──► phones, TVs, browsers (home network or Tailscale)
               ▲    Bazarr adds subtitles; MediaSorter sorts your own downloads and trims languages
               │
-           Media Hub: status, problems, logs, activity, hourly health check, 5-minute watchdog
+           Media Hub: status, problems, logs, activity, hourly health check, 5-minute watchdog,
+                      request doctor, nightly backups, VPN leak check, phone alerts (ntfy)
 ```
+
+Lidarr (optional) does the same for music: you add artists in Lidarr itself, and albums land in
+`data/media/Music` (Jellyfin's *Music* library).
 
 ## Folders
 
@@ -31,6 +35,7 @@
 │  └─ drop/         drop video files here to have them sorted
 ├─ config/<app>/    each app's settings and database
 ├─ config/shared/mediastack.json   the whole install described for MediaSorter, the Media Hub and the health check
+├─ backups/         nightly zips of every app's settings and databases (newest 7)
 ├─ apps/            Windows: the programs (plus MediaStack.exe, the background launcher)
 ├─ logs/            Windows: output of the background apps
 ├─ docker-compose.yml, .env   Linux

@@ -168,6 +168,9 @@
   .empty { color: var(--muted); font-size: 13.5px; }
   .bar { width: 92px; height: 7px; background: var(--sage); border-radius: 999px; overflow: hidden; flex: none; }
   .bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #4f7ff0, #23408f); }
+  .why { display: block; margin-top: 3px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .why.stuck { color: #9a5c00; } .why.error { color: #b42318; }
+  h3 .btn.sm { margin-left: auto; padding: 4px 11px; font-size: 12px; }
   .thumb { width: 36px; height: 54px; border-radius: 8px; background: var(--sage) center/cover no-repeat; flex: none; box-shadow: 0 2px 6px #14203f1a; }
 
   /* request */
@@ -323,10 +326,12 @@
       <div class="sec-head"><h2>What's happening</h2><span class="label"><span class="dot ok"></span>Live</span></div>
       <div class="cols">
         <div class="card"><h3><svg><use href="#i-down"/></svg>Downloading</h3><ul class="list" id="queue"></ul></div>
-        <div class="card"><h3><svg><use href="#i-film"/></svg>Requests</h3><ul class="list feed" id="requests"></ul></div>
+        <div class="card"><h3><svg><use href="#i-film"/></svg>Requests<button class="btn sm" data-action="requests" title="Follow every unfinished request into Sonarr/Radarr and fix what&#39;s stuck">Why not here?</button></h3><ul class="list feed" id="requests"></ul></div>
         <div class="card"><h3><svg><use href="#i-list"/></svg>Activity</h3><ul class="list feed" id="feed"></ul></div>
         <div class="card"><h3><svg><use href="#i-folder"/></svg>Recently sorted</h3><ul class="list" id="imports"></ul></div>
         <div class="card"><h3><svg><use href="#i-play"/></svg>Now playing</h3><ul class="list" id="playing"></ul></div>
+<div class="card" id="phonecard"><h3><svg><use href="#i-bell"/></svg>Phone alerts</h3><div id="phone"><div class="empty">Loading…</div></div></div>
+<div class="card"><h3><svg><use href="#i-folder"/></svg>Backups<button class="btn sm" data-action="backup">Back up now</button></h3><p class="muted" id="backupline" style="margin:-4px 0 10px;font-size:13px">Every app's settings and databases, nightly at 3:30. Not the media itself.</p><ul class="list" id="backups"></ul></div>
         <div class="card"><h3><svg><use href="#i-shield"/></svg>Incidents</h3><ul class="list feed" id="incidents"></ul></div>
       </div>
     </div>
@@ -469,7 +474,12 @@ function render() {
   $("#headline").textContent = headline;
   $("#subline").textContent = `${greeting()}. ${apps.filter(a => a.status === "ok").length} of ${apps.length} apps healthy.`;
   const vpn = state.system.vpn;
-  $("#chips").innerHTML = `${vpn === null || vpn === undefined ? "" : `<span class="chip"><span class="dot ${vpn ? "ok" : "warn"}"></span>VPN ${vpn ? "connected" : "off"}</span>`}
+  // VPN chip: the leak check's verdict (where torrents appear from) when there is one, else just up/down.
+  const lk = state.system.vpncheck, lkt = lk && lk.torrent ? [lk.torrent.city, lk.torrent.country].filter(Boolean).join(", ") : "";
+  const vpnChip = lk && lk.status === "leak" ? `<span class="chip" title="${esc(lk.text)}"><span class="dot error"></span>VPN leak!</span>`
+    : lk && lk.status === "ok" ? `<span class="chip" title="Leak check: ${esc(lk.text)}"><span class="dot ok"></span>Torrents via VPN${lkt ? " · " + esc(lkt) : ""}</span>`
+    : vpn === null || vpn === undefined ? "" : `<span class="chip" title="${esc(lk ? lk.text : "")}"><span class="dot ${vpn ? "ok" : "warn"}"></span>VPN ${vpn ? "connected" : "off"}</span>`;
+  $("#chips").innerHTML = `${vpnChip}
     <span class="chip">${state.system.disk.free_gb.toLocaleString()} GB free</span>
     ${state.watchdog ? `<button class="chip" id="wdchip" title="Click to turn the watchdog ${state.watchdog.on ? "off" : "on"}"><span class="dot ${!state.watchdog.on ? "warn" : state.watchdog.open.length ? "error" : "ok"}"></span>Watchdog ${!state.watchdog.on ? "off"
       : state.watchdog.open.length ? "· " + esc(state.watchdog.open.join(", ")) + " down" : state.watchdog.checked ? "· checked " + ago(state.watchdog.checked) : "on"}</button>` : ""}
@@ -507,11 +517,14 @@ function render() {
                  ...manual.map(t => `<li><span class="tag">${esc(t.category || "manual")}</span><span class="t" title="${esc(t.name)}">${esc(t.name)}</span><span class="bar"><i style="width:${t.progress}%"></i></span><span class="muted">${t.progress}%</span></li>`)];
   $("#queue").innerHTML = qhtml.join("") || `<li class="empty">Nothing downloading.</li>`;
 
+  // The request doctor (hourly, or the "Why not here?" button) explains each request that isn't here yet.
   const reqs = by("seerr").requests || [];
-  $("#requests").innerHTML = reqs.length ? reqs.map(r => `<li>${thumb(r.poster)}
-      <span class="t"><b>${esc(r.title)}</b>${r.year ? ` (${esc(r.year)})` : ""}<br><span class="muted">${r.type === "tv" ? "TV" : "Movie"}${r.by ? " · " + esc(r.by) : ""}</span></span>
+  const why = r => r.status === "Available" || r.pending ? null : doctor[`${r.type}:${r.tmdb}`];
+  $("#requests").innerHTML = reqs.length ? reqs.map(r => { const d = why(r); return `<li>${thumb(r.poster)}
+      <span class="t"><b>${esc(r.title)}</b>${r.year ? ` (${esc(r.year)})` : ""}<br><span class="muted">${r.type === "tv" ? "TV" : "Movie"}${r.by ? " · " + esc(r.by) : ""}${d && d.progress ? " · " + esc(d.progress) : ""}</span>
+      ${d ? `<span class="why ${esc(d.state)}" title="${esc([...(d.details || []), ...d.fixed.map(f => "Fixed: " + f)].join("\n"))}">${esc(d.reason)}${d.fixed.length ? ` · fixed: ${esc(d.fixed[d.fixed.length - 1])}` : ""}</span>` : ""}</span>
       ${r.pending ? `<button class="btn sm primary" data-req="${r.id}" data-verb="approve">Approve</button><button class="btn sm" data-req="${r.id}" data-verb="decline">Decline</button>`
-                  : `<span class="tag ${r.status === "Available" ? "ok" : ""}">${esc(r.status)}</span>`}</li>`).join("")
+                  : `<span class="tag ${r.status === "Available" ? "ok" : d && d.state === "stuck" ? "warn" : ""}">${esc(d ? DOCTOR_STATE[d.state] || r.status : r.status)}</span>`}</li>`; }).join("")
     : `<li class="empty">${by("seerr").status === "setup" ? "Seerr needs setup." : "No requests yet. Search above to request something."}</li>`;
 
   const imp = (by("mediasorter").recent || []).slice(0, 10);
@@ -530,6 +543,15 @@ function render() {
   renderNav();
 }
 const by = id => (state && state.apps.find(a => a.id === id)) || {};
+const DOCTOR_STATE = {waiting: "Not out yet", airing: "Up to date", downloading: "Downloading", searching: "Searching", stuck: "Stuck", available: "Downloaded", error: "Check failed"};
+let doctor = {};
+async function loadDoctor() {
+  try {
+    const d = await (await fetch("/api/requests")).json();
+    doctor = Object.fromEntries((d.items || []).map(i => [i.key, i]));
+    if (state) render();
+  } catch {}
+}
 
 fetch("/api/me").then(r => r.json()).then(m => {
   if (m.user) {
@@ -643,7 +665,21 @@ $("#askform").onsubmit = e => { e.preventDefault(); const q = $("#ask").value.tr
 // Desktop notifications toggle (stored by the hub service).
 let notifyOn = true;
 function paintBell() { $("#notif").classList.toggle("off", !notifyOn); $("#notif").title = `Desktop notifications: ${notifyOn ? "on" : "off"} (click to turn ${notifyOn ? "off" : "on"})`; }
-fetch("/api/settings").then(r => r.json()).then(s => { notifyOn = !!s.notifications; paintBell(); if (s.can_notify === false) $("#notif").hidden = true; }).catch(() => {});
+fetch("/api/settings").then(r => r.json()).then(s => { notifyOn = !!s.notifications; paintBell(); if (s.can_notify === false) $("#notif").hidden = true; paintPhone(s); }).catch(() => {});
+
+// Phone alerts through the free ntfy app: the hub posts to a private topic the phone subscribes to.
+function paintPhone(s) {
+  const t = s.ntfy_topic, server = (s.ntfy_server || "https://ntfy.sh").replace(/\/$/, "");
+  $("#phone").innerHTML = s.phone && t ? `<p class="muted" style="margin:-4px 0 10px;font-size:13px">On. "Ready to watch" and problem alerts go to your phone.</p>
+      <ol style="margin:0 0 12px;padding-left:18px;font-size:13.5px;line-height:1.6">
+        <li>Install <b>ntfy</b> (App Store or Google Play).</li>
+        <li>Tap <b>+</b> and subscribe to <b>${esc(t)}</b> <button class="copy" data-copy="${esc(t)}">Copy</button>${server !== "https://ntfy.sh" ? ` on ${esc(server)}` : ""}.</li>
+      </ol>
+      <p class="muted" style="font-size:12px;margin:0 0 12px">Keep the topic name private: anyone who knows it can read these alerts.</p>
+      <button class="btn sm primary" data-phone="test">Send a test</button> <button class="btn sm" data-phone="off">Turn off</button>`
+    : `<p class="muted" style="margin:-4px 0 12px;font-size:13px">Get "ready to watch" and problem alerts on your phone, even away from home, with the free ntfy app. No account needed.</p>
+      <button class="btn sm primary" data-phone="on">Turn on</button>`;
+}
 $("#notif").onclick = () => { notifyOn = !notifyOn; paintBell(); post("/api/settings", {notifications: notifyOn}).then(() => toast(notifyOn ? "Desktop notifications on" : "Desktop notifications off")); };
 
 // Apps marked with a browser (Jellyfin: Chrome) are opened by the hub itself when used on this PC, since a page
@@ -686,6 +722,22 @@ document.addEventListener("click", async e => {
     setTimeout(refresh, 3000);
     return;
   }
+  const ph = e.target.closest("[data-phone]");
+  if (ph) {
+    ph.disabled = true;
+    if (ph.dataset.phone === "test") { const r = await post("/api/phone/test"); toast(r.message); ph.disabled = false; return; }
+    const s = await post("/api/settings", {phone: ph.dataset.phone === "on"});
+    paintPhone(s); toast(s.phone ? "Phone alerts on: subscribe to the topic in the ntfy app" : "Phone alerts off");
+    return;
+  }
+  const rs = e.target.closest("[data-restore]");
+  if (rs) {
+    if (!confirm(`Restore ${rs.dataset.restore}?\n\nEvery app's settings go back to that moment. The apps restart, and the current settings are saved as a backup first.`)) return;
+    rs.disabled = true;
+    const r = await post("/api/backups/restore", {name: rs.dataset.restore});
+    toast(r.message); setTimeout(loadBackups, 5000);
+    return;
+  }
   const decide = e.target.closest("[data-req]");
   if (decide) {
     decide.disabled = true;
@@ -702,6 +754,7 @@ document.addEventListener("click", async e => {
     } catch { toast("That didn't work. Check Errors & logs."); }
     act.disabled = false;
     setTimeout(refresh, 4000);
+    if (act.dataset.action === "backup") setTimeout(loadBackups, 8000);
   }
 });
 $("#logrefresh").onclick = loadLogs; $("#logapp").onchange = loadLogs; $("#loglevel").onchange = loadLogs;
@@ -709,6 +762,20 @@ $("#logrefresh").onclick = loadLogs; $("#logapp").onchange = loadLogs; $("#logle
 refresh().then(() => { let v = null; try { v = localStorage.getItem("hub-view"); } catch {} if (v && v !== "overview" && state) show(v); });
 setInterval(refresh, 10000);
 loadEvents(); setInterval(loadEvents, 10000);
+loadDoctor(); setInterval(loadDoctor, 30000);
+
+// Backups: nightly zips of every app's settings; restoring is only offered on the server PC.
+async function loadBackups() {
+  try {
+    const d = await (await fetch("/api/backups")).json(), list = d.backups || [];
+    const mb = b => b.size_mb >= 1 ? Math.round(b.size_mb) + " MB" : b.size_mb + " MB";
+    $("#backups").innerHTML = list.length ? list.map((b, i) => `<li><span class="tag ${i === 0 ? "ok" : ""}">${b.label === "before-restore" ? "before restore" : ago(b.made)}</span>
+      <span class="t" title="${esc(b.apps.join(", "))}">${new Date(b.made * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"})} · ${mb(b)} · ${b.apps.length} apps</span>
+      ${d.can_restore ? `<button class="btn sm" data-restore="${esc(b.name)}">Restore</button>` : ""}</li>`).join("")
+      : `<li class="empty">No backups yet. The first one runs tonight, or press Back up now.</li>`;
+  } catch {}
+}
+loadBackups(); setInterval(loadBackups, 60000);
 loadIncidents(); setInterval(loadIncidents, 30000);
 </script>
 </body>

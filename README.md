@@ -4,8 +4,9 @@ One program that builds a complete, automated home media server, one guided step
 explains what it's about to install, installs it, connects it to everything already installed, and tells
 you what to do next.
 
-Request a film or show from your phone, and a few minutes later it's in Jellyfin, named properly, in 4K when
-there's a 4K release, with English subtitles for anime, ready on your TV.
+Request a film or show from your phone, and a few minutes later it's in Jellyfin, named properly, with English
+subtitles for anime, ready on your TV. It takes whatever copy is available first and keeps upgrading it (films
+up to 4K, shows up to 1080p), and if a request is stuck, the Media Hub tells you why and fixes what it can.
 
 - **Windows 10/11**: apps are installed natively and run in the background (Task Scheduler), no Docker needed.
 - **Linux** (PCs, servers, Raspberry Pi 4/5 with a 64-bit OS): apps run as Docker containers.
@@ -18,14 +19,17 @@ there's a 4K release, with English subtitles for anime, ready on your TV.
 | Watch | **Jellyfin** | Your own streaming service for phones, TVs and browsers |
 | Request | **Seerr** | Search and click *Request*; friends can too (auto-approved) |
 | Find | **Prowlarr**, **Sonarr**, **Radarr** | Search your indexers, grab releases, rename and file them |
-| Quality | **Recyclarr** | TRaSH Guides profiles: best 4K first, 1080p when no 4K exists |
+| Quality | **Recyclarr** | TRaSH Guides profiles: anything watchable first, then upgraded (films to 4K, shows to 1080p) |
 | Download | **qBittorrent** + your **VPN** | Torrents only ever go through the VPN |
 | Subtitles | **Bazarr** | English subtitles when the audio isn't English |
 | Tidy | **Unpackerr**, **Cleanuparr** | Unpack archives; remove stalled, dead and fake downloads |
 | Sort | **MediaSorter** | Files your own downloads into the library; strips unwanted audio/subtitle languages |
 | Overview | **Media Hub** | One dashboard: status, problems, requests, downloads, logs, health checks, and a watchdog that restarts apps that go down |
+| Requests | **Request doctor** (in the hub) | Says why each request isn't here yet, fixes what it can, and keeps searching for upgrades |
+| Safety | **Backups**, **VPN leak check** (in the hub) | Nightly backup of every app's settings with a Restore button; proof that torrents use the VPN |
+| Alerts | **Phone notifications** (ntfy) | "Ready to watch" and problems on your phone, even away from home |
 | Away from home | **Tailscale** | Private access from your phone, TV and friends, nothing opened to the internet |
-| Optional | **jfa-go**, **Requestrr**, **autobrr**, **trawl**, **Byparr** | Invite links, Discord requests, IRC auto-grabs, Cloudflare helpers |
+| Optional | **Lidarr**, **Qui**, **Intro Skipper**, **jfa-go**, **Requestrr**, **autobrr**, **trawl**, **Byparr** | Music, a faster qBittorrent page with seeding rules, a "Skip Intro" button, invite links, Discord requests, IRC auto-grabs, Cloudflare helpers |
 
 ## Download
 

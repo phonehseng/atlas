@@ -69,8 +69,8 @@ type Ctx struct {
 var Order = []string{
 	"welcome", "folders", "account",
 	"jellyfin",
-	"vpn", "qbittorrent",
-	"prowlarr", "sonarr", "radarr", "recyclarr", "trawl", "byparr", "bazarr", "unpackerr", "cleanuparr",
+	"vpn", "qbittorrent", "qui",
+	"prowlarr", "sonarr", "radarr", "lidarr", "recyclarr", "trawl", "byparr", "bazarr", "unpackerr", "cleanuparr",
 	"seerr", "jfago", "requestrr", "autobrr",
 	"mediasorter", "hub",
 	"remote", "finish",
@@ -144,10 +144,10 @@ func (c *Ctx) Deploy(id, readyPath string) error {
 // Pass is the admin password (the wizard asks again if it was restarted).
 func (c *Ctx) Pass() string { return c.St.AdminPass }
 
-// Arr is a client for Sonarr/Radarr/Prowlarr's API.
+// Arr is a client for Sonarr/Radarr/Lidarr/Prowlarr's API.
 func (c *Ctx) Arr(id string) *core.API {
 	ver := "v3"
-	if id == "prowlarr" {
+	if id == "prowlarr" || id == "lidarr" {
 		ver = "v1"
 	}
 	return core.NewAPI(c.St.URL(id)+"/api/"+ver, map[string]string{"X-Api-Key": c.St.Key(id)})

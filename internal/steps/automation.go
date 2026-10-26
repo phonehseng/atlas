@@ -40,6 +40,7 @@ var roles = map[string]string{
 	"qbittorrent": "Downloads", "bazarr": "Subtitles", "cleanuparr": "Stuck-download cleanup", "jfago": "Friend & family invites",
 	"requestrr": "Discord requests", "autobrr": "IRC autodownloads", "trawl": "Cloudflare helper", "byparr": "Cloudflare helper",
 	"unpackerr": "Archive extraction", "mediasorter": "Sorts manual downloads", "recyclarr": "Quality profiles", "gluetun": "VPN",
+	"lidarr": "Music", "qui": "Torrents & seeding rules",
 }
 
 // logGlob says where each app writes its log (as the hub sees it).
@@ -51,7 +52,7 @@ func logGlob(st *core.Stack, id string) string {
 			return c + "/log/log_*.log"
 		case "qbittorrent":
 			return c + "/qBittorrent/logs/qbittorrent.log"
-		case "sonarr", "radarr", "prowlarr":
+		case "sonarr", "radarr", "prowlarr", "lidarr":
 			return c + "/logs/" + id + ".txt"
 		case "bazarr":
 			return c + "/log/bazarr.log"
@@ -72,7 +73,7 @@ func logGlob(st *core.Stack, id string) string {
 		return filepath.Join(c, "log", "log_*.log")
 	case "qbittorrent":
 		return filepath.Join(c, "qBittorrent", "data", "logs", "qbittorrent.log")
-	case "sonarr", "radarr", "prowlarr":
+	case "sonarr", "radarr", "prowlarr", "lidarr":
 		return filepath.Join(c, "logs", id+".txt")
 	case "bazarr":
 		return filepath.Join(c, "log", "bazarr.log")
@@ -94,7 +95,7 @@ func WriteAppConfig(st *core.Stack) error {
 	apps := map[string]appInfo{}
 	for _, id := range st.DeployedApps() {
 		a := platform.Apps[id]
-		if a == nil || id == "healthcheck" {
+		if a == nil || id == "healthcheck" || id == "backup" {
 			continue
 		}
 		info := appInfo{Name: a.Name, Role: roles[id], Key: st.Key(id), Log: logGlob(st, id)}
@@ -169,7 +170,7 @@ func WriteAppConfig(st *core.Stack) error {
 		// The Media Hub's watchdog: restarts apps that go down. Set ollama_host/ollama_model to a local Ollama
 		// model to have it write the incident diagnosis; otherwise it's read from the app's log.
 		"watchdog":               core.M{"minutes": 5, "auto_restart": true, "ollama_host": "", "ollama_model": ""},
-		"managed_categories":     []string{"sonarr", "radarr"},
+		"managed_categories":     []string{"sonarr", "radarr", "lidarr"},
 		"sweep_interval_seconds": map[bool]int{true: 60, false: 300}[st.Docker()],
 		"drop_settle_seconds":    60,
 		"min_video_mb":           40,
@@ -293,6 +294,11 @@ func runHub(c *Ctx) error {
 		} else {
 			c.J.OK("Hourly health check scheduled")
 		}
+		if err := c.P.Deploy(c, st, c.J, "backup"); err != nil {
+			c.J.Warn("Nightly backup: %v", err)
+		} else {
+			c.J.OK("Every app's settings are backed up nightly at 3:30 to %s", filepath.Join(st.Root, "backups"))
+		}
 		desktopShortcut(c, "Media Hub", OpenURL(st, "hub"))
 	}
 	hubHooks(c)
@@ -314,6 +320,12 @@ func hubHooks(c *Ctx) {
 		if err := ensureWebhook(c.Arr(id), "Media Hub", hook+id, []string{"onGrab", "onDownload", "onUpgrade",
 			"onHealthIssue", "includeHealthWarnings", "onHealthRestored", "onManualInteractionRequired", add}); err != nil {
 			c.J.Warn("%s -> Media Hub: %v", platform.Get(id).Name, err)
+		}
+	}
+	if st.IsDeployed("lidarr") {
+		if err := ensureWebhook(c.Arr("lidarr"), "Media Hub", hook+"lidarr", []string{"onGrab", "onReleaseImport", "onUpgrade",
+			"onHealthIssue", "includeHealthWarnings", "onHealthRestored", "onDownloadFailure", "onImportFailure"}); err != nil {
+			c.J.Warn("Lidarr -> Media Hub: %v", err)
 		}
 	}
 	if st.IsDeployed("prowlarr") {

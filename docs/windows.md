@@ -26,18 +26,20 @@ Everything installs natively, with no Docker, and runs in the background wheneve
 | Check this computer | Internet, winget, graphics card and ports are checked | Fix anything it lists, then *Check* again |
 | Choose a folder | Creates `<drive>:\MediaServer` (or your choice) with the library and download folders | Pick a big drive |
 | Your admin login | One username/password for Jellyfin and all admin pages | Choose a strong password |
-| Jellyfin | Downloads Jellyfin, runs its first-time setup, creates the libraries, turns on NVIDIA transcoding if you have NVIDIA graphics | - |
+| Jellyfin | Downloads Jellyfin, runs its first-time setup, creates the libraries, turns on NVIDIA transcoding if you have NVIDIA graphics, adds Intro Skipper ("Skip Intro" button) | Untick Intro Skipper if you don't want it |
 | VPN for downloads | Locks qBittorrent to your VPN's network connection | Connect your VPN app, press **Refresh**, pick it (NordVPN: *NordLynx*) |
 | qBittorrent | Installed system-wide (click **Yes** on the Windows prompt), folders, categories and seeding limits set | NordVPN split tunnelling: see below |
+| Qui (optional) | A faster qBittorrent page with per-tracker seeding rules, signed in with your admin login | - |
 | Prowlarr, Sonarr, Radarr | Installed and connected to qBittorrent, Jellyfin and each other | Add your indexers in Prowlarr (see [after setup](after-setup.md)) |
-| Quality profiles | TRaSH Guides profiles synced into Sonarr and Radarr, weekly | - |
+| Lidarr (optional) | Music: connected to qBittorrent, Prowlarr and Jellyfin (a *Music* library) | Add artists in Lidarr |
+| Quality profiles | TRaSH Guides profiles synced weekly, set to take what's available first and upgrade (films to 4K, shows to 1080p) | - |
 | trawl / Byparr (optional) | Cloudflare helpers for Prowlarr | Only if an indexer is behind Cloudflare |
 | Bazarr | English subtitles when the audio isn't English | Optional: add an OpenSubtitles.com account |
 | Unpackerr, Cleanuparr | Archive extraction, stuck/fake download removal | - |
 | Seerr | Built from source (10-15 minutes), signed in to Jellyfin, connected to Sonarr/Radarr | - |
 | jfa-go, Requestrr, autobrr (optional) | Invites, Discord requests, IRC grabs | See [after setup](after-setup.md) |
 | MediaSorter | Python and MKVToolNix installed (click **Yes**), qBittorrent hands it every finished download | Choose which audio/subtitle languages to keep |
-| Media Hub | The dashboard, an hourly health check, a desktop shortcut | - |
+| Media Hub | The dashboard, an hourly health check, a nightly settings backup (3:30), a desktop shortcut | Optional: turn on phone alerts |
 | Phones, TVs & away from home | Windows Firewall rules (click **Yes**), Tailscale installed and signed in | Sign in to Tailscale in the browser tab it opens |
 | All done | A table of the addresses to use | Your to-do list |
 
@@ -79,6 +81,6 @@ the background properly); use this instead.
 ## Uninstalling
 
 1. Task Scheduler → delete the **Media Stack** folder's tasks (select them → Delete), then the folder.
-2. Delete `<folder>` (this deletes your library too; move the media out first if you want to keep it).
+2. Delete `<folder>` (this deletes your library and the `backups` folder too; move them out first if you want to keep them).
 3. Optional: uninstall qBittorrent, MKVToolNix and Tailscale in *Settings → Apps*, and remove the
    "Media Stack - ..." rules in *Windows Defender Firewall → Inbound Rules*.

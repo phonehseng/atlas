@@ -337,6 +337,12 @@ func (s *Server) execute(step *steps.Step, job *core.Job, values map[string]stri
 	case err == nil:
 		if st != nil {
 			st.SetStep(step.ID, "done", "")
+			if st.IsDeployed("mediasorter") {
+				// The hub and the health check learn about apps added after them.
+				if werr := steps.WriteAppConfig(st); werr != nil {
+					job.Warn("Couldn't update the Media Hub's settings: %v", werr)
+				}
+			}
 		} else if step.ID == "welcome" {
 			s.mu.Lock()
 			s.welcome = "done"

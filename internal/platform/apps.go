@@ -43,7 +43,7 @@ type WinRecipe struct {
 	// Keep lists folders inside the program folder that hold settings (apps that store them next to the
 	// program); they're carried over when the app is updated.
 	Keep    []string
-	Trigger string // "logon" (default), "weekly", "hourly", or "none" (installed, not scheduled)
+	Trigger string // "logon" (default), "weekly", "daily" (3:30), "hourly", or "none" (installed, not scheduled)
 }
 
 // DockerSpec is an app's Docker Compose service (Linux).
@@ -91,23 +91,37 @@ func init() {
 			Volumes: servarrVolumes, Env: map[string]string{"WEBUI_PORT": "8080", "TORRENTING_PORT": "6881"}},
 		Prepare: prepareQbittorrent})
 
+	// -nosingleinstancecheck: Sonarr/Radarr/Prowlarr/Lidarr refuse to start while any other copy is running (another
+	// install's too, matched by program name), so one install would stop the other starting after a reboot.
 	add(&App{ID: "prowlarr", Name: "Prowlarr",
 		Win: &WinRecipe{Repo: "Prowlarr/Prowlarr", Asset: `^Prowlarr\.\w+\.[\d.]+\.windows-core-x64\.zip$`,
-			Exe: "Prowlarr.Console.exe", Args: []string{"-nobrowser", "-data={config}"}},
+			Exe: "Prowlarr.Console.exe", Args: []string{"-nobrowser", "-nosingleinstancecheck", "-data={config}"}},
 		Docker:  &DockerSpec{Image: "lscr.io/linuxserver/prowlarr:latest", Port: 9696, LSIO: true, Volumes: []string{"{config}:/config"}},
 		Prepare: servarrPrepare("Prowlarr", "master")})
 
 	add(&App{ID: "sonarr", Name: "Sonarr",
 		Win: &WinRecipe{Repo: "Sonarr/Sonarr", Asset: `^Sonarr\.main\.[\d.]+\.win-x64\.zip$`,
-			Exe: "Sonarr.Console.exe", Args: []string{"-nobrowser", "-data={config}"}},
+			Exe: "Sonarr.Console.exe", Args: []string{"-nobrowser", "-nosingleinstancecheck", "-data={config}"}},
 		Docker:  &DockerSpec{Image: "lscr.io/linuxserver/sonarr:latest", Port: 8989, LSIO: true, Volumes: servarrVolumes},
 		Prepare: servarrPrepare("Sonarr", "main")})
 
 	add(&App{ID: "radarr", Name: "Radarr",
 		Win: &WinRecipe{Repo: "Radarr/Radarr", Asset: `^Radarr\.master\.[\d.]+\.windows-core-x64\.zip$`,
-			Exe: "Radarr.Console.exe", Args: []string{"-nobrowser", "-data={config}"}},
+			Exe: "Radarr.Console.exe", Args: []string{"-nobrowser", "-nosingleinstancecheck", "-data={config}"}},
 		Docker:  &DockerSpec{Image: "lscr.io/linuxserver/radarr:latest", Port: 7878, LSIO: true, Volumes: servarrVolumes},
 		Prepare: servarrPrepare("Radarr", "master")})
+
+	add(&App{ID: "lidarr", Name: "Lidarr",
+		Win: &WinRecipe{Repo: "Lidarr/Lidarr", Asset: `^Lidarr\.master\.[\d.]+\.windows-core-x64\.zip$`,
+			Exe: "Lidarr.Console.exe", Args: []string{"-nobrowser", "-nosingleinstancecheck", "-data={config}"}},
+		Docker:  &DockerSpec{Image: "lscr.io/linuxserver/lidarr:latest", Port: 8686, LSIO: true, Volumes: servarrVolumes},
+		Prepare: servarrPrepare("Lidarr", "master")})
+
+	add(&App{ID: "qui", Name: "Qui",
+		Win: &WinRecipe{Repo: "autobrr/qui", Asset: `^qui_[\d.]+_windows_x86_64\.zip$`, Exe: "qui.exe",
+			Args: []string{"serve", "--config-dir", "{config}"}},
+		Docker:  &DockerSpec{Image: "ghcr.io/autobrr/qui:latest", Port: 7476, User: true, Volumes: []string{"{config}:/config"}},
+		Prepare: prepareQui})
 
 	add(&App{ID: "bazarr", Name: "Bazarr",
 		Win: &WinRecipe{Install: installBazarr, Exe: `.venv\Scripts\python.exe`,
@@ -182,8 +196,9 @@ func init() {
 			Args: []string{`{root}\apps\mediastack-py\mediahub\hub.py`},
 			Env:  []string{"PYTHONIOENCODING=utf-8", `MEDIASTACK_CONFIG={root}\config\shared\mediastack.json`}},
 		Docker: &DockerSpec{Build: "apps/mediastack-py", Port: 8585,
+			// /appconfig is writable for restoring backups (the hub makes them nightly into /backups).
 			Volumes: []string{"{root}/config/shared:/shared:ro", "{config}:/state",
-				"{data}:/data", "{root}/config:/appconfig:ro", "{root}/config/mediasorter:/sorter",
+				"{data}:/data", "{root}/config:/appconfig", "{root}/backups:/backups", "{root}/config/mediasorter:/sorter",
 				"/var/run/docker.sock:/var/run/docker.sock"},
 			Env:     map[string]string{"MEDIASTACK_CONFIG": "/shared/mediastack.json", "MEDIASTACK_STATE": "/state"},
 			Command: []string{"python", "/app/mediahub/hub.py"}}})
@@ -191,6 +206,12 @@ func init() {
 	add(&App{ID: "healthcheck", Name: "Health check",
 		Win: &WinRecipe{Install: installPythonApps, Exe: `{root}\apps\python-env\Scripts\python.exe`,
 			Args: []string{`{root}\apps\mediastack-py\mediasorter\healthcheck.py`}, Trigger: "hourly",
+			Env: []string{"PYTHONIOENCODING=utf-8", `MEDIASTACK_CONFIG={root}\config\shared\mediastack.json`}}})
+
+	// Nightly backup of every app's settings (Linux: the Media Hub container does it).
+	add(&App{ID: "backup", Name: "Backup",
+		Win: &WinRecipe{Install: installPythonApps, Exe: `{root}\apps\python-env\Scripts\python.exe`,
+			Args: []string{`{root}\apps\mediastack-py\mediasorter\backup.py`}, Trigger: "daily",
 			Env: []string{"PYTHONIOENCODING=utf-8", `MEDIASTACK_CONFIG={root}\config\shared\mediastack.json`}}})
 }
 
@@ -293,6 +314,28 @@ logMaxBackups = 3
 checkForUpdates = false
 sessionSecret = "%s"
 `, host, port, core.RandomHex(16))
+	return core.WriteFileAtomic(file, []byte(conf), 0o600)
+}
+
+// prepareQui writes Qui's config.toml: its port, and on Windows only this PC (keeps the session secret).
+func prepareQui(_ context.Context, st *core.Stack, _ *core.Job, port int) error {
+	file := filepath.Join(st.ConfigDir("qui"), "config.toml")
+	if b, err := os.ReadFile(file); err == nil {
+		s := regexp.MustCompile(`(?m)^port\s*=.*$`).ReplaceAllString(string(b), fmt.Sprintf("port = %d", port))
+		return core.WriteFileAtomic(file, []byte(s), 0o600)
+	}
+	host := "127.0.0.1"
+	if st.Docker() {
+		host = "0.0.0.0"
+	}
+	conf := fmt.Sprintf(`# Qui settings (written by Media Stack Setup)
+host = "%s"
+port = %d
+baseUrl = "/"
+sessionSecret = "%s"
+logLevel = "INFO"
+checkForUpdates = false
+`, host, port, core.RandomHex(32))
 	return core.WriteFileAtomic(file, []byte(conf), 0o600)
 }
 

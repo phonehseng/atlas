@@ -52,12 +52,27 @@ Blocklist* → remove them, then search again. The health check warns about this
 server), restart trawl from the Media Hub. The health check does this automatically for failed `trawl`
 indexers.
 
+**A request has been "Searching" for days**: read its line on the Media Hub's *Requests* card. "No indexer
+has it" means none of your indexers carry it: add more in Prowlarr. "None usable: no one is sharing it" means it
+exists but nobody seeds it; try again later or add indexers. "Blocked by the quality rules" names the rule; for
+a one-off, use *Interactive Search* in Sonarr/Radarr and grab a release yourself.
+
+**A film downloaded but it's the wrong length**: the request doctor removes film files far shorter than the
+film (they go to the recycle bin, `data/media/.recycle-bin`, kept 14 days) and blocklists that release.
+
 **A download finished but isn't imported**: Sonarr/Radarr → *Activity → Queue* shows why (the orange icon).
 Releases whose folder name confused them are imported automatically by the health check; others need
 *Manual Import* there.
 
 **A manual download wasn't sorted**: check the Media Hub's *Recently sorted* card. It must have the category
 *movies*, *tv* or *anime* (or be in the *drop* folder). Use *Retry failed imports* after fixing the cause.
+
+**The VPN leak check says torrents use your home address**: stop qBittorrent (Media Hub → restart, or close it),
+then: Windows: run the *VPN for downloads* and *qBittorrent* steps again with the VPN connected. Linux:
+`docker compose logs gluetun`. The check runs again within 10 minutes.
+
+**Lidarr has no indexers**: Prowlarr only shares indexers that return music results with Lidarr. Add a site
+with music in Prowlarr.
 
 ## Jellyfin
 
@@ -73,6 +88,10 @@ scan if it's missing. You can also use Jellyfin → *Dashboard → Libraries →
 
 **Playback stutters on a phone/TV**: the file is being converted. Turn on hardware acceleration (Jellyfin →
 *Dashboard → Playback → Transcoding*), or use a quality profile with smaller files.
+
+**No "Skip Intro" button**: Intro Skipper scans episodes in the background (Jellyfin → *Dashboard → Scheduled
+Tasks*). Some apps don't show the button yet; Jellyfin's web page and official apps do. If the plugin shows
+"Restart" in *Dashboard → Plugins*, restart Jellyfin (the health check does it once nobody is watching).
 
 **Subtitles sit too high or too low**: in the Jellyfin app, *Settings → Subtitles → Vertical position*.
 
@@ -106,6 +125,16 @@ again to reapply the settings.
 
 **The apps don't start after a reboot (Windows)**: they start when you sign in. Turn on automatic sign-in on
 a dedicated server PC.
+
+## Backups
+
+**Restore a backup**: Media Hub → Overview → *Backups* → **Restore** (on the server itself). The current settings
+are saved as a backup first ("before restore"), so you can go back. From a command line:
+Windows `<folder>\apps\python-env\Scripts\python.exe <folder>\apps\mediastack-py\mediasorter\backup.py restore <zip> [apps]`;
+Linux `docker compose exec hub python /app/mediasorter/backup.py restore <zip> [apps]`.
+
+**"The last settings backup is N days old"**: Windows: Task Scheduler → your install's folder → *Backup* → *Run*,
+and check its log in `<folder>\logs\backup.log`. Linux: the hub container makes them; `docker compose logs hub`.
 
 ## Starting over
 

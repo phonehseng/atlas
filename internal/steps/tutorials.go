@@ -25,12 +25,14 @@ Every step explains what it installs before it does anything.</p>
 <li><b>Sonarr</b> &amp; <b>Radarr</b> - find, download, rename and upgrade TV/anime and films.</li>
 <li><b>Prowlarr</b> - one place for the search sites (indexers) Sonarr and Radarr use.</li>
 <li><b>qBittorrent</b> - downloads, only through your VPN.</li>
-<li><b>Recyclarr</b> - expert quality settings from the TRaSH Guides: 4K first, 1080p when there's no 4K.</li>
+<li><b>Recyclarr</b> - expert quality settings from the TRaSH Guides: whatever is available first, then upgraded (films up to 4K, shows up to 1080p).</li>
 <li><b>Bazarr</b> - English subtitles for anime and foreign-language films.</li>
 <li><b>Unpackerr</b> &amp; <b>Cleanuparr</b> - unpack archived releases; remove stuck or fake downloads.</li>
-<li><b>MediaSorter</b> &amp; the <b>Media Hub</b> - sort files you download yourself; one dashboard for everything.</li>
+<li><b>MediaSorter</b> &amp; the <b>Media Hub</b> - sort files you download yourself; one dashboard for everything, with nightly
+backups, a VPN leak check, phone alerts, and a request doctor that explains (and fixes) why a request isn't here yet.</li>
 <li><b>Tailscale</b> - private access from your phone or TV away from home. Optional extras: <b>jfa-go</b> (invite friends),
-<b>Requestrr</b> (requests from Discord), <b>autobrr</b> (IRC), <b>trawl</b>/<b>Byparr</b> (Cloudflare-protected sites).</li>
+<b>Requestrr</b> (requests from Discord), <b>autobrr</b> (IRC), <b>trawl</b>/<b>Byparr</b> (Cloudflare-protected sites),
+<b>Lidarr</b> (music), <b>Qui</b> (a faster qBittorrent page with seeding rules).</li>
 </ul>
 {{if win}}<p>On Windows every app runs in the background whenever you're signed in (Task Scheduler folder <i>{{.St.Name}}</i>),
 and restarts by itself if it crashes. Some steps install software system-wide: Windows will ask you to click <b>Yes</b>.
@@ -64,12 +66,14 @@ which is instant and uses no extra space while a torrent keeps seeding.</p>`,
 	"jellyfin": {Intro: `
 <p><b>Jellyfin</b> is the part you watch: a free, private streaming service for your own files. This step installs it,
 creates your admin account, and adds the libraries <i>Movies</i>, <i>TV Shows</i> and <i>Anime</i> (series and films together).
+With the box below ticked it also adds <b>Intro Skipper</b>, which gives episodes a Netflix-style <i>Skip Intro</i> button.
 {{if nvidia}}Your NVIDIA graphics card will be used to convert video for devices that can't play a file as-is.{{end}}</p>`,
 		After: `
 <ol><li>Open Jellyfin: <a href="{{url "jellyfin"}}" target="_blank">{{url "jellyfin"}}</a> and sign in with your admin login.</li>
 <li>Install the <b>Jellyfin</b> app on your phone or TV (Android, iPhone, Android TV / Google TV, Fire TV, Roku, Apple TV via Swiftfin...).
 At home, use the server address <code>{{lan "jellyfin"}}</code>. For away from home, see the last steps (Tailscale).</li>
-<li>The libraries stay empty until something is requested or sorted in - that's the next steps.</li></ol>`},
+<li>The libraries stay empty until something is requested or sorted in - that's the next steps.</li>
+<li><i>Skip Intro</i> appears once Intro Skipper has scanned an episode (its scheduled task runs daily; new episodes are scanned as they arrive).</li></ol>`},
 
 	"vpn": {Intro: `
 <p>Torrent downloads are visible to everyone sharing the same file, and to your internet provider. A VPN hides your home address.
@@ -87,7 +91,8 @@ Nothing else on the server uses the VPN.</p>
 <li><b>Mullvad</b>: account page → <i>WireGuard configuration</i> → generate a key; use the private key and the address it shows.</li>
 <li><b>Surfshark</b>, <b>PIA</b>, <b>ExpressVPN</b>, <b>Windscribe</b>...: look for "manual setup" or "OpenVPN credentials".</li></ul>
 <p>They are stored only in <code>{{.Root}}/.env</code>, readable by root only.</p>{{end}}`,
-		After: `{{if win}}<p>Saved. The next step installs qBittorrent and locks it to <b>{{.St.VPN.Adapter}}</b>.</p>
+		After: `{{if win}}<p>Saved. The next step installs qBittorrent and locks it to <b>{{.St.VPN.Adapter}}</b>. The Media Hub's
+<b>VPN leak check</b> later proves it: it compares the address torrents use with your home address.</p>
 {{else}}<p>The VPN container is connected. The next step puts qBittorrent inside it.</p>{{end}}`},
 
 	"qbittorrent": {Intro: `
@@ -103,6 +108,13 @@ and MediaSorter files it into the right library.</p>{{else}}
 <p>qBittorrent's web page: <a href="{{url "qbittorrent"}}" target="_blank">{{url "qbittorrent"}}</a> (your admin login).
 For manual downloads pick a category (<i>movies</i>, <i>tv</i>, <i>anime</i>) and MediaSorter files it into the right library.</p>{{end}}
 <p>Or drop <code>.torrent</code> files into <code>{{watch}}</code>.</p>`},
+
+	"qui": {Intro: `
+<p><b>Optional.</b> <b>Qui</b> is a faster, modern page for qBittorrent that copes with thousands of torrents, and adds
+<b>rules per tracker</b>: how long to seed, when to pause or remove, tags and categories. Most useful with private trackers,
+which expect you to seed for a set time. This step installs it, creates its login (your admin login) and connects qBittorrent.</p>`,
+		After: `<p>Open <a href="{{url "qui"}}" target="_blank">Qui</a> and sign in with your admin login. Seeding rules: <i>Automations</i>.
+qBittorrent's own simple limits (ratio 1.0 / 12 hours) still apply to anything without a rule.</p>`},
 
 	"prowlarr": {Intro: `
 <p><b>Prowlarr</b> keeps the list of sites (indexers) that Sonarr and Radarr search. You add each site once here and it's
@@ -125,12 +137,26 @@ Choose series type <i>Anime</i> for anime so episodes are matched by absolute nu
 		After: `<p>Add films through <b>Seerr</b> - or in <a href="{{url "radarr"}}" target="_blank">Radarr</a> → <i>Add New</i>.</p>`},
 
 	"recyclarr": {Intro: `
-<p><b>Recyclarr</b> copies the community's best-known quality rules (TRaSH Guides) into Sonarr and Radarr and keeps them up to date weekly:</p>
-<ul><li><b>Remux 2160p (Combined)</b> for films and TV: the best 4K release, 1080p only when no 4K exists, upgrading later.</li>
-<li><b>[Anime] Remux-1080p</b> for anime.</li></ul>
-<p>4K remuxes are big (40-80 GB per film). Prefer smaller files? After setup, pick <i>WEB-2160p</i> or <i>HD Bluray + WEB</i>
-in Sonarr/Radarr's profile list instead.</p>`,
-		After: `<p>Profiles synced. Seerr will use them automatically.</p>`},
+<p><b>Recyclarr</b> copies the community's best-known quality rules (TRaSH Guides) into Sonarr and Radarr and keeps them up to date
+weekly. On top of them this installer applies one rule: <b>get whatever is available first, then upgrade</b>, so a request never
+waits for a perfect copy:</p>
+<ul><li><b>Films</b> (<i>Remux 2160p (Combined)</i>): any watchable release first, upgraded step by step up to a 4K remux.</li>
+<li><b>Shows</b> (<i>1080p</i>): any watchable release first, upgraded up to 1080p. Want a show in 4K? Switch it to
+<i>Remux 2160p (Combined)</i> in Sonarr.</li>
+<li><b>Anime</b> (<i>[Anime] Remux-1080p</i>): the anime release groups' rules, with anything subtitled accepted while it waits.</li></ul>
+<p>Low-quality encodes (like YTS), x265 and upscales are taken only when nothing better exists. Disc images, extras, 3D,
+dubbed-only versions and raw (unsubtitled) anime are never taken. 4K remuxes are big (40-80 GB per film); for smaller films
+pick <i>UHD Bluray + WEB</i> or <i>HD Bluray + WEB</i> instead.</p>`,
+		After: `<p>Profiles synced. Seerr uses them automatically, and the Media Hub's request doctor keeps looking for upgrades.</p>`},
+
+	"lidarr": {Intro: `
+<p><b>Optional.</b> <b>Lidarr</b> does for music what Sonarr does for shows: add an artist, and it finds, downloads, tags and files
+their albums into <i>Music</i>, which this step adds to Jellyfin. It takes what's available first and upgrades to lossless.</p>`,
+		After: `
+<ol><li>Open <a href="{{url "lidarr"}}" target="_blank">Lidarr</a> → <i>Add New</i> → search for an artist.</li>
+<li>Lidarr only gets the Prowlarr indexers that have <b>music</b>. If Lidarr says it has no indexers, add a site with music in
+Prowlarr; it's shared within a minute once it returns music results.</li>
+<li>Listen in Jellyfin (the <i>Music</i> library), or a music app like Finamp (Android/iPhone).</li></ol>`},
 
 	"trawl": {Intro: `
 <p><b>Optional.</b> Some indexer sites sit behind Cloudflare's "checking your browser" page, which Prowlarr can't get past.
@@ -200,13 +226,19 @@ losslessly, nothing is re-encoded.</p>`,
 
 	"hub": {Intro: `
 <p>The <b>Media Hub</b> is one page for everything: what's downloading, requests (approve, search, request), problems from every app
-with fix buttons, a combined error log, and every app's own page as a tab. It also shows the addresses to use on phones and TVs.</p>`,
+with fix buttons, a combined error log, and every app's own page as a tab. It also shows the addresses to use on phones and TVs.</p>
+<ul><li><b>Request doctor</b>: every request that isn't here yet says why (not released yet, no seeders, blocked by the quality
+rules...), and what it could fix, it fixes: wrong profile, never searched, broken files, Seerr losing a request.</li>
+<li><b>Nightly backups</b> of every app's settings and databases (not the media), with a <i>Restore</i> button.</li>
+<li><b>VPN leak check</b>: proves torrents use the VPN's address, not yours, and alerts you if that ever changes.</li>
+<li><b>Phone alerts</b> through the free ntfy app: "ready to watch" and problems, even away from home.</li></ul>`,
 		After: `
 <p>Open <a href="{{url "hub"}}" target="_blank">the Media Hub</a>{{if win}} (there's a desktop shortcut){{end}}.
 {{if win}}On this PC it needs no login. From your phone over Tailscale, sign in with your Jellyfin admin login.
 {{else}}Sign in with your Jellyfin admin login.{{end}} A health check runs every hour and fixes common problems by itself,
 and a watchdog checks every 5 minutes: it restarts any app that goes down, notes what its log said (Overview → Incidents),
-and tells you if a restart didn't fix it.</p>`},
+and tells you if a restart didn't fix it.</p>
+<p>Phone alerts: Overview → <i>Phone alerts</i> → <b>Turn on</b>, then subscribe to the topic it shows in the ntfy app.</p>`},
 
 	"remote": {Intro: `
 <p><b>At home</b>, phones and TVs on the same Wi-Fi can reach Jellyfin and Seerr directly{{if win}} once Windows Firewall allows it (first option){{end}}.</p>

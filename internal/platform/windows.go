@@ -195,6 +195,9 @@ func taskXML(st *core.Stack, a *App, exe string, args []string, dir string) ([]b
 		trig = fmt.Sprintf(`<CalendarTrigger><StartBoundary>%s</StartBoundary><Enabled>true</Enabled>`+
 			`<ScheduleByWeek><DaysOfWeek><Sunday /></DaysOfWeek><WeeksInterval>1</WeeksInterval></ScheduleByWeek></CalendarTrigger>`,
 			time.Now().Format("2006-01-02")+"T04:00:00")
+	case "daily":
+		trig = fmt.Sprintf(`<CalendarTrigger><StartBoundary>%s</StartBoundary><Enabled>true</Enabled>`+
+			`<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>`, time.Now().Format("2006-01-02")+"T03:30:00")
 	case "hourly":
 		trig = fmt.Sprintf(`<TimeTrigger><Repetition><Interval>PT1H</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition>`+
 			`<StartBoundary>%s</StartBoundary><Enabled>true</Enabled></TimeTrigger>`, start)
@@ -205,7 +208,7 @@ func taskXML(st *core.Stack, a *App, exe string, args []string, dir string) ([]b
 	}
 	restart := `<RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>`
 	limit := "PT0S"
-	if a.Win.Trigger == "weekly" || a.Win.Trigger == "hourly" {
+	if a.Win.Trigger == "weekly" || a.Win.Trigger == "hourly" || a.Win.Trigger == "daily" {
 		restart, limit = "", "PT2H"
 	}
 	quoted := make([]string, len(args))

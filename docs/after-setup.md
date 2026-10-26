@@ -19,7 +19,8 @@ Open **Seerr** (`http://<server>:5055`), sign in with your Jellyfin login, searc
 - Requests are approved immediately.
 - Anime is detected and goes to the *Anime* folders with the anime quality profile.
 - Follow progress in the Media Hub (*Downloading*, *Activity*). It appears in Jellyfin a minute or two after
-  the download finishes, and you get a notification (Windows).
+  the download finishes, and you get a notification (Windows, and your phone if phone alerts are on).
+- Not there yet? The Media Hub's *Requests* card says why for each request (see [the request doctor](#the-request-doctor)).
 
 You can also request from the Media Hub's **Request** tab, or add shows/films directly in Sonarr/Radarr.
 
@@ -68,10 +69,39 @@ then *Filters* → create a filter that sends matches to Sonarr or Radarr (alrea
 
 ## Quality and file size
 
-The default profiles prefer **4K remuxes** (best quality, 40-80 GB per film) and fall back to 1080p when no
-4K exists. To use less space, pick a different profile in Sonarr/Radarr (*Edit* the show/film, or change the
-default in Seerr → *Settings → Services*): *WEB-2160p*, *UHD Bluray + WEB* or *HD Bluray + WEB* (1080p) are
-also installed.
+The rule is **get whatever is available first, then upgrade**, so a request never waits for a perfect copy:
+
+| | Profile | Takes first | Upgrades up to |
+|---|---|---|---|
+| Films | *Remux 2160p (Combined)* | any watchable release (even a small encode) | a 4K remux (40-80 GB) |
+| Shows | *1080p* | any watchable release | 1080p (web or Blu-ray) |
+| Anime | *[Anime] Remux-1080p* | any subtitled release | the best 1080p release from the anime groups |
+
+Low-quality encodes (YTS-style), x265 and upscales are only taken when nothing better exists. Disc images,
+extras, 3D, dubbed-only versions and raw (unsubtitled) anime are never taken. Sonarr and Radarr only look for
+upgrades in brand-new releases, so the Media Hub's request doctor also searches a few older items for better
+copies every hour.
+
+Want a show in 4K? Edit it in Sonarr and pick *Remux 2160p (Combined)*. Want smaller films? Pick *UHD Bluray +
+WEB* or *HD Bluray + WEB* in Radarr (or as the default in Seerr → *Settings → Services*).
+
+## Music (Lidarr)
+
+If you installed **Lidarr**: open it → *Add New* → search for an artist. Albums go to `data/media/Music`, which
+Jellyfin shows as the *Music* library. Lidarr only gets the Prowlarr indexers that have music; if it says it has
+no indexers, add a site with music in Prowlarr.
+
+## Qui
+
+If you installed **Qui**: it's a faster qBittorrent page (sign in with your admin login). *Automations* sets
+rules per tracker: how long to seed, when to pause or remove. Torrents without a rule keep qBittorrent's own
+limits.
+
+## Skip Intro
+
+With **Intro Skipper** (the Jellyfin step's checkbox), episodes get a *Skip Intro* button once the plugin has
+scanned them. It scans new episodes as they arrive and everything else in its daily scheduled task (Jellyfin →
+*Dashboard → Scheduled Tasks*). Supported by Jellyfin's own apps and web page.
 
 ## Audio and subtitle languages
 
@@ -94,8 +124,48 @@ The **Media Hub** (`http://localhost:8585` on Windows, `http://<server>:8585` on
 - the addresses to use on phones and TVs.
 
 A health check runs every hour: it restarts stopped apps, re-tests failed indexers, imports downloads that
-got stuck on a folder-name mix-up, rescans Jellyfin when it's missing items, and tells you about anything it
-can't fix.
+got stuck on a folder-name mix-up, rescans Jellyfin when it's missing items, restarts Jellyfin to finish a
+plugin install when nobody is watching, runs the request doctor, checks the backups and the VPN, and tells you
+about anything it can't fix.
+
+### The request doctor
+
+Every request that isn't fully available is followed into Sonarr/Radarr and the download queue. The *Requests*
+card says, in plain words, where it stands:
+
+- **Not out yet**: still in cinemas, or the next episode hasn't aired. Nothing to do; it downloads on release.
+- **Downloading**: how far along it is.
+- **Searching**: it searched the indexers (each item at most every 6 hours). If a release qualifies it's
+  grabbed; if none do, it says why every release was turned down: no seeders, too small to be real,
+  blocklisted after an earlier failure, or no indexer has it at all (only more indexers can help then).
+- **Stuck**: searched repeatedly with nothing usable. The health check tells you once, after three days.
+
+What it fixes by itself: a request Seerr never handed to Sonarr/Radarr (sent again), an anime profile on a show
+that isn't anime, unmonitored items, a downloaded film whose file is far shorter than the film (blocklisted and
+moved to the recycle bin so a proper copy is found), and Seerr not noticing a finished download. Press **Why
+not here?** on the card to run it now.
+
+### Backups
+
+Every night at 3:30 the settings and databases of every app (not the media) are zipped into
+`<folder>/backups`; the newest 7 are kept. *Back up now* makes one immediately. **Restore** (on the server
+itself) stops the apps, puts that backup's files back and starts them again; the current settings are saved as
+a backup first, so a restore can be undone. A backup is about 10 MB. Copy the `backups` folder to another drive
+or cloud storage now and then: a backup on the same disk doesn't survive that disk failing.
+
+### VPN leak check
+
+Every 10 minutes the hub compares the internet address qBittorrent's peers see (qBittorrent reports it) with
+your home address, and shows where torrents appear from on the Overview (*Torrents via VPN · city*). If they
+ever match, torrents are leaking past the VPN: you get an alert, and the problem shows until it's fixed. It
+also checks that qBittorrent is still locked to the VPN's network connection (Windows).
+
+### Phone alerts
+
+Overview → *Phone alerts* → **Turn on**, then install the free **ntfy** app (App Store / Google Play) and
+subscribe to the topic the card shows. You'll get "ready to watch" (with the poster) and problem alerts, even away
+from home. The topic name is the only key, so keep it private; the alerts go through the public ntfy.sh server.
+To use your own ntfy server, add `"ntfy_server": "https://..."` to `config/hub/hub.json`.
 
 ### The watchdog
 

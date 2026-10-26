@@ -56,6 +56,12 @@ func (d *Docker) Deploy(ctx context.Context, st *core.Stack, j *core.Job, id str
 	if err := os.MkdirAll(st.ConfigDir(id), 0o755); err != nil {
 		return err
 	}
+	if id == "hub" {
+		// The hub writes the nightly settings backups here (made by Docker as root otherwise).
+		if err := os.MkdirAll(filepath.Join(st.Root, "backups"), 0o750); err != nil {
+			return err
+		}
+	}
 	if a.Prepare != nil {
 		if err := a.Prepare(ctx, st, j, core.BasePorts[id]); err != nil {
 			return fmt.Errorf("writing %s settings: %w", a.Name, err)

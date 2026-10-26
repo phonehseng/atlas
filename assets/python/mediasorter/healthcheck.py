@@ -8,6 +8,10 @@ plus a desktop notification on Windows when something needs attention). Safe fix
   * import downloads stuck only on a folder-name mismatch when every file clearly maps to an episode/movie
   * rescan Jellyfin when it shows fewer items than Sonarr/Radarr have on disk
   * retry failed MediaSorter imports
+  * restart Jellyfin to finish a plugin install or update, once nobody is watching
+  * follow every unfinished Seerr request and fix why it's stuck (requestdoctor.py)
+  * warn when the nightly settings backup stops happening (backup.py)
+  * prove torrents go through the VPN: qBittorrent's public address vs your home one (vpncheck.py)
 Windows: a scheduled task runs it hourly. Linux: the Media Hub container runs it hourly.
 """
 import calendar
@@ -29,7 +33,7 @@ import stackconf  # noqa: E402
 
 # Rejections that only mean "the download's folder name confused me" - safe to import past.
 HARMLESS_REJECTION = re.compile(r"was unexpected considering .* folder name|already imported", re.I)
-SCHEDULED = ("Recyclarr", "Health check")  # tasks that are meant to be idle between runs
+SCHEDULED = ("Recyclarr", "Health check", "Backup", "Restore")  # tasks that are meant to be idle between runs
 
 
 class Report:
@@ -158,7 +162,11 @@ def check_indexers(rep, cfg, clients):
         if any("Indexers unavailable" in x["message"] for x in c.get("health")):
             for i in c.get("indexer"):
                 c.s.post(f"{c.url}/api/v3/indexer/test", json=i, timeout=180)
-            c.command({"name": "CheckHealth"})
+            try:
+                c.command({"name": "CheckHealth"}, timeout=180)
+            except arr.ArrError:
+                rep.good(f"{c.name} is busy (long searches running); its indexer warning is re-checked next hour")
+                continue
             if any("Indexers unavailable" in x["message"] for x in c.get("health")):
                 rep.need(f"{c.name} still reports unavailable indexers")
             else:
@@ -231,6 +239,14 @@ def check_jellyfin(rep, cfg, sonarr, radarr):
                 f"{counts['EpisodeCount']}/{episodes} episodes) - started a library scan")
     else:
         rep.good(f"Jellyfin has everything ({counts['MovieCount']} movies, {counts['EpisodeCount']} episodes)")
+    # Plugin installs and updates only take effect after a restart: do it while nobody is watching.
+    if requests.get(stackconf.url(cfg, "jellyfin", "/System/Info"), headers=h, timeout=30).json().get("HasPendingRestart"):
+        sessions = requests.get(stackconf.url(cfg, "jellyfin", "/Sessions"), headers=h, timeout=30).json()
+        if any(s.get("NowPlayingItem") for s in sessions):
+            rep.good("Jellyfin has an update/plugin waiting for a restart (after people stop watching)")
+        else:
+            requests.post(stackconf.url(cfg, "jellyfin", "/System/Restart"), headers=h, timeout=30)
+            rep.fix("restarted Jellyfin to finish installing an update or plugin (nobody was watching)")
 
 
 def check_sorter(rep, cfg):
@@ -265,6 +281,47 @@ def check_seerr(rep, cfg):
         rep.need(f"Seerr has {c['pending']} request(s) waiting for approval")
 
 
+def check_vpn_leak(rep, cfg):
+    import vpncheck
+    r = vpncheck.check(cfg, force=True)
+    if r["status"] in ("leak", "warn"):
+        rep.need(f"VPN leak check: {r['text']}")
+    elif r["status"] == "ok":
+        rep.good(f"VPN leak check passed: {r['text']}")
+
+
+def check_backups(rep, cfg):
+    import backup
+    made = [b["made"] for b in backup.list_backups(cfg) if b["label"] == "nightly"]
+    if not made:
+        rep.need("no backup of the apps' settings exists yet - press 'Back up now' in the Media Hub")
+    elif time.time() - max(made) > 2 * 86400:
+        rep.need(f"the last settings backup is {(time.time() - max(made)) / 86400:.0f} days old")
+    else:
+        rep.good(f"{len(made)} backup(s), newest {(time.time() - max(made)) / 3600:.0f} h old")
+
+
+def check_requests(rep, cfg):
+    """Why requests aren't here yet, with safe fixes (see requestdoctor.py)."""
+    if not stackconf.key(cfg, "seerr"):
+        return
+    import requestdoctor
+    doc = requestdoctor.Doctor(cfg, quiet=True)
+    report = doc.run()
+    for f in report["fixed"]:
+        rep.fix(f)
+    for p in report["problems"]:
+        rep.need(p)
+    for s in doc.newly_stuck():
+        rep.need(f"a request has been stuck for days - {s}")
+    counts = ", ".join(f"{n} {state}" for state, n in report["counts"].items())
+    rep.good(f"{len(report['items'])} request(s) on the way ({counts})" if report["items"] else "every request is available")
+    if report["searches"]:
+        rep.good(f"started {len(report['searches'])} background search(es) for requests that are still missing")
+    for u in report["upgrades"]:
+        rep.good(u)
+
+
 def main():
     rep = Report()
     cfg = stackconf.load()
@@ -272,12 +329,13 @@ def main():
     radarr = arr.Radarr(stackconf.app(cfg, "radarr")) if stackconf.has(cfg, "radarr") else None
     clients = [c for c in (sonarr, radarr) if c]
     for name, fn in (("background apps", lambda: check_background(rep, cfg)), ("apps", lambda: check_hub_apps(rep, cfg)),
-                     ("qbittorrent", lambda: check_qbittorrent(rep, cfg)),
+                     ("qbittorrent", lambda: check_qbittorrent(rep, cfg)), ("vpn leak", lambda: check_vpn_leak(rep, cfg)),
                      ("indexers", lambda: check_indexers(rep, cfg, clients)),
                      ("stuck imports", lambda: check_stuck_imports(rep, clients)),
                      ("arr health", lambda: check_arr_health(rep, clients)),
                      ("jellyfin", lambda: check_jellyfin(rep, cfg, sonarr, radarr)),
-                     ("sorter", lambda: check_sorter(rep, cfg)), ("seerr", lambda: check_seerr(rep, cfg))):
+                     ("sorter", lambda: check_sorter(rep, cfg)), ("seerr", lambda: check_seerr(rep, cfg)),
+                     ("backups", lambda: check_backups(rep, cfg)), ("requests", lambda: check_requests(rep, cfg))):
         try:
             fn()
         except Exception as e:

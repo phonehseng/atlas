@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,7 +26,9 @@ func init() {
 	step(&Step{ID: "radarr", Title: "Radarr (movies)", Group: "Find & organise", Button: "Install Radarr",
 		Needs: []string{"qbittorrent", "prowlarr"}, Password: true, Run: func(c *Ctx) error { return runArr(c, "radarr") },
 		Links: links("radarr")})
-	step(&Step{ID: "recyclarr", Title: "Quality profiles (4K first)", Group: "Find & organise", Button: "Install Recyclarr",
+	step(&Step{ID: "lidarr", Title: "Lidarr (music)", Group: "Find & organise", Optional: true, Button: "Install Lidarr",
+		Needs: []string{"qbittorrent", "prowlarr"}, Password: true, Run: runLidarr, Links: links("lidarr")})
+	step(&Step{ID: "recyclarr", Title: "Quality profiles (grab, then upgrade)", Group: "Find & organise", Button: "Install Recyclarr",
 		Needs: []string{"sonarr", "radarr"}, Run: runRecyclarr})
 	step(&Step{ID: "trawl", Title: "Cloudflare helper: trawl", Group: "Find & organise", Optional: true, Button: "Install trawl",
 		Needs: []string{"prowlarr"}, Run: func(c *Ctx) error { return runSolver(c, "trawl", "/health") }})
@@ -197,9 +200,12 @@ func ensureQbtClient(c *Ctx, id string) error {
 		field(obj, "username", c.St.AdminUser)
 		field(obj, "password", c.Pass())
 	}
-	if id == "sonarr" {
+	switch id {
+	case "sonarr":
 		field(obj, "tvCategory", "sonarr")
-	} else {
+	case "lidarr":
+		field(obj, "musicCategory", "lidarr")
+	default:
 		field(obj, "movieCategory", "radarr")
 	}
 	obj["name"], obj["enable"], obj["priority"] = "qBittorrent", true, 1
@@ -270,7 +276,8 @@ func ensureJellyfinConnect(c *Ctx, id string) error {
 	field(s, "updateLibrary", true)
 	field(s, "notify", false)
 	s["name"] = "Jellyfin"
-	for _, k := range []string{"onDownload", "onUpgrade", "onRename", "onSeriesDelete", "onEpisodeFileDelete", "onMovieDelete", "onMovieFileDelete"} {
+	for _, k := range []string{"onDownload", "onUpgrade", "onRename", "onSeriesDelete", "onEpisodeFileDelete", "onMovieDelete",
+		"onMovieFileDelete", "onReleaseImport", "onTrackRetag", "onArtistDelete", "onAlbumDelete"} {
 		if _, ok := s[k]; ok {
 			s[k] = true
 		}
@@ -335,11 +342,146 @@ func runRecyclarr(c *Ctx) error {
 	if st.Docker() {
 		time.Sleep(3 * time.Second) // let the container settle before exec
 	}
+	// SD sizes aren't in TRaSH's TV sizes (Recyclarr refuses them), so lower those floors directly - before
+	// the sync: Sonarr applies size updates a few seconds late, so reading them back after it would undo it.
+	var sizes []core.M
+	if c.Arr("sonarr").Get("/qualitydefinition", &sizes) == nil {
+		for _, d := range sizes {
+			q, _ := d["quality"].(map[string]any)
+			if sizeFloors[fmt.Sprint(q["name"])] == 1 {
+				if m, _ := d["minSize"].(float64); m > 1 {
+					d["minSize"] = 1
+				}
+			}
+		}
+		c.Arr("sonarr").Put("/qualitydefinition/update", sizes, nil)
+		time.Sleep(5 * time.Second)
+	}
 	if err := c.P.RunNow(c, st, c.J, "recyclarr"); err != nil {
 		return fmt.Errorf("recyclarr sync failed: %w", err)
 	}
-	c.J.OK("Quality profiles added: \"Remux 2160p (Combined)\" (4K first) for movies and TV, \"[Anime] Remux-1080p\" for anime. Re-synced weekly.")
+	c.J.OK("Quality profiles: anything watchable is grabbed first, then upgraded. Films up to 4K (\"Remux 2160p (Combined)\"), " +
+		"shows up to 1080p (\"1080p\"), anime up to 1080p remux (\"[Anime] Remux-1080p\"). Re-synced weekly.")
 	return nil
+}
+
+// Grab whatever is available first, then upgrade: films up to 4K remux, shows up to 1080p, anime up to its
+// 1080p remux. Each profile accepts every real resolution below its target, grouped so that within a
+// resolution TRaSH's scores pick the best release. The worst-but-watchable formats (YTS-style encodes, x265,
+// upscales) become last resorts instead of blocked; discs, extras, 3D, dubbed-only versions and raws stay
+// blocked.
+var (
+	hdGroups = []any{
+		map[string]any{"name": "1080p", "qualities": []any{"WEBDL-1080p", "WEBRip-1080p", "Bluray-1080p", "HDTV-1080p"}},
+		map[string]any{"name": "720p", "qualities": []any{"WEBDL-720p", "WEBRip-720p", "Bluray-720p", "HDTV-720p"}},
+	}
+	uhdGroup = map[string]any{"name": "2160p", "qualities": []any{"WEBDL-2160p", "WEBRip-2160p", "Bluray-2160p", "HDTV-2160p"}}
+	sdTV     = map[string]any{"name": "SD", "qualities": []any{"Bluray-576p", "Bluray-480p", "WEBDL-480p", "WEBRip-480p", "DVD", "SDTV"}}
+	sdFilm   = map[string]any{"name": "SD", "qualities": []any{"Bluray-576p", "Bluray-480p", "WEBDL-480p", "WEBRip-480p", "DVD", "DVD-R", "SDTV"}}
+)
+
+func qualityList(parts ...any) []any {
+	var out []any
+	for _, p := range parts {
+		switch v := p.(type) {
+		case string:
+			out = append(out, map[string]any{"name": v})
+		case []any:
+			out = append(out, v...)
+		default:
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// profileRules: per service, guide profile trash_id -> settings Recyclarr applies on top of the guide.
+var profileRules = map[string]map[string]map[string]any{
+	"sonarr": {
+		"911df0e05a395c19d8b3efc76a7467c1": { // Remux 2160p (Combined): for shows someone wants in 4K
+			"upgrade":   map[string]any{"allowed": true, "until_quality": "Bluray-2160p Remux", "until_score": 10000},
+			"qualities": qualityList("Bluray-2160p Remux", uhdGroup, "Bluray-1080p Remux", hdGroups, sdTV)},
+		"72dae194fc92bf828f32cde7744e51a1": { // WEB-1080p, renamed: the default for shows
+			"name":      "1080p",
+			"upgrade":   map[string]any{"allowed": true, "until_quality": "1080p", "until_score": 10000},
+			"qualities": qualityList(hdGroups, sdTV)},
+		"20e0fc959f1f1704bed501f23bdae76f": {}, // [Anime] Remux-1080p
+	},
+	"radarr": {
+		"d1d310673359205736b4b84acd5ea8c8": { // Remux 2160p (Combined): the default for films
+			"upgrade":   map[string]any{"allowed": true, "until_quality": "Remux-2160p", "until_score": 10000},
+			"qualities": qualityList("Remux-2160p", uhdGroup, "Remux-1080p", hdGroups, sdFilm)},
+		"722b624f9af1e492284c4bc842153a38": {}, // [Anime] Remux-1080p
+	},
+}
+
+// softened: profile trash_id -> custom formats (trash_id: score) the guide blocks with -10000 there.
+var softened = map[string]map[string]int{
+	"911df0e05a395c19d8b3efc76a7467c1": {"9c11cd3f07101cdba90a2d81cf0e56b4": -1000, "e2315f990da2e2cbfc9fa5b7a6fcfe48": -1000, // LQ, LQ (Release Title)
+		"32b367365729d530ca1c124a0b180c64": -1000, "9b64dff695c2115facf1b6ea59c9bd07": -500, // Bad Dual Groups, x265 (no HDR/DV)
+		"23297a736ca77c0fc8e70f8edd7ee56c": -2000, "15a05bc7c1a36e2b57fd628f8977e2fc": -2000}, // Upscaled, AV1
+	"72dae194fc92bf828f32cde7744e51a1": {"9c11cd3f07101cdba90a2d81cf0e56b4": -1000, "e2315f990da2e2cbfc9fa5b7a6fcfe48": -1000,
+		"32b367365729d530ca1c124a0b180c64": -1000, "47435ece6b99a0b477caf360e79ba0bb": -500, // x265 (HD)
+		"23297a736ca77c0fc8e70f8edd7ee56c": -2000, "15a05bc7c1a36e2b57fd628f8977e2fc": -2000},
+	"20e0fc959f1f1704bed501f23bdae76f": {"15a05bc7c1a36e2b57fd628f8977e2fc": -2000, "e3515e519f3b1360cbfc17651944354c": -1000}, // AV1, Anime LQ Groups
+	"d1d310673359205736b4b84acd5ea8c8": {"90a6f9a284dff5103f6346090e6280c8": -1000, "e204b80c87be9497a8a6eaff48f72905": -1000,
+		"b6832f586342ef70d9c128d40c07b872": -1000, "839bea857ed2c0a8e084f3cbdbd65ecb": -500,
+		"bfd8eb01832d646a0a89c4deb46f8564": -2000, "cae4ca30163749b891686f95532519bd": -2000,
+		"e6886871085226c3da1830830146846c": -2000}, // Generated Dynamic HDR
+	"722b624f9af1e492284c4bc842153a38": {"cae4ca30163749b891686f95532519bd": -2000, "b0fdc5897f68c9a68c70c25169f77447": -1000},
+}
+
+// sizeFloors: the smallest believable file per quality, in MB per minute (TRaSH's are much higher).
+var sizeFloors = map[string]float64{"SDTV": 1, "WEBRip-480p": 1, "WEBDL-480p": 1, "DVD": 1, "Bluray-480p": 1, "Bluray-576p": 1,
+	"HDTV-720p": 3, "WEBRip-720p": 3, "WEBDL-720p": 3, "Bluray-720p": 3,
+	"HDTV-1080p": 4, "WEBRip-1080p": 4, "WEBDL-1080p": 4, "Bluray-1080p": 4,
+	"HDTV-2160p": 8, "WEBRip-2160p": 8, "WEBDL-2160p": 8, "Bluray-2160p": 8}
+
+// applyUpgradeRules adds the grab-then-upgrade settings to one merged Recyclarr instance.
+func applyUpgradeRules(service string, inst map[string]any) {
+	profiles, _ := inst["quality_profiles"].([]any)
+	var cfs []any
+	for _, p := range profiles {
+		prof, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		tid := fmt.Sprint(prof["trash_id"])
+		rule, ok := profileRules[service][tid]
+		if !ok {
+			continue
+		}
+		for k, v := range rule {
+			prof[k] = v
+		}
+		prof["min_format_score"] = -5000
+		ids := make([]string, 0, len(softened[tid]))
+		for cf := range softened[tid] {
+			ids = append(ids, cf)
+		}
+		sort.Strings(ids)
+		for _, cf := range ids {
+			cfs = append(cfs, map[string]any{"trash_ids": []any{cf},
+				"assign_scores_to": []any{map[string]any{"trash_id": tid, "score": softened[tid][cf]}}})
+		}
+	}
+	existing, _ := inst["custom_formats"].([]any)
+	inst["custom_formats"] = append(existing, cfs...)
+	qd, _ := inst["quality_definition"].(map[string]any)
+	if qd != nil {
+		names := make([]string, 0, len(sizeFloors))
+		for q, mb := range sizeFloors {
+			if mb > 1 { // SD isn't in the guide's sizes; set directly after the sync
+				names = append(names, q)
+			}
+		}
+		sort.Strings(names)
+		var qs []any
+		for _, q := range names {
+			qs = append(qs, map[string]any{"name": q, "min": sizeFloors[q]})
+		}
+		qd["qualities"] = qs
+	}
 }
 
 // RecyclarrConfig merges the TRaSH templates into one Sonarr and one Radarr instance.
@@ -409,6 +551,7 @@ func RecyclarrConfig(ctx context.Context, st *core.Stack) ([]byte, error) {
 				}
 			}
 		}
+		applyUpgradeRules(service, merged)
 		merged["base_url"] = st.AppURL(service)
 		merged["api_key"] = st.Key(service)
 		out[service] = map[string]any{service: merged}
@@ -575,6 +718,13 @@ func runBazarr(c *Ctx) error {
 // ---------------------------------------------------------------------------------------------- Unpackerr
 
 func runUnpackerr(c *Ctx) error {
+	if err := writeUnpackerrConf(c); err != nil {
+		return err
+	}
+	return c.Deploy("unpackerr", "")
+}
+
+func writeUnpackerrConf(c *Ctx) error {
 	st := c.St
 	in := func(p string) string { return c.InApp("unpackerr", p) }
 	complete := filepath.Join(st.DownloadsDir(), "complete")
@@ -603,10 +753,107 @@ parallel = 1
   paths = ['%s']
 %s`, logFile, st.AppURL("sonarr"), st.Key("sonarr"), in(filepath.Join(complete, "sonarr")),
 		st.AppURL("radarr"), st.Key("radarr"), in(filepath.Join(complete, "radarr")), folders.String())
-	if err := core.WriteFileAtomic(filepath.Join(st.ConfigDir("unpackerr"), "unpackerr.conf"), []byte(conf), 0o600); err != nil {
+	if st.IsDeployed("lidarr") {
+		conf += fmt.Sprintf("\n[[lidarr]]\n  url = \"%s\"\n  api_key = \"%s\"\n  paths = ['%s']\n",
+			st.AppURL("lidarr"), st.Key("lidarr"), in(filepath.Join(complete, "lidarr")))
+	}
+	return core.WriteFileAtomic(filepath.Join(st.ConfigDir("unpackerr"), "unpackerr.conf"), []byte(conf), 0o600)
+}
+
+// ---------------------------------------------------------------------------------------------- Lidarr
+
+func runLidarr(c *Ctx) error {
+	st := c.St
+	if err := c.Deploy("lidarr", "/ping"); err != nil {
 		return err
 	}
-	return c.Deploy("unpackerr", "")
+	api := c.Arr("lidarr")
+	music := filepath.Join(st.DataDir(), "media", "Music")
+	if err := os.MkdirAll(music, 0o755); err != nil {
+		return err
+	}
+	platform.Chown(st, music)
+
+	// Quality: take whatever is there, then upgrade up to lossless (the stack's rule).
+	var profiles, metas []core.M
+	if err := api.Get("/qualityprofile", &profiles); err != nil {
+		return err
+	}
+	api.Get("/metadataprofile", &metas)
+	var anyProfile core.M
+	for _, p := range profiles {
+		if p["name"] == "Any" {
+			anyProfile = p
+		}
+	}
+	if anyProfile == nil && len(profiles) > 0 {
+		anyProfile = profiles[0]
+	}
+	if anyProfile != nil {
+		items, _ := anyProfile["items"].([]any)
+		for _, it := range items {
+			if m, ok := it.(map[string]any); ok {
+				m["allowed"] = true
+				if strings.EqualFold(fmt.Sprint(m["name"]), "lossless") && m["id"] != nil {
+					anyProfile["cutoff"] = m["id"]
+				}
+			}
+		}
+		anyProfile["upgradeAllowed"] = true
+		api.Put(fmt.Sprintf("/qualityprofile/%v", anyProfile["id"]), anyProfile, nil)
+	}
+	var roots []struct{ Path string }
+	api.Get("/rootfolder", &roots)
+	have := false
+	for _, r := range roots {
+		have = have || strings.EqualFold(strings.TrimRight(r.Path, `\/`), strings.TrimRight(c.InApp("lidarr", music), `\/`))
+	}
+	if !have && anyProfile != nil && len(metas) > 0 {
+		if err := api.Post("/rootfolder", core.M{"name": "Music", "path": c.InApp("lidarr", music),
+			"defaultQualityProfileId": anyProfile["id"], "defaultMetadataProfileId": metas[0]["id"],
+			"defaultMonitorOption": "all", "defaultNewItemMonitorOption": "all", "defaultTags": []int{}}, nil); err != nil {
+			return fmt.Errorf("adding the music folder: %w", err)
+		}
+	}
+	update(api, "/config/mediamanagement", core.M{"copyUsingHardlinks": true, "recycleBin": c.InApp("lidarr", st.RecycleDir()),
+		"recycleBinCleanupDays": 14})
+	c.J.OK("Lidarr's music folder: %s (takes what's available first, then upgrades to lossless)", music)
+
+	if err := ensureQbtClient(c, "lidarr"); err != nil {
+		return fmt.Errorf("connecting Lidarr to qBittorrent: %w", err)
+	}
+	c.J.OK("Lidarr sends downloads to qBittorrent (category \"lidarr\")")
+	if err := ensureProwlarrApp(c, "lidarr"); err != nil {
+		return fmt.Errorf("connecting Prowlarr to Lidarr: %w", err)
+	}
+	c.J.OK("Prowlarr shares its indexers that have music with Lidarr")
+	if st.IsDeployed("jellyfin") && st.Key("jellyfin") != "" {
+		jf := core.NewAPI(st.URL("jellyfin"), map[string]string{"Authorization": fmt.Sprintf(`MediaBrowser Token="%s"`, st.Key("jellyfin"))})
+		var folders []struct{ Name string }
+		if jf.Get("/Library/VirtualFolders", &folders) == nil {
+			found := false
+			for _, f := range folders {
+				found = found || f.Name == "Music"
+			}
+			if !found {
+				q := url.Values{"name": {"Music"}, "collectionType": {"music"}, "refreshLibrary": {"true"}}
+				jf.Post("/Library/VirtualFolders?"+q.Encode(), core.M{"LibraryOptions": core.M{
+					"EnableRealtimeMonitor": true, "PathInfos": []core.M{{"Path": c.InApp("jellyfin", music)}}}}, nil)
+				c.J.OK("Jellyfin has a Music library")
+			}
+		}
+		if err := ensureJellyfinConnect(c, "lidarr"); err == nil {
+			c.J.OK("Lidarr tells Jellyfin about every new album")
+		}
+	}
+	if st.IsDeployed("hub") {
+		ensureWebhook(api, "Media Hub", st.AppURL("hub")+"/api/hook/lidarr", []string{"onGrab", "onReleaseImport",
+			"onUpgrade", "onHealthIssue", "includeHealthWarnings", "onHealthRestored", "onDownloadFailure", "onImportFailure"})
+	}
+	if st.IsDeployed("unpackerr") && writeUnpackerrConf(c) == nil {
+		c.P.Restart(st, "unpackerr")
+	}
+	return arrLogin(c, "lidarr")
 }
 
 // ---------------------------------------------------------------------------------------------- Cleanuparr

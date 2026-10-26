@@ -52,6 +52,8 @@ They're the same as on Windows (see the [Windows guide](windows.md#the-steps)), 
   sign-in link.
 - Admin pages (Sonarr, Radarr...) always ask for your login, even on your home network, because a container
   can't tell "this computer" apart from other devices.
+- The Media Hub container makes the nightly settings backup (into `/srv/mediastack/backups`) and runs the
+  hourly health check; there are no scheduled tasks.
 
 ## Day to day
 
@@ -77,5 +79,5 @@ Intel, **VAAPI** for AMD. NVIDIA needs the NVIDIA Container Toolkit; see Jellyfi
 
 ```bash
 cd /srv/mediastack && sudo docker compose down --rmi local
-sudo rm -rf /srv/mediastack      # deletes your library too - move media out first
+sudo rm -rf /srv/mediastack      # deletes your library and backups too - move them out first
 ```
