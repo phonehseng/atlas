@@ -143,9 +143,10 @@ waits for a perfect copy:</p>
 <ul><li><b>Films</b> (<i>Remux 2160p (Combined)</i>): any watchable release first, upgraded step by step up to a 4K remux.</li>
 <li><b>Shows</b> (<i>1080p</i>): any watchable release first, upgraded up to 1080p. Want a show in 4K? Switch it to
 <i>Remux 2160p (Combined)</i> in Sonarr.</li>
-<li><b>Anime</b> (<i>[Anime] Remux-1080p</i>): the anime release groups' rules, with anything subtitled accepted while it waits.</li></ul>
+<li><b>Anime</b> (<i>[Anime] Remux-1080p</i>): the anime release groups' rules, with anything English-subtitled accepted while it waits.</li></ul>
 <p>Low-quality encodes (like YTS), x265 and upscales are taken only when nothing better exists. Disc images, extras, 3D,
-dubbed-only versions and raw (unsubtitled) anime are never taken. 4K remuxes are big (40-80 GB per film); for smaller films
+dubbed-only versions, raw (unsubtitled) anime and anime subtitled only in another language (custom format
+<i>Foreign subs only</i>, e.g. Brazilian "Legendado" releases) are never taken. 4K remuxes are big (40-80 GB per film); for smaller films
 pick <i>UHD Bluray + WEB</i> or <i>HD Bluray + WEB</i> instead.</p>`,
 		After: `<p>Profiles synced. Seerr uses them automatically, and the Media Hub's request doctor keeps looking for upgrades.</p>`},
 

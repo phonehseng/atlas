@@ -75,10 +75,12 @@ The rule is **get whatever is available first, then upgrade**, so a request neve
 |---|---|---|---|
 | Films | *Remux 2160p (Combined)* | any watchable release (even a small encode) | a 4K remux (40-80 GB) |
 | Shows | *1080p* | any watchable release | 1080p (web or Blu-ray) |
-| Anime | *[Anime] Remux-1080p* | any subtitled release | the best 1080p release from the anime groups |
+| Anime | *[Anime] Remux-1080p* | any English-subtitled release | the best 1080p release from the anime groups |
 
 Low-quality encodes (YTS-style), x265 and upscales are only taken when nothing better exists. Disc images,
-extras, 3D, dubbed-only versions and raw (unsubtitled) anime are never taken. Sonarr and Radarr only look for
+extras, 3D, dubbed-only versions, raw (unsubtitled) anime and anime subtitled only in another language (the
+*Foreign subs only* custom format: titles like "Legendado" or "Sub ITA" that don't mention English, Multi-Subs
+or "Multiple Subtitle") are never taken. Sonarr and Radarr only look for
 upgrades in brand-new releases, so the Media Hub's request doctor also searches a few older items for better
 copies every hour.
 

@@ -357,11 +357,101 @@ func runRecyclarr(c *Ctx) error {
 		c.Arr("sonarr").Put("/qualitydefinition/update", sizes, nil)
 		time.Sleep(5 * time.Second)
 	}
+	// Our own anime format goes in before the sync (Recyclarr ignores `except` names it can't find) and gets
+	// its score after it (the sync creates the anime profile).
+	formats := map[string]any{}
+	for _, id := range []string{"sonarr", "radarr"} {
+		cf, err := ensureForeignSubs(c.Arr(id))
+		if err != nil {
+			return fmt.Errorf("adding the %q format to %s: %w", foreignSubs, platform.Get(id).Name, err)
+		}
+		formats[id] = cf
+	}
 	if err := c.P.RunNow(c, st, c.J, "recyclarr"); err != nil {
 		return fmt.Errorf("recyclarr sync failed: %w", err)
 	}
+	for _, id := range []string{"sonarr", "radarr"} {
+		if err := scoreFormat(c.Arr(id), animeProfile, formats[id], foreignSubs, -10000); err != nil {
+			return fmt.Errorf("blocking foreign-subtitled anime in %s: %w", platform.Get(id).Name, err)
+		}
+	}
 	c.J.OK("Quality profiles: anything watchable is grabbed first, then upgraded. Films up to 4K (\"Remux 2160p (Combined)\"), " +
 		"shows up to 1080p (\"1080p\"), anime up to 1080p remux (\"[Anime] Remux-1080p\"). Re-synced weekly.")
+	c.J.OK("Anime subtitled only in another language (like Brazilian \"Legendado\" releases) is never taken")
+	return nil
+}
+
+// Anime: the guide only blocks French-subtitled releases and raws, so with "grab anything" a release subtitled
+// in another language (e.g. Brazilian "Legendado") got through. Block releases whose title names other-language
+// subtitles and doesn't mention English (ENG, Multi-Subs and "Multiple Subtitle" releases stay fine). Not a
+// TRaSH format, so the weekly sync is told not to reset its score.
+const (
+	foreignSubs  = "Foreign subs only"
+	animeProfile = "[Anime] Remux-1080p"
+	foreignRx    = `(?:\b(?:legendad[oa]s?|legendas|pt[ ._-]?br|portugu[eê]s|subtitulad[oa]s?|` +
+		`sub(?:s|titles?)?[ ._-]?(?:esp(?:a[nñ]ol)?|spa(?:nish)?|castellano|latino|ita(?:liano)?|ger(?:man)?|` +
+		`deu(?:tsch)?|rus(?:sian)?|ara(?:bic)?|indo(?:nesian)?|pol(?:ish)?|tur(?:kish)?|heb(?:rew)?|kor(?:ean)?|` +
+		`chi(?:nese)?|vie(?:tnamese)?|thai|por(?:tuguese)?)|(?:ita|ger|rus|ara|indo|pl|tr|heb|kor|thai)[ ._-]?subs?|` +
+		`vietsub|gersub|hebsub|korsub|indosub|napisy|altyaz[iı]|субтитр\w*)\b)|` +
+		`(?:\[(?:chs|cht|gb|big5|简体|繁體|繁体|简繁|简日|繁日)[^\]]*\])`
+	englishRx = `\b(?:eng(?:lish)?|en[ ._-]?subs?|multi[ ._-]?subs?|multisubs?|multiple[ ._-]?subtitles?)\b`
+)
+
+// ensureForeignSubs creates/updates the "Foreign subs only" custom format and returns its id.
+func ensureForeignSubs(api *core.API) (any, error) {
+	spec := func(name, value string, negate bool) core.M {
+		return core.M{"name": name, "implementation": "ReleaseTitleSpecification", "negate": negate, "required": true,
+			"fields": []core.M{{"name": "value", "value": value}}}
+	}
+	body := core.M{"name": foreignSubs, "includeCustomFormatWhenRenaming": false,
+		"specifications": []core.M{spec("Subtitles in another language", foreignRx, false),
+			spec("No English subtitles mentioned", englishRx, true)}}
+	var cfs []core.M
+	if err := api.Get("/customformat", &cfs); err != nil {
+		return nil, err
+	}
+	var made core.M
+	for _, cf := range cfs {
+		if cf["name"] == foreignSubs {
+			body["id"] = cf["id"]
+		}
+	}
+	var err error
+	if body["id"] != nil {
+		err = api.Put(fmt.Sprintf("/customformat/%v", body["id"]), body, &made)
+	} else {
+		err = api.Post("/customformat", body, &made)
+	}
+	if err == nil && made["id"] == nil {
+		err = fmt.Errorf("no id in the reply")
+	}
+	return made["id"], err
+}
+
+// scoreFormat sets a custom format's score in one quality profile.
+func scoreFormat(api *core.API, profile string, format any, name string, score int) error {
+	var profiles []core.M
+	if err := api.Get("/qualityprofile", &profiles); err != nil {
+		return err
+	}
+	for _, p := range profiles {
+		if p["name"] != profile {
+			continue
+		}
+		items, _ := p["formatItems"].([]any)
+		found := false
+		for _, it := range items {
+			if m, ok := it.(map[string]any); ok && fmt.Sprint(m["format"]) == fmt.Sprint(format) {
+				m["score"], found = score, true
+			}
+		}
+		if !found {
+			p["formatItems"] = append(items, core.M{"format": format, "name": name, "score": score})
+		}
+		if err := api.Put(fmt.Sprintf("/qualityprofile/%v", p["id"]), p, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -446,6 +536,7 @@ func applyUpgradeRules(service string, inst map[string]any) {
 		if !ok {
 			continue
 		}
+		prof["reset_unmatched_scores"] = map[string]any{"enabled": true, "except": []any{foreignSubs}}
 		tid := fmt.Sprint(prof["trash_id"])
 		rule, ok := profileRules[service][tid]
 		if !ok {

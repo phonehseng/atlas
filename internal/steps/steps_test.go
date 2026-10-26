@@ -3,6 +3,7 @@ package steps
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -110,5 +111,29 @@ func TestAppConfig(t *testing.T) {
 	}
 	if _, ok := c.Apps["gluetun"]; !ok {
 		t.Errorf("gluetun should be listed for the hub")
+	}
+}
+
+func TestForeignSubsRule(t *testing.T) {
+	foreign, english := regexp.MustCompile("(?i)"+foreignRx), regexp.MustCompile("(?i)"+englishRx)
+	blocked := func(title string) bool { return foreign.MatchString(title) && !english.MatchString(title) }
+	for title, want := range map[string]bool{
+		"[AT] Initial D Fourth Stage (Quarto Estágio) [1080p) 01 ~ 24 (Legendado)": true,
+		"[Erai-raws] Initial D First Stage - 01 [1080p][Multiple Subtitle]":        false,
+		"[SubsPlease] Frieren - 01 (1080p) [ENG]":                                  false,
+		"Frieren 01 1080p Sub ITA":                                                 true,
+	} {
+		if blocked(title) != want {
+			t.Errorf("%s: blocked=%v, want %v", title, !want, want)
+		}
+	}
+	inst := map[string]any{"quality_profiles": []any{map[string]any{"trash_id": "20e0fc959f1f1704bed501f23bdae76f"},
+		map[string]any{"trash_id": "not-one-of-ours"}}}
+	applyUpgradeRules("sonarr", inst)
+	for _, p := range inst["quality_profiles"].([]any) {
+		reset, _ := p.(map[string]any)["reset_unmatched_scores"].(map[string]any)
+		if except, _ := reset["except"].([]any); len(except) != 1 || except[0] != foreignSubs {
+			t.Errorf("the weekly sync must keep the %q score: %+v", foreignSubs, p)
+		}
 	}
 }
