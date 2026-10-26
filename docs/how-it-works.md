@@ -18,7 +18,7 @@
            data/media/...  ──► Jellyfin ──► phones, TVs, browsers (home network or Tailscale)
               ▲    Bazarr adds subtitles; MediaSorter sorts your own downloads and trims languages
               │
-           Media Hub: status, problems, logs, activity, hourly health check
+           Media Hub: status, problems, logs, activity, hourly health check, 5-minute watchdog
 ```
 
 ## Folders

@@ -166,6 +166,9 @@ func WriteAppConfig(st *core.Stack) error {
 			"audio": splitList(st.Opt("tracks_audio"), "eng"), "anime_audio": splitList(st.Opt("tracks_anime_audio"), "eng,jpn"),
 			"subtitles": splitList(st.Opt("tracks_subs"), "eng"),
 		},
+		// The Media Hub's watchdog: restarts apps that go down. Set ollama_host/ollama_model to a local Ollama
+		// model to have it write the incident diagnosis; otherwise it's read from the app's log.
+		"watchdog":               core.M{"minutes": 5, "auto_restart": true, "ollama_host": "", "ollama_model": ""},
 		"managed_categories":     []string{"sonarr", "radarr"},
 		"sweep_interval_seconds": map[bool]int{true: 60, false: 300}[st.Docker()],
 		"drop_settle_seconds":    60,

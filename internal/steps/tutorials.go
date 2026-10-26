@@ -204,7 +204,9 @@ with fix buttons, a combined error log, and every app's own page as a tab. It al
 		After: `
 <p>Open <a href="{{url "hub"}}" target="_blank">the Media Hub</a>{{if win}} (there's a desktop shortcut){{end}}.
 {{if win}}On this PC it needs no login. From your phone over Tailscale, sign in with your Jellyfin admin login.
-{{else}}Sign in with your Jellyfin admin login.{{end}} A health check runs every hour and fixes common problems by itself.</p>`},
+{{else}}Sign in with your Jellyfin admin login.{{end}} A health check runs every hour and fixes common problems by itself,
+and a watchdog checks every 5 minutes: it restarts any app that goes down, notes what its log said (Overview → Incidents),
+and tells you if a restart didn't fix it.</p>`},
 
 	"remote": {Intro: `
 <p><b>At home</b>, phones and TVs on the same Wi-Fi can reach Jellyfin and Seerr directly{{if win}} once Windows Firewall allows it (first option){{end}}.</p>

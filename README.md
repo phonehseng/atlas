@@ -23,7 +23,7 @@ there's a 4K release, with English subtitles for anime, ready on your TV.
 | Subtitles | **Bazarr** | English subtitles when the audio isn't English |
 | Tidy | **Unpackerr**, **Cleanuparr** | Unpack archives; remove stalled, dead and fake downloads |
 | Sort | **MediaSorter** | Files your own downloads into the library; strips unwanted audio/subtitle languages |
-| Overview | **Media Hub** | One dashboard: status, problems, requests, downloads, logs, health checks |
+| Overview | **Media Hub** | One dashboard: status, problems, requests, downloads, logs, health checks, and a watchdog that restarts apps that go down |
 | Away from home | **Tailscale** | Private access from your phone, TV and friends, nothing opened to the internet |
 | Optional | **jfa-go**, **Requestrr**, **autobrr**, **trawl**, **Byparr** | Invite links, Discord requests, IRC auto-grabs, Cloudflare helpers |
 

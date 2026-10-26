@@ -541,8 +541,7 @@ def addresses():
     return jsonify(server_addresses())
 
 
-@app.get("/api/status")
-def status():
+def status_data():
     with _status_lock:
         def compute():
             k = keys()
@@ -553,7 +552,12 @@ def status():
             return {"apps": apps, "system": system_checks(), "time": time.time(),
                     "ui": (HERE / "static" / "index.html").stat().st_mtime, "name": cfg().get("name"),
                     "platform": cfg().get("platform")}
-        return jsonify(cached("status", 5, compute))
+        return cached("status", 5, compute)
+
+
+@app.get("/api/status")
+def status():
+    return jsonify({**status_data(), "watchdog": watchdog_summary()})
 
 
 # --------------------------------------------------------------------------- logs
@@ -570,8 +574,10 @@ def latest(pattern):
 def tail(path, max_bytes=400_000):
     with open(path, "rb") as f:
         f.seek(0, 2)
-        f.seek(max(0, f.tell() - max_bytes))
-        return f.read().decode("utf-8", "replace").splitlines()[1:]
+        start = max(0, f.tell() - max_bytes)
+        f.seek(start)
+        lines = f.read().decode("utf-8", "replace").splitlines()
+        return lines[1:] if start else lines  # the first line is only partial when reading began mid-file
 
 
 def log_lines(meta):
@@ -618,10 +624,11 @@ _db_lock = threading.Lock()
 
 
 def hub_settings():
+    defaults = {"notifications": not DOCKER, "watchdog": True}
     try:
-        return {"notifications": not DOCKER, **json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))}
+        return {**defaults, **json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))}
     except Exception:
-        return {"notifications": not DOCKER}
+        return defaults
 
 
 def events_db():
@@ -800,9 +807,156 @@ def events():
 def settings_route():
     s = hub_settings()
     if request.method == "POST":
-        s.update({k: v for k, v in (request.get_json(force=True) or {}).items() if k in ("notifications",)})
+        s.update({k: bool(v) for k, v in (request.get_json(force=True) or {}).items() if k in ("notifications", "watchdog")})
         SETTINGS_FILE.write_text(json.dumps(s), encoding="utf-8")
     return jsonify({**s, "can_notify": not DOCKER})
+
+
+# --------------------------------------------------------------------------- watchdog
+# Every few minutes: restart apps that went down (at most once per 30 minutes each), keep an incident history with
+# what the app's own log says, and notify when a restart didn't fix it. Settings in mediastack.json "watchdog":
+# {"minutes": 5, "auto_restart": true, "ollama_host": "", "ollama_model": ""} - with a local Ollama model set, the
+# diagnosis is written by it; otherwise it's read from the log.
+
+INCIDENTS = STATE / "incidents.jsonl"
+WATCH = {"checked": None, "open": {}, "last_restart": {}}
+_incident_lock = threading.Lock()
+RESTART_GAP = 1800
+# Common causes, recognised in an app's recent log lines.
+HINTS = [
+    (r"address already in use|only one usage of each socket address|EADDRINUSE|port \d+ (is )?(already )?in use",
+     "Another program is using its port. Close that program, or restart the computer."),
+    (r"no space left|disk (is )?full|not enough (disk )?space",
+     "The drive is full. Free some space (the recycle bin, old downloads)."),
+    (r"database is locked|disk image is malformed|database .*corrupt",
+     "Its database is locked or damaged. A restart usually clears a lock; a damaged one needs restoring from the app's backups."),
+    (r"out of memory|outofmemory|cannot allocate memory",
+     "It ran out of memory. Close other programs or add RAM."),
+    (r"permission denied|access to the path .* is denied|unauthorizedaccess",
+     "It isn't allowed to read or write one of its folders. Check that folder's permissions."),
+    (r"\b401\b|unauthori[sz]ed|invalid api ?key|\b403\b|forbidden",
+     "Another app refused it (wrong API key or login). Run its step in Media Stack Setup again."),
+    (r"connection refused|actively refused|timed out|name or service not known|no such host|could not resolve",
+     "It couldn't reach another app or the internet. Check that app, the VPN and the network."),
+]
+
+
+def wd_settings():
+    c = cfg().get("watchdog") or {}
+    return {"minutes": float(c.get("minutes", 5)), "auto_restart": bool(c.get("auto_restart", True)),
+            "ollama_host": (c.get("ollama_host") or "").rstrip("/"), "ollama_model": c.get("ollama_model") or ""}
+
+
+def log_incident(rec):
+    with _incident_lock, open(INCIDENTS, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def incidents(limit=50):
+    """One entry per incident (its latest state), newest first."""
+    if not INCIDENTS.exists():
+        return []
+    latest = {}
+    for line in INCIDENTS.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        latest[(rec.get("app"), rec.get("time"))] = rec
+    return list(latest.values())[::-1][:limit]
+
+
+def recent_errors(app_id, n=40):
+    try:
+        lines = log_lines(APPS()[app_id])[-3000:]
+    except Exception:
+        return []
+    return [l.strip() for l in lines if any(rx.search(l) for _, rx in LEVEL_RE)][-n:]
+
+
+def diagnose(app, errors):
+    s = wd_settings()
+    problems = "; ".join(p["text"] for p in app.get("problems", [])) or app.get("summary", "")
+    if s["ollama_host"] and s["ollama_model"]:
+        try:
+            r = requests.post(f"{s['ollama_host']}/api/chat", timeout=120, json={
+                "model": s["ollama_model"], "stream": False, "options": {"temperature": 0.2},
+                "messages": [{"role": "user", "content":
+                    f"{app['name']} on a home media server is down. Reported problems: {problems}\n"
+                    f"Recent log errors:\n" + ("\n".join(errors[-40:]) or "(none)") +
+                    "\n\nIn at most two short sentences: the most likely cause, and what would fix it. Plain words, no preamble."}]})
+            text = (r.json().get("message") or {}).get("content", "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+    blob = " ".join(errors) + " " + problems
+    last = f" Its last logged error: “{errors[-1][:200]}”" if errors else ""
+    for rx, hint in HINTS:
+        if re.search(rx, blob, re.I):
+            return hint + last
+    return last.strip() or "Nothing useful in its log: it may have crashed or been closed."
+
+
+def watchdog_check(status=None, now=None):
+    status = status or status_data()
+    now = now or time.time()
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now))
+    WATCH["checked"] = now
+    s = wd_settings()
+    for app in status.get("apps", []):
+        aid, name = app["id"], app["name"]
+        down = app.get("status") == "down"
+        inc = WATCH["open"].get(aid)
+        if down and not inc:
+            problem = "; ".join(p["text"] for p in app.get("problems", [])) or app.get("summary", "")
+            inc = {"time": stamp, "app": aid, "name": name, "problem": problem,
+                   "diagnosis": diagnose(app, recent_errors(aid)), "action": None, "resolved": None, "notified": False}
+            if not s["auto_restart"]:
+                inc["action"] = "Automatic restarts are off"
+            elif now - WATCH["last_restart"].get(aid, 0) < RESTART_GAP:
+                inc["action"] = "Not restarted (it was restarted less than 30 minutes ago)"
+            else:
+                try:
+                    restart_app(aid)
+                    inc["action"] = f"Restarted {name}"
+                    WATCH["last_restart"][aid] = now
+                except Exception as e:
+                    inc["action"] = f"Restart failed: {e}"
+            WATCH["open"][aid] = inc
+            log_incident({**inc, "state": "open"})
+            add_event("watchdog", "Incident", "error", f"{name} went down", f"{inc['action']}. {inc['diagnosis']}")
+        elif down and inc and not inc["notified"]:
+            # Still down a check later, even after a restart: that needs a person.
+            inc["notified"] = True
+            log_incident({**inc, "state": "still down"})
+            add_event("watchdog", "Incident", "error", f"{name} is still down", inc["diagnosis"], toast=True)
+        elif not down and inc:
+            WATCH["open"].pop(aid)
+            inc["resolved"] = stamp
+            log_incident({**inc, "state": "resolved"})
+            add_event("watchdog", "Recovered", "info", f"{name} is back up", f"It was down from {inc['time'][11:16]}.")
+
+
+def watchdog_summary():
+    return {"on": bool(hub_settings().get("watchdog", True)), "checked": WATCH["checked"],
+            "minutes": wd_settings()["minutes"], "open": [i["name"] for i in WATCH["open"].values()]}
+
+
+def watchdog_loop():
+    time.sleep(180)  # after a reboot, give every app time to start before judging it
+    while True:
+        if hub_settings().get("watchdog", True):
+            try:
+                watchdog_check()
+            except Exception as e:
+                print("watchdog check failed:", e)
+        time.sleep(max(60, wd_settings()["minutes"] * 60))
+
+
+@app.get("/api/incidents")
+def incidents_route():
+    return jsonify(incidents(min(int(request.args.get("limit", 50)), 500)))
 
 
 # --------------------------------------------------------------------------- Seerr (search & request from the hub)
@@ -972,5 +1126,6 @@ if __name__ == "__main__":
     from waitress import serve
     if DOCKER:
         threading.Thread(target=hourly_healthcheck, daemon=True).start()
+    threading.Thread(target=watchdog_loop, daemon=True, name="watchdog").start()
     # All interfaces, but guard() decides who gets in.
     serve(app, host="0.0.0.0", port=int(CFG["hub"]["listen_port"]), threads=8)

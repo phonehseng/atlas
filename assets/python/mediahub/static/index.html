@@ -97,6 +97,8 @@
   .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
   .chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1px solid var(--line); border-radius: 999px;
           padding: 5px 12px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  button.chip { cursor: pointer; font-family: inherit; line-height: inherit; }
+  button.chip:hover { border-color: #9db4e6; }
 
   /* ---------- overview hero ---------- */
   .hero { text-align: center; padding: 34px 32px 30px; border-radius: 24px; }
@@ -261,6 +263,7 @@
     <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l11-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
@@ -324,6 +327,7 @@
         <div class="card"><h3><svg><use href="#i-list"/></svg>Activity</h3><ul class="list feed" id="feed"></ul></div>
         <div class="card"><h3><svg><use href="#i-folder"/></svg>Recently sorted</h3><ul class="list" id="imports"></ul></div>
         <div class="card"><h3><svg><use href="#i-play"/></svg>Now playing</h3><ul class="list" id="playing"></ul></div>
+        <div class="card"><h3><svg><use href="#i-shield"/></svg>Incidents</h3><ul class="list feed" id="incidents"></ul></div>
       </div>
     </div>
   </section>
@@ -346,8 +350,11 @@
   <!-- ======================= Activity ======================= -->
   <section class="view" id="view-activity">
     <div class="glass">
-      <div class="sec-head"><div><h2>Activity</h2><p class="sub">Everything Sonarr, Radarr, Prowlarr, Seerr and the health check report, newest first.</p></div>
+      <div class="sec-head"><div><h2>Activity</h2><p class="sub">Everything Sonarr, Radarr, Prowlarr, Seerr, the watchdog and the health check report, newest first.</p></div>
         <span class="label"><span class="dot ok"></span>Live</span></div>
+      <div class="card" style="margin-bottom:16px"><h3><svg><use href="#i-shield"/></svg>Incidents
+        <span class="muted" style="font-weight:400">· the watchdog restarts apps that go down and notes what their logs said</span></h3>
+        <ul class="list feed" id="incidentsfull"></ul></div>
       <div class="card"><ul class="list feed" id="feedfull"></ul></div>
     </div>
   </section>
@@ -464,6 +471,8 @@ function render() {
   const vpn = state.system.vpn;
   $("#chips").innerHTML = `${vpn === null || vpn === undefined ? "" : `<span class="chip"><span class="dot ${vpn ? "ok" : "warn"}"></span>VPN ${vpn ? "connected" : "off"}</span>`}
     <span class="chip">${state.system.disk.free_gb.toLocaleString()} GB free</span>
+    ${state.watchdog ? `<button class="chip" id="wdchip" title="Click to turn the watchdog ${state.watchdog.on ? "off" : "on"}"><span class="dot ${!state.watchdog.on ? "warn" : state.watchdog.open.length ? "error" : "ok"}"></span>Watchdog ${!state.watchdog.on ? "off"
+      : state.watchdog.open.length ? "· " + esc(state.watchdog.open.join(", ")) + " down" : state.watchdog.checked ? "· checked " + ago(state.watchdog.checked) : "on"}</button>` : ""}
     ${(by("jellyfin").nowPlaying || []).length ? `<span class="chip"><span class="dot ok"></span>${by("jellyfin").nowPlaying.length} watching</span>` : ""}`;
   $("#updated").textContent = "Updated " + new Date(state.time * 1000).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}) + " · refreshes every 10 seconds";
   const pc = $("#probcount"); pc.hidden = !errors; pc.textContent = errors;
@@ -595,6 +604,23 @@ async function loadEvents() {
   } catch {}
 }
 
+// Incidents: apps the watchdog found down, what it did, and what their logs said.
+async function loadIncidents() {
+  try {
+    const list = await (await fetch("/api/incidents?limit=50")).json();
+    const li = i => {
+      const st = i.state === "resolved" ? ["ok", "Resolved"] : i.state === "still down" ? ["error", "Still down"] : ["error", "Open"];
+      const when = Date.parse(i.time) / 1000;
+      return `<li><span class="tag ${st[0]}">${st[1]}</span><span class="t"><b>${esc(i.name)}</b> went down
+        <span class="muted">· ${ago(when)}${i.resolved ? " · back up at " + esc(i.resolved.slice(11, 16)) : ""}</span>
+        <br><span class="muted">${esc(i.action || "")}${i.diagnosis ? " · " + esc(i.diagnosis) : ""}</span></span></li>`;
+    };
+    const none = `<li class="empty">No incidents. The watchdog checks every few minutes and restarts anything that goes down.</li>`;
+    $("#incidents").innerHTML = list.slice(0, 5).map(li).join("") || none;
+    $("#incidentsfull").innerHTML = list.map(li).join("") || none;
+  } catch {}
+}
+
 // Request: search Seerr (TMDB) and request straight from the hub.
 let searchSeq = 0;
 async function search(q) {
@@ -634,6 +660,12 @@ async function openApp(id, url) {
 }
 
 document.addEventListener("click", async e => {
+  if (e.target.closest("#wdchip")) {
+    const on = !(state.watchdog && state.watchdog.on);
+    await post("/api/settings", {watchdog: on});
+    toast(on ? "Watchdog on: it restarts apps that go down" : "Watchdog off");
+    return refresh();
+  }
   const cp = e.target.closest("button.copy");
   if (cp) { copyText(cp.dataset.copy).then(() => toast("Copied " + cp.dataset.copy), () => toast("Couldn't copy. Select the address instead.")); return; }
   const nav = e.target.closest("[data-view]"); if (nav) return show(nav.dataset.view);
@@ -677,6 +709,7 @@ $("#logrefresh").onclick = loadLogs; $("#logapp").onchange = loadLogs; $("#logle
 refresh().then(() => { let v = null; try { v = localStorage.getItem("hub-view"); } catch {} if (v && v !== "overview" && state) show(v); });
 setInterval(refresh, 10000);
 loadEvents(); setInterval(loadEvents, 10000);
+loadIncidents(); setInterval(loadIncidents, 30000);
 </script>
 </body>
 </html>

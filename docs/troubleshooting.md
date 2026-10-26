@@ -90,8 +90,14 @@ Tailscale.
 
 ## Apps
 
-**An app shows "Down" in the Media Hub**: press its restart button. Windows: Task Scheduler → *Media Stack* →
-right-click the app → *Run*. Linux: `docker compose restart <app>`. If it keeps stopping, check its log.
+**An app shows "Down" in the Media Hub**: the watchdog restarts it within 5 minutes and records an incident
+saying what its log reported (Overview → *Incidents*). To restart it yourself: press its restart button, or
+Windows: Task Scheduler → *Media Stack* → right-click the app → *Run*; Linux: `docker compose restart <app>`.
+
+**The watchdog says an app is "still down"**: a restart didn't help, so read the incident's diagnosis (and the
+app's log in *Errors & logs*). The common causes are another program on its port, a full drive, a damaged
+database, or another app's API key having changed (run that app's setup step again). The watchdog won't
+restart the same app more than once every 30 minutes.
 
 **Sonarr/Radarr ask for a login on this PC (Windows)**: they shouldn't on the PC itself. Run their step
 again to reapply the settings.

@@ -96,3 +96,21 @@ The **Media Hub** (`http://localhost:8585` on Windows, `http://<server>:8585` on
 A health check runs every hour: it restarts stopped apps, re-tests failed indexers, imports downloads that
 got stuck on a folder-name mix-up, rescans Jellyfin when it's missing items, and tells you about anything it
 can't fix.
+
+### The watchdog
+
+Every 5 minutes the Media Hub's **watchdog** checks every app. When one has gone down it:
+
+1. restarts it (at most once every 30 minutes per app, so a broken app isn't restarted in a loop);
+2. records an **incident** with what the app's own log says, translated into plain words when it recognises
+   the cause (port in use, disk full, locked database, wrong API key, network unreachable, out of memory...);
+3. notifies you if the app is still down at the next check, because that needs a person;
+4. marks the incident resolved when the app is back.
+
+Incidents are on the Overview (*What's happening → Incidents*) and the Activity page. Click the **Watchdog**
+chip on the Overview to turn it off or on.
+
+Optional: if you run [Ollama](https://ollama.com) on the server, the watchdog can have a local AI model write
+the diagnosis. In `<folder>/config/shared/mediastack.json`, set `"watchdog": {"ollama_host":
+"http://127.0.0.1:11434", "ollama_model": "<a model you have>"}` and restart the Media Hub. The same section
+has `minutes` (how often it checks) and `auto_restart`.
