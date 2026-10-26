@@ -101,23 +101,40 @@ def guard():
 
 
 LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Media Hub - Sign in</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#eef3fc"><title>Media Hub - Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap">
 <style>
- :root{--bg:#f4f5f8;--panel:#fff;--text:#1b1d24;--muted:#6a6f7d;--line:#e2e4ea;--accent:#6d5dfc;--err:#d43c3c}
- @media (prefers-color-scheme:dark){:root{--bg:#111318;--panel:#191c23;--text:#e7e9ee;--muted:#9298a6;--line:#2a2f3a;--accent:#8b7dff;--err:#f06262}}
- *{box-sizing:border-box} body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);
- font:15px/1.45 "Segoe UI",system-ui,sans-serif;padding:16px}
- form{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;width:100%;max-width:360px}
- h1{font-size:20px;margin:0 0 4px} p{color:var(--muted);margin:0 0 18px;font-size:13px}
- label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
- input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
- button{margin-top:18px;width:100%;padding:11px;border:0;border-radius:9px;background:var(--accent);color:#fff;font:inherit;font-weight:600}
- .err{color:var(--err);font-size:13px;margin-top:12px}
-</style></head><body><form method="post">
+ :root{color-scheme:light;--bg:#eef3fc;--ink:#14203f;--muted:#4b5a7a;--line:#d2dcf0;--err:#b42318}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;color:var(--ink);
+  font:15px/1.6 "Google Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:radial-gradient(900px 480px at 50% -160px,#d9e5fb 0%,#eef3fc00 70%),var(--bg)}
+ .glass{width:100%;max-width:420px;padding:14px;border-radius:28px;border:1px solid #ffffffd9;
+  background:radial-gradient(130% 75% at 12% 0%,#ffffffb3 0%,#fff0 58%),linear-gradient(140deg,#ffffffc4 0%,#ffffff9c 55%,#ffffffb8 100%);
+  box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px #ffffff8c,0 1px 2px #0b14330d,0 16px 40px #0b14331f;
+  backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8)}
+ form{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 4px 14px #14203f0f;padding:30px 26px 26px;text-align:center}
+ .mark{width:52px;height:52px;border-radius:15px;box-shadow:0 6px 18px #23408f33;margin-bottom:12px}
+ h1{font-size:28px;font-weight:650;letter-spacing:-1.2px;margin:0}
+ p{color:var(--muted);margin:4px 0 20px;font-size:14px}
+ label{display:block;text-align:left;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 6px 4px}
+ input{width:100%;padding:12px 18px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);
+  font:16px "Google Sans",system-ui,sans-serif;box-shadow:0 2px 8px #14203f0d;outline:0}
+ input:focus{border-color:#9db4e6;box-shadow:0 0 0 4px #2f55b51a}
+ button{margin-top:22px;width:100%;padding:12px;border-radius:999px;color:#fff;font:700 15px "Google Sans",system-ui,sans-serif;cursor:pointer;
+  border:1px solid #ffffff33;background:radial-gradient(120% 100% at 15% 0%,#ffffff38,#fff0 55%),linear-gradient(140deg,#14203fe6,#23408fbf);
+  box-shadow:inset 0 1px 0 #ffffff59,inset 0 -1px 0 #0b14334d,0 8px 22px #14203f33}
+ .err{color:var(--err);background:#fde7e5;border-radius:999px;font-size:13px;font-weight:600;margin-top:14px;padding:7px 14px}
+</style></head><body><div class="glass"><form method="post">
+<svg class="mark" viewBox="0 0 64 64"><defs><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f55b5"/><stop offset="1" stop-color="#23408f"/></linearGradient></defs>
+<rect width="64" height="64" rx="16" fill="url(#b)"/><rect x="14" y="20" width="34" height="24" rx="5" fill="#fff"/><path d="M27 26.5v11l9.5-5.5z" fill="#23408f"/>
+<path d="M25 50h12" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="51" cy="13" r="10" fill="#ff8a1f" opacity=".28"/>
+<circle cx="51" cy="13" r="5.4" fill="#ff8a1f" stroke="#fff" stroke-width="1.8"/></svg>
 <h1>Media Hub</h1><p>Sign in with your Jellyfin administrator account.</p>
 <label for="u">Username</label><input id="u" name="username" autocomplete="username" autocapitalize="none" required autofocus>
 <label for="p">Password</label><input id="p" name="password" type="password" autocomplete="current-password">
-<button>Sign in</button>{error}</form></body></html>"""
+<button>Sign in</button>{error}</form></div></body></html>"""
 
 
 @app.route("/login", methods=["GET", "POST"])
