@@ -126,6 +126,29 @@ def clock(s):
     return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
 
 
+LOUD_CUES = {"scream": "a scream", "shriek": "a shriek", "gunshot": "gunfire", "gunfire": "gunfire",
+             "explosion": "an explosion", "explodes": "an explosion", "bang": "a bang", "crash": "a crash",
+             "roar": "a roar", "thud": "a thud", "shatter": "something shattering", "blast": "a blast",
+             "slam": "a slam", "growl": "a growl", "jolt": "a jolt", "stinger": "a music sting"}
+
+
+def sound_cue(app, item, position, span):
+    """The first loud sound cue the SDH subtitles mark ahead ([screams], (GUNSHOT)), as (time, words), or None."""
+    try:
+        from . import subs
+        cues = subs.cues_for(app, item, sdh=True) or []
+    except Exception:
+        return None
+    for c in cues:
+        if position < c["start"] <= position + span:
+            for m in subs.CUE.finditer(c["text"]):
+                low = m.group(0).lower()
+                for k, words in LOUD_CUES.items():
+                    if k in low:
+                        return c["start"], words
+    return None
+
+
 def answer(app, item, position, span=300, audio_index=None):
     """A short, spoiler-light line about the next few minutes, measured from `position` (when it was asked)."""
     events = scan(app, item, position, span, audio_index)
@@ -148,6 +171,9 @@ def answer(app, item, position, span=300, audio_index=None):
     if flags:
         cats = sorted({f["category"] for f in flags})
         parts.append(f"the index also flags {' and '.join(cats)} {when(flags[0]['start'])}")
+    cue = sound_cue(app, item, position, span)
+    if cue and not any(abs(cue[0] - e["t"]) < 8 for e in spikes):
+        parts.append(f"the subtitles mark {cue[1]} {when(cue[0])}")
     if not parts:
         return f"Nothing sudden in the next {mins} minutes - the sound stays fairly even.", events, flags
     text = "; ".join(parts) + "."

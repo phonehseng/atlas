@@ -283,7 +283,11 @@ def _next_in_collection(app, item):
 # ------------------------------------------------------------------ the last minutes' dialogue
 def _sidecar(path):
     p = Path(path)
-    cands = [x for x in p.parent.glob(p.stem + "*") if x.suffix.lower() in (".srt", ".ass", ".ssa", ".vtt")]
+    try:  # (no glob: titles often contain [brackets])
+        cands = [x for x in p.parent.iterdir() if x.name.startswith(p.stem + ".")
+                 and x.suffix.lower() in (".srt", ".ass", ".ssa", ".vtt")]
+    except OSError:
+        cands = []
     cands.sort(key=lambda x: (0 if re.search(r"\.(en|eng|english)\b", x.name, re.I) else 1,
                               1 if re.search(r"forced|sdh", x.name, re.I) else 0))
     return cands[0] if cands else None

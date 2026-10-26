@@ -1,4 +1,4 @@
-﻿"""Marquee: a local, Netflix-style player for your Jellyfin library."""
+"""Marquee: a local, Netflix-style player for your Jellyfin library."""
 import os
 import subprocess
 

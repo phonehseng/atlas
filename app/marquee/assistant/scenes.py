@@ -312,7 +312,55 @@ class Scenes:
 
     # -- finding
     def find(self, item, text, position=None):
-        """Everything needed to act: {"kind", "cands", "indexed", "eta", "queries"}."""
+        """Everything needed to act: {"kind", "cands", "indexed", "eta", "queries", "why"?}."""
+        import os
+        if os.environ.get("MARQUEE_SCENES") != "v1":
+            from . import scene_search
+            self._get_sdh(item)
+            found = scene_search.find(self.app, item, text, credits_start(self.app, item))
+            found["eta"] = None
+            if not found["indexed"]:
+                found["eta"] = self._start_indexing(item, found)
+            return found
+        return self.find_v1(item, text, position)
+
+    def _get_sdh(self, item, wait=30.0):
+        """No hearing-impaired subtitles yet: ask Bazarr now (up to ~30 s, then carry on with the normal track;
+        the download finishes in the background for next time)."""
+        try:
+            from . import sdh_fetch
+            if not sdh_fetch.bazarr() or sdh_fetch.has_sdh(item) or not sdh_fetch.allowed(item["Id"])[0]:
+                return None
+        except Exception:
+            return None
+        ctl = getattr(self, "ctl", None)
+        try:
+            if ctl is not None and ctl.playing():
+                ctl.toast("Getting the detailed subtitles...")
+        except Exception:
+            pass
+        box = {}
+        t = threading.Thread(target=lambda: box.update(sdh_fetch.fetch(self.app, item, why="scene search")), daemon=True)
+        t.start()
+        t.join(wait)
+        self.last_sdh = box or {"ok": False, "message": "still fetching"}
+        return self.last_sdh
+
+    def _start_indexing(self, item, found):
+        try:
+            from .. import index
+            st = index.touch(item["Id"], urgent=True) or {}
+            eta = st.get("eta")
+            if eta is None and st.get("state") in ("queued", "starting"):
+                run = (item.get("RunTimeTicks") or 0) / 10_000_000
+                eta = run / 25 if run else None  # indexing runs at roughly 20-30x real time
+            return eta
+        except Exception as e:
+            print("index touch failed:", e)
+            return None
+
+    def find_v1(self, item, text, position=None):
+        """The first version (word overlap + CLIP + a lenient look), kept for comparison: MARQUEE_SCENES=v1."""
         title = (item.get("SeriesName") or item.get("Name") or "") + \
             (f" ({item['ProductionYear']})" if item.get("ProductionYear") else "")
         queries, spoken, in_title = visual_queries(text, title)
@@ -369,7 +417,8 @@ class Scenes:
         if found["kind"] == "absent":
             return f"I don't think that happens in {item.get('SeriesName') or item.get('Name')}."
         if found["kind"] == "none":
-            return f"I couldn't find the part where {text.strip().rstrip('.?!')}."
+            hint = f" ({found['why']})" if found.get("why") else ""
+            return f"I couldn't find the part where {text.strip().rstrip('.?!')}{hint}."
         if found["kind"] == "winner":
             c = found["cands"][0]
             self.jump(c["target"], item, pos)
@@ -394,7 +443,8 @@ class Scenes:
         for n, c in enumerate(cands, 1):
             f = self._thumb_file(item, c["jump"], w, h, n)
             cap = (c.get("text") or "").strip()
-            args += [clock(c["target"]), (f"“{cap[:60]}”" if cap else ("picture match" if c["source"] == "picture" else "")),
+            seen = (c.get("describe") or "").strip()
+            args += [clock(c["target"]), (f"“{cap[:60]}”" if cap else (seen[:60] or ("picture match" if c["source"] == "picture" else ""))),
                      f or ""]
         self.pick = {"id": self._seq, "cands": cands, "item": item.get("Id"), "from": pos, "at": time.time(), "label": label}
         self.assistant.atlas._publish("clear", "", 0, self.assistant.atlas.gen)
@@ -446,7 +496,8 @@ class Scenes:
             if not found["indexed"]:
                 return ("This one isn't scanned for scenes yet; I've started on it"
                         + (f" (about {max(1, round(found['eta'] / 60))} minutes)." if found.get("eta") else ".")), []
-            return f"I couldn't find the part where {text}.", []
+            hint = f" ({found['why']})" if found.get("why") else ""
+            return f"I couldn't find the part where {text}{hint}.", []
         acts = [{"type": "play_from", "id": item["Id"], "start": c["target"], "label": clock(c["target"]),
                  "text": c.get("text"), "thumb": f"/api/index/{item['Id']}/thumb?t={c['jump']:.2f}"} for c in found["cands"]]
         if found["kind"] == "winner":

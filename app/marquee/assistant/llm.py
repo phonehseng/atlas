@@ -23,11 +23,45 @@ SYSTEM = ("You are the voice assistant of a home movie player. Reply with ONE JS
           "if the context doesn't say, answer briefly from general knowledge or say you don't know.")
 
 
+_seen = {"atlas_at": 0.0, "atlas_up": True, "ollama_at": 0.0, "ollama_model": None}
+
+
+def _atlas_up():
+    """Is Atlas' API listening right now? (checked at most every 20 s)"""
+    import socket
+    if time.time() - _seen["atlas_at"] > 20:
+        _seen["atlas_at"] = time.time()
+        try:
+            socket.create_connection(("127.0.0.1", 8765), timeout=0.3).close()
+            _seen["atlas_up"] = True
+        except OSError:
+            _seen["atlas_up"] = False
+    return _seen["atlas_up"]
+
+
+def _ollama_fast():
+    """A small fast model in Ollama itself (what Atlas would pass through), for when Atlas isn't running."""
+    if time.time() - _seen["ollama_at"] > 300 or _seen["ollama_model"] is None and time.time() - _seen["ollama_at"] > 20:
+        _seen["ollama_at"] = time.time()
+        try:
+            names = [m["name"] for m in requests.get("http://127.0.0.1:11434/api/tags", timeout=2).json().get("models", [])]
+            _seen["ollama_model"] = next((n for f in ai.FAST_MODELS for n in names if n.startswith(f)), None)
+        except Exception:
+            _seen["ollama_model"] = None
+    return _seen["ollama_model"]
+
+
 def provider():
     try:
-        return ai._provider()
+        p = ai._provider()
     except Exception:
         return None
+    if p and p.get("name") == "Atlas" and p.get("url") == ai.ATLAS_URL and not _atlas_up():
+        m = _ollama_fast()
+        if m:  # Atlas is off but its models are there: talk to Ollama directly
+            return {"url": "http://127.0.0.1:11434/v1", "key": "ollama", "model": m, "name": "Atlas"}
+        return None  # neither is running: behave as if no AI is set up (rules and classic search still work)
+    return p
 
 
 def available():

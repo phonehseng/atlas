@@ -20,6 +20,8 @@ POST /api/assistant/answer/clear                 -> cancel / hide it
 POST /api/assistant/ending/<item>/prepare {credits_at} -> start the end-of-title comment + picks (low priority)
 GET  /api/assistant/ending/<item>                -> {state: ready|pending, comment, picks, thinking}
 POST /api/assistant/ending/<item>/cancel         -> stopped watching early: drop it"""
+import threading
+
 from flask import Blueprint, jsonify, request
 
 from . import config, installer, llm
@@ -150,6 +152,34 @@ def look():
     return _ok(**job, vision=_vision_info())
 
 
+@bp.post("/api/assistant/scenes/<path:item_id>/prepare")
+def scenes_prepare(item_id):
+    """Opened a title's page: make its stretch summaries ahead of time (never while something plays)."""
+    from .. import server
+    from . import scene_search
+    app = server.APP
+    if getattr(getattr(app, "player", None), "playing", False):
+        return _ok(started=False)
+    scene_search.prepare(app, app.jf.item(item_id))
+    return _ok(started=True)
+
+
+@bp.get("/api/assistant/sdh/<path:item_id>")
+def sdh_state(item_id):
+    from .. import server
+    from . import sdh_fetch
+    it = server.APP.jf.item(item_id)
+    f = sdh_fetch.sidecar(it)
+    return _ok(has_sdh=sdh_fetch.has_sdh(it), sidecar=str(f) if f else None, bazarr=bool(sdh_fetch.bazarr()))
+
+
+@bp.post("/api/assistant/sdh/<path:item_id>/fetch")
+def sdh_fetch_now(item_id):
+    from .. import server
+    from . import sdh_fetch
+    return _ok(**sdh_fetch.fetch(server.APP, server.APP.jf.item(item_id), why="asked"))
+
+
 @bp.post("/api/assistant/scene/choose")
 def scene_choose():
     n = int((request.get_json(force=True, silent=True) or {}).get("n") or 0)
@@ -229,6 +259,29 @@ def hook_player(app=None):
     return True
 
 
+def _sdh_watch(app):
+    """SDH subtitles from Bazarr: for the title being played (a few minutes in), and a slow idle sweep."""
+    import time
+    from . import sdh_fetch
+    last_id, last_play, last_sweep = None, time.time(), 0.0
+    while True:
+        time.sleep(30)
+        try:
+            p = getattr(app, "player", None)
+            item = getattr(p, "item", None) if getattr(p, "playing", False) else None
+            if item:
+                last_play = time.time()
+                if item.get("Id") != last_id:
+                    last_id = item.get("Id")
+                    if not str(last_id).startswith("file:"):
+                        sdh_fetch.fetch_soon(app, item)
+            elif time.time() - last_play > 1200 and time.time() - last_sweep > 1200:
+                last_sweep = time.time()
+                sdh_fetch.idle_sweep(app)
+        except Exception as e:
+            print("sdh watch:", e)
+
+
 def init(app):
     """Optional: build the assistant now and start voice if it was left on (when its parts are installed)."""
     a = assistant()
@@ -236,6 +289,7 @@ def init(app):
         app.assistant = a  # app.assistant.prepare_ending / cancel_ending / ask_atlas for the player
     except Exception:
         pass
+    threading.Thread(target=_sdh_watch, args=(app,), daemon=True).start()
     try:
         hook_player(app)
     except Exception as e:

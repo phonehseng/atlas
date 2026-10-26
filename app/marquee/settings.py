@@ -78,6 +78,9 @@ DEFAULTS = {
     "radarr_key": "",            # encrypted
     "sonarr_url": "",
     "sonarr_key": "",            # encrypted
+    "sdh_fetch": True,           # get hearing-impaired (SDH) English subtitles from Bazarr for scene search (search only)
+    "bazarr_url": "",            # Bazarr for that (else mediastack.json's bazarr entry)
+    "bazarr_key": "",            # encrypted
     "smart_request": True,       # shows requested "smart": the next season is requested as you watch
     "smart_request_at": 50,      # ...once this % of the season being watched is watched (30% for 4K / big seasons)
     "stack_config": "",          # <root>/config/shared/mediastack.json (written by Media Stack Setup): "Your stack"
@@ -90,7 +93,7 @@ DEFAULTS = {
     "update_skip": "",           # a version the user chose to skip ("Skip this version")
 }
 SECRET = ("token", "seerr_cookie", "ai_key", "gdrive_client_secret", "gdrive_token", "radarr_key", "sonarr_key",
-          "hub_token")
+          "hub_token", "bazarr_key")
 
 
 class _Blob(ctypes.Structure):
@@ -153,4 +156,5 @@ def public(s: dict) -> dict:
                                                                "gdrive_client_secret_set": bool(s.get("gdrive_client_secret")),
                                                                "gdrive_signed_in": bool(s.get("gdrive_token")),
                                                                "radarr_key_set": bool(s.get("radarr_key")),
+                                                               "bazarr_key_set": bool(s.get("bazarr_key")),
                                                                "sonarr_key_set": bool(s.get("sonarr_key"))}

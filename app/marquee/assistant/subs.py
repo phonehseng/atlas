@@ -43,12 +43,24 @@ def _ts(s):
     return int(h) * 3600 + int(m) * 60 + float(rest)
 
 
-def parse_srt(text):
+def keep_cues(text):
+    """Like clean(), but keeps the sound cues of SDH subtitles ([gunshot], (SCREAMING), SPEAKER:) for searching."""
+    t = re.sub(r"\{[^}]*\}", "", text or "")
+    t = re.sub(r"<[^>]+>", "", t)
+    t = t.replace("\\N", " ").replace("\\n", " ")
+    t = re.sub(r"\s+", " ", t).strip(" -\u266a")
+    return t.strip()
+
+
+CUE = re.compile(r"\[[^\]]{2,}\]|\([A-Za-z][^)]{1,40}\)")
+
+
+def parse_srt(text, keep=False):
     cues = []
     for block in re.split(r"\r?\n\s*\r?\n", text.strip()):
         m = re.search(r"(\d+:\d+:\d+[.,]\d+)\s*-->\s*(\d+:\d+:\d+[.,]\d+)[^\n]*\n(.*)", block, re.S)
         if m:
-            t = clean(m.group(3))
+            t = (keep_cues if keep else clean)(m.group(3))
             if t:
                 cues.append({"start": _ts(m.group(1)), "end": _ts(m.group(2)), "text": t})
     return cues
@@ -58,6 +70,29 @@ def _forced(s):
     """Forced (foreign-parts-only) tracks: flagged, or only named so ("Forced - English")."""
     return bool(s.get("IsForced") or s.get("forced")) or "forced" in " ".join(
         str(s.get(k) or "") for k in ("Title", "DisplayTitle", "title")).lower()
+
+
+SDH_WORDS = re.compile(r"\b(sdh|cc|hearing[ -]?impaired|hi)\b|\.(sdh|hi|cc)\.", re.I)
+
+
+def _sdh(s):
+    """A subtitle track for deaf and hard-of-hearing viewers (sound cues and speaker names)."""
+    label = " ".join(str(s.get(k) or "") for k in ("Title", "DisplayTitle", "Path", "title"))
+    return bool(s.get("IsHearingImpaired") or s.get("hearing_impaired")) or bool(SDH_WORDS.search(label))
+
+
+def _pick_sdh(item, prefs):
+    """For searching: the SDH/CC track in the preferred language, else (None) - the caller then compares the
+    full tracks by how many sound cues they carry. Never a forced track."""
+    src = (item.get("MediaSources") or [{}])[0]
+    full = [s for s in src.get("MediaStreams") or [] if s.get("Type") == "Subtitle"
+            and (s.get("Codec") or "").lower() in TEXT_CODECS and not _forced(s)]
+    for lang in prefs:
+        same = [s for s in full if (s.get("Language") or "").lower().startswith(lang.lower()[:2])]
+        if same:
+            sdh = [s for s in same if _sdh(s)]
+            return src, (sdh[0] if sdh else None), same
+    return src, None, full
 
 
 def _pick_stream(item, mpv, prefs):
@@ -89,9 +124,11 @@ def _pick_stream(item, mpv, prefs):
     return src, full[0]
 
 
-def cues_for(app, item):
-    """All subtitle cues of the item (cached per item), or None when it has no text subtitles."""
-    key = item["Id"]
+def cues_for(app, item, sdh=False):
+    """All subtitle cues of the item (cached per item), or None when it has no text subtitles.
+    sdh=True (scene search, loudness): the SDH/CC track when there is one (else the full track with the most sound
+    cues), with its [sound cues] kept in the text. What's shown on screen is not affected."""
+    key = (item["Id"], "sdh") if sdh else item["Id"]
     with _lock:
         if key in _cache:
             return _cache[key]
@@ -106,26 +143,65 @@ def cues_for(app, item):
                 return _cache[key]
         raise RuntimeError("subtitles still loading")
     try:
-        return _fetch(app, item, key)
+        return _fetch(app, item, key, sdh)
     finally:
         with _lock:
             _inflight.pop(key, None)
         ev.set()
 
 
-def _fetch(app, item, key):
+def _get_track(app, item, src, stream, keep):
+    jf = app.jf
+    r = jf.s.get(f"{jf.base}/Videos/{item['Id']}/{src.get('Id')}/Subtitles/{stream['Index']}/0/Stream.srt",
+                 headers={"Authorization": jf.auth_header()}, timeout=90)  # first time: Jellyfin extracts it
+    r.raise_for_status()
+    return parse_srt(r.content.decode("utf-8-sig", "replace"), keep=keep)
+
+
+def _fetch(app, item, key, sdh=False):
     from .. import settings
     jf = app.jf
     prefs = [x for x in settings.load()["sub_lang"].split(",") + ["eng", "en"] if x]
     if not item.get("MediaSources"):
         item = jf.item(item["Id"])
-    src, stream = _pick_stream(item, getattr(app.player, "mpv", None), prefs)
     cues = None
-    if stream is not None:
-        r = jf.s.get(f"{jf.base}/Videos/{item['Id']}/{src.get('Id')}/Subtitles/{stream['Index']}/0/Stream.srt",
-                     headers={"Authorization": jf.auth_header()}, timeout=90)  # first time: Jellyfin extracts it
-        r.raise_for_status()
-        cues = parse_srt(r.content.decode("utf-8-sig", "replace"))
+    side = None
+    if sdh:  # a hearing-impaired file next to the video (e.g. fetched by Bazarr) wins
+        try:
+            from .sdh_fetch import sidecar, sound_cues
+            side = sidecar(item)
+            if side is not None:
+                marked, total = sound_cues(side)
+                if not total or marked < max(5, total * 0.03):
+                    side = None  # labelled hearing-impaired but without sound cues: no better than the rest
+        except Exception:
+            side = None
+    if side is not None:
+        text = side.read_text(encoding="utf-8-sig", errors="replace")
+        if side.suffix.lower() in (".ass", ".ssa"):
+            from .ending import _parse_ass
+            cues = [{**c, "text": keep_cues(c["text"])} for c in _parse_ass(text)]
+        else:
+            cues = parse_srt(text, keep=True)
+    elif sdh:
+        src, stream, same = _pick_sdh(item, prefs)
+        if stream is not None:
+            cues = _get_track(app, item, src, stream, keep=True)
+        else:  # no labelled SDH: the full track with the most [sound cues] (at most 3 looked at)
+            best = None
+            for st in [x for x in same if (x.get("Codec") or "").lower() in TEXT_CODECS][:3]:
+                try:
+                    got = _get_track(app, item, src, st, keep=True)
+                except Exception:
+                    continue
+                n = sum(1 for c in got if CUE.search(c["text"]))
+                if best is None or n > best[0]:
+                    best = (n, got)
+            cues = best[1] if best else None
+    else:
+        src, stream = _pick_stream(item, getattr(app.player, "mpv", None), prefs)
+        if stream is not None:
+            cues = _get_track(app, item, src, stream, keep=False)
     with _lock:
         if len(_cache) > 8:
             _cache.clear()
