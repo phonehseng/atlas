@@ -160,7 +160,7 @@ async function send(text, extra) {
   C.busy = true;
   $('.chat-composer')?.classList.add('busy');
   $('.chat-chips') && ($('.chat-chips').hidden = true);
-  userBubble(text);
+  const mine = userBubble(text);
   const el = botBubble({ text: '' });
   thinking(el);
   scrollEnd();
@@ -191,6 +191,7 @@ async function send(text, extra) {
         else if (ev.kind === 'action') { startText(); bubble.innerHTML = richText(shown); actionCard(el, ev.card, true); scrollEnd(); }
         else if (ev.kind === 'ui') { setTimeout(() => uiDo(ev), 350); }
         else if (ev.kind === 'error') { throw new Error(ev.text); }
+        else if (ev.kind === 'notice') { noticeLine(el, ev.text); }
         else if (ev.kind === 'done') { engineLine(el, ev.engine); }
       }
     }
@@ -201,13 +202,28 @@ async function send(text, extra) {
   } catch (e) {
     clearInterval(C.statusTimer);
     if (e.name === 'AbortError') { el.remove(); }
-    else { bubble.classList.remove('is-thinking', 'streaming'); bubble.classList.add('is-error'); bubble.textContent = e.message || 'Something went wrong.'; }
+    else {
+      bubble.classList.remove('is-thinking', 'streaming'); bubble.classList.add('is-error'); bubble.textContent = e.message || 'Something went wrong.';
+      // Retry: the same question again, in place of this failed exchange
+      const { icon } = K();
+      const b = document.createElement('button');
+      b.className = 'btn small ghost chat-retry'; b.innerHTML = `${icon('restart', 14)} Retry`;
+      b.onclick = () => { if (C.busy) return; el.remove(); mine.remove(); send(text, extra); };
+      bubble.after(b);
+    }
   } finally {
     C.busy = false; C.ctrl = null;
     $('.chat-composer')?.classList.remove('busy');
     scrollEnd();
     if (document.activeElement === document.body) $('.chat-composer textarea')?.focus({ preventScroll: true });
   }
+}
+/* A quiet line above an answer (e.g. the AI is away, so this one comes from the shelves). */
+function noticeLine(el, text) {
+  if ($('.chat-notice', el)) return;
+  const n = document.createElement('div');
+  n.className = 'chat-notice'; n.textContent = text;
+  $('.bubble', el).before(n);
 }
 /* After the final paint: bold names without a card go back to plain bold. */
 function relink(el) {

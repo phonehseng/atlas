@@ -75,6 +75,26 @@ def _builtin(allow_during_playback):
         return None
 
 
+_atlas_seen = {"at": 0.0, "up": False}
+
+
+def _atlas_up():
+    """Is Atlas actually answering on its port right now? (A quick local connect, remembered for 15 s.) Its key
+    file can exist while it's switched off; Auto then moves on to the next provider instead of failing."""
+    import socket
+    import time
+    now = time.time()
+    if now - _atlas_seen["at"] < 15:
+        return _atlas_seen["up"]
+    try:
+        with socket.create_connection(("127.0.0.1", int(ATLAS_URL.split(":")[2].split("/")[0])), timeout=0.3):
+            up = True
+    except OSError:
+        up = False
+    _atlas_seen.update(at=now, up=up)
+    return up
+
+
 def _provider(allow_during_playback=True):
     """The language model to use, as {"url", "key", "model", "name", "kind", "vision"}, or None (Classic: no model).
     Cheap to call: it never loads or starts anything. allow_during_playback only matters for the built-in AI: the
@@ -86,7 +106,7 @@ def _provider(allow_during_playback=True):
     if p in ("auto", "custom") and s["ai_url"] and s["ai_key"]:
         return {"url": s["ai_url"].rstrip("/"), "key": s["ai_key"], "model": s["ai_model"] or "gpt-4o-mini",
                 "name": "AI", "kind": "custom", "vision": True}
-    if p in ("auto", "atlas") and _atlas_key():
+    if (p == "atlas" or (p == "auto" and _atlas_up())) and _atlas_key():
         return {"url": ATLAS_URL, "key": _atlas_key(), "model": s["ai_model"] or _atlas_model(), "name": "Atlas",
                 "kind": "atlas", "vision": False}  # Atlas' OpenAI endpoint drops images (the assistant uses Ollama)
     if p in ("auto", "builtin"):

@@ -988,6 +988,7 @@ class Catalog:
     def home_rows(self):
         rows = []
         libs = {r.get("library") for r in self.items.values()}
+        rng = random.Random(time.strftime("%Y-%m-%d") + "|library")  # the same picks all day
 
         def add(key, title, items, style="poster"):
             if items:
@@ -1002,24 +1003,24 @@ class Catalog:
             if "shows" in libs:
                 add("new-shows", "New episodes", self.latest("shows"))
             if "anime" in libs:
-                add("anime", "Anime", random.sample(a := self._of("Series,Movie", "anime"), min(24, len(a))))
+                add("anime", "Anime", rng.sample(a := self._of("Series,Movie", "anime"), min(24, len(a))))
             for rec in (self.meta.get("recommendations") or [])[:3]:
                 base = rec.get("base")
                 title = {"SimilarToRecentlyPlayed": f"Because you watched {base}",
                          "SimilarToLikedItem": f"Because you liked {base}",
                          "HasDirectorFromRecentlyPlayed": f"More from {base}",
                          "HasActorFromRecentlyPlayed": f"More with {base}"}.get(rec.get("type"), "Picked for you")
-                add("rec-" + (base or str(random.random())), title, [self.items.get(i) for i in rec["ids"]])
+                add("rec-" + (base or str(rng.random())), title, [self.items.get(i) for i in rec["ids"]])
             pool = self._of("Movie,Series")
             unwatched = [r for r in pool if not self._played(r)]
-            add("unwatched", "Haven't watched yet", random.sample(unwatched, min(24, len(unwatched))))
+            add("unwatched", "Haven't watched yet", rng.sample(unwatched, min(24, len(unwatched))))
             add("top", "Highest rated in your library",
                 sorted([r for r in pool if r.get("rating")], key=lambda r: -r["rating"])[:24])
             genres = GENRES[:]
-            random.shuffle(genres)
+            rng.shuffle(genres)
             for g in genres[:3]:
                 hits = [r for r in pool if g in (r.get("genres") or [])]
-                add("genre-" + g, g, random.sample(hits, min(24, len(hits))))
+                add("genre-" + g, g, rng.sample(hits, min(24, len(hits))))
         return rows
 
     def library_rows(self, kind):
@@ -1145,7 +1146,8 @@ class Catalog:
     # ------------------------------------------------------------------ small cache (ratings, people, TMDB extras)
     def kv_get(self, key, max_age=None):
         """(data, age_seconds) from the cache, or (None, None). max_age: older entries count as missing."""
-        row = self.db.execute("SELECT data, fetched FROM kv WHERE key=?", (key,)).fetchone()
+        with self.lock:  # one connection shared by many threads (pages, background cache fills)
+            row = self.db.execute("SELECT data, fetched FROM kv WHERE key=?", (key,)).fetchone()
         if not row:
             return None, None
         age = time.time() - (row[1] or 0)
@@ -1153,12 +1155,13 @@ class Catalog:
             return None, age
         try:
             return json.loads(row[0]), age
-        except ValueError:
+        except (TypeError, ValueError):
             return None, None
 
     def kv_set(self, key, data):
-        self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?,?)",
-                        (key, json.dumps(data, ensure_ascii=False), time.time()))
+        blob = json.dumps(data, ensure_ascii=False)
+        with self.lock:
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?,?)", (key, blob, time.time()))
 
     # ------------------------------------------------------------------ removed titles (deleted to save space)
     # Removing a file never erases its history: marquee.storage writes a record here first (ids, title, artwork,

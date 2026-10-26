@@ -483,7 +483,13 @@ def stream(message, client_history=None, pick=None, intent=None):
                 yield {"kind": "replace", "text": v}
                 shown = v
     except Exception as e:
-        yield {"kind": "error", "text": f"{ai.available()['name']} didn't answer ({type(e).__name__}). Try again in a moment."}
+        name = ai.available()["name"]
+        print("chat: the model failed:", type(e).__name__, e)
+        if not shown:  # nothing said yet: answer from the shelves instead (rules, no model), and say so
+            yield {"kind": "notice", "text": f"{name} isn't answering right now, so these come from your shelves and Seerr."}
+            yield from _classic_reply(message, hist)
+            return
+        yield {"kind": "error", "text": f"{name} stopped answering ({type(e).__name__}).", "retry": True}
         return
     answer = visible(full).strip()
     if answer != shown.strip():

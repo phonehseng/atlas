@@ -20,6 +20,8 @@ import sys
 import threading
 import time
 import queue
+import re
+import subprocess
 import uuid
 from collections import deque
 
@@ -1228,6 +1230,10 @@ class Player:
         if self._index_outro is None and not self._credits and pos > dur * 0.5 and item.get("Type") == "Episode":
             self._index_outro = 0
             threading.Thread(target=self._fetch_index_outro, args=(item.get("Id"),), daemon=True).start()
+        # films: where the talking stops for good (the subtitles), instead of guessing the last few minutes
+        if self._index_outro is None and not self._credits and pos > dur * 0.5 and item.get("Type") != "Episode":
+            self._index_outro = 0
+            threading.Thread(target=self._find_film_credits, args=(item.get("Id"), dur), daemon=True).start()
         start = self.credits_start()
         if os.environ.get("MARQUEE_DEV_DEBUG") and start and pos > start - 15:
             print(f"credits tick pos={pos:.1f} last={last} start={start:.1f}", flush=True)
@@ -1278,6 +1284,36 @@ class Player:
                 self._index_outro = float(outro["start"])
         except Exception:
             pass
+
+    def _find_film_credits(self, item_id, dur):
+        """A film's credits from its subtitles: the end credits are a long stretch with no spoken line (only music
+        notes like "[UPBEAT MUSIC PLAYING]", or nothing at all), even when a post-credits scene talks again later.
+        Reads only the last fifth of the subtitle track (a fast seek, not the whole file)."""
+        try:
+            path = self.mpv.path if self.mpv else None
+            if not path or not os.path.exists(str(path)):
+                return
+            from . import details
+            ff = details._ffmpeg()
+            offset = dur * 0.8
+            side = details._sidecar_subs(path)
+            if side:
+                raw = side.read_bytes()
+                cues = [(a - offset, b - offset, t) for a, b, t in details._parse_cues(raw.decode("utf-8-sig", "replace"))
+                        if b > offset]
+            else:
+                idx = details._embedded_sub_stream(ff, path) if ff else None
+                if idx is None:
+                    return
+                p = subprocess.run([ff, "-hide_banner", "-loglevel", "error", "-ss", f"{offset:.1f}", "-i", path,
+                                    "-map", f"0:{idx}", "-f", "srt", "pipe:1"], capture_output=True, timeout=120)
+                cues = details._parse_cues(p.stdout.decode("utf-8", "replace")) if p.returncode == 0 else []
+            start = credits_from_cues([(a + offset, b + offset, t) for a, b, t in cues], dur)
+            if start and self.item and self.item.get("Id") == item_id:
+                self._index_outro = start
+                print(f"credits: film credits from subtitles at {start / 60:.1f} min", flush=True)
+        except Exception as e:
+            print("credits from subtitles failed:", e)
 
     def to_mini(self, reason="ui"):
         """Shrink the video into the bottom-right of the app window (about a quarter wide, rounded), so the page
@@ -2039,3 +2075,24 @@ def _round_corners(buf, w, h, r):
                 buf[o + 1] = int(buf[o + 1] * a)
                 buf[o + 2] = int(buf[o + 2] * a)
                 buf[o + 3] = int(255 * a)
+
+
+_SOUND_ONLY = re.compile(r"\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|<[^>]+>|[♪♫#\-–—\s.]")
+
+
+def credits_from_cues(cues, dur):
+    """Where a film's end credits start, from its subtitle cues [(start, end, text)] in seconds: the first long
+    stretch (2.5+ minutes) in the last 20 % with no spoken line - music notes and sound cues don't count, and a
+    post-credits scene that talks again later doesn't either. None when there's no such stretch."""
+    spoken = sorted((a, b) for a, b, t in cues if _SOUND_ONLY.sub("", t or ""))
+    if not spoken or not dur:
+        return None
+    floor = dur * 0.8
+    prev_end = None
+    for a, b in spoken:
+        if prev_end is not None and prev_end >= floor and a - prev_end >= 150:
+            return prev_end + 20
+        prev_end = max(prev_end or 0, b)
+    if prev_end and prev_end >= floor and dur - prev_end >= 150:  # the talking simply stops before the end
+        return prev_end + 20
+    return None

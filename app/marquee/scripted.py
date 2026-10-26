@@ -601,11 +601,11 @@ def rows(app, now=None, min_items=3):
     out = []
     rng = _rng(now.date(), "rows")
 
-    def add(key, title, items):
+    def add(key, title, items, seed=None):
         items = [r for r in items if r]
         if len(items) >= min_items:
             out.append({"key": "classic-" + key, "title": title, "items": cat.cards(items[:24]), "style": "poster",
-                        "classic": True})
+                        "classic": True, "seed": seed})
 
     with cat.lock:
         taste = Taste(cat, now)
@@ -621,7 +621,7 @@ def rows(app, now=None, min_items=3):
             pool = [r for r in cands if r["id"] in sims or r["id"] in local]
             scored = sorted(pool, key=lambda r: -((r["id"] in sims) * 2 + local.index(r["id"]) * -0.1
                                                   if r["id"] in local else (r["id"] in sims) * 2))
-            add("because", L.ROWS["because"].format(title=_title_short(base.get("name"), 40)), scored)
+            add("because", L.ROWS["because"].format(title=_title_short(base.get("name"), 40)), scored, seed=base["id"])
         short = [r for r in cat._of("Movie") if 20 * 60 <= (r.get("runtime") or 0) <= 100 * 60]
         short.sort(key=lambda r: (cat._played(r), -(r.get("rating") or 0)))
         add("short", L.ROWS["short"], short)

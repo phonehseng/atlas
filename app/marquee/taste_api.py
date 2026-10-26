@@ -353,11 +353,17 @@ def rate_title(key):
 # ------------------------------------------------------------------ a Home row that follows the profile
 @bp.get("/api/taste/home-row")
 def home_row():
+    return ok(row=taste_row())
+
+
+def taste_row():
+    """Library titles that fit the taste profile best ({"key": "taste", ...} or None). Home's assemble step mixes
+    requestable titles into it."""
     from . import server
     cat = server.catalog()
     p = taste.profile()
     if taste.is_empty(p):
-        return ok(row=None)
+        return None
     with cat.lock:
         rows = [r for r in cat._of("Movie,Series") if not cat._played(r)]
         facts = [(r, {**cat.card(r), "people": (r.get("extra") or {}).get("people") or []}) for r in rows]
@@ -369,7 +375,7 @@ def home_row():
         items.append({**cat.card(r), "fit": s})
     top = taste.top_genres(2)
     title = "Picked for your taste" + (f": {taste._list([g.lower() for g in top])}" if top else "")
-    return ok(row={"key": "taste", "title": title, "items": items, "style": "poster"} if len(items) >= 3 else None)
+    return {"key": "taste", "title": title, "items": items, "style": "poster", "genres": top} if len(items) >= 3 else None
 
 
 # ------------------------------------------------------------------ Letterboxd

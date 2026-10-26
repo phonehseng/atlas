@@ -218,12 +218,18 @@ def collection(cid, exclude_tmdb=None):
         for p in c.get("parts") or []:
             card = APP().seerr.card({**p, "mediaType": "movie"})
             if card:
+                card["date"] = p.get("releaseDate") or None
                 parts.append(card)
-        parts.sort(key=lambda p: p.get("year") or "9999")
-        return {"name": c.get("name"), "parts": parts}
+        return {"name": c.get("name"), "parts": sorted(parts, key=part_order)}
     data = cached(f"collection:{int(cid)}", 7 * DAY, fetch) or {}
-    items = [owned_or_tmdb("movie", p) for p in data.get("parts") or [] if str(p["id"]) != str(exclude_tmdb)]
+    parts = sorted(data.get("parts") or [], key=part_order)  # older caches were saved in TMDB's own order
+    items = [owned_or_tmdb("movie", p) for p in parts if str(p["id"]) != str(exclude_tmdb)]
     return {"name": data.get("name"), "items": items} if items else None
+
+
+def part_order(p):
+    """A film series in watching order: by release date (1, 2, 3...), undated (announced) parts last."""
+    return (p.get("date") or (f"{p['year']}-99" if p.get("year") else "9999"), str(p.get("title") or ""))
 
 
 def recommended(kind, tmdb):
@@ -386,14 +392,8 @@ def _short_bio(text, limit=700):
     return (cut[:end + 1] if end > 200 else cut.rstrip() + "…")
 
 
-@bp.get("/api/person/<path:pid>")
-def person(pid):
-    """A person sheet: photo, short bio, what's in the library with them, and what they're known for."""
-    c = cat()
-    name = request.args.get("name") or ""
-    tmdb = pid[5:] if pid.startswith("tmdb-") else None
-    jf_id = None if tmdb else pid
-
+def person_jf(jf_id):
+    """A Jellyfin person (name, bio, TMDB id, photo), cache-first."""
     def fetch_jf():
         jf = APP().jf
         if not jf.online:
@@ -405,9 +405,19 @@ def person(pid):
                 "born": (p.get("PremiereDate") or "")[:10] or None,
                 "place": (p.get("ProductionLocations") or [None])[0],
                 "photo": jf_img(jf_id, "Primary", "person") if (p.get("ImageTags") or {}).get("Primary") else None}
+    return cached(f"person:jf:{jf_id}", 14 * DAY, fetch_jf) or {}
+
+
+@bp.get("/api/person/<path:pid>")
+def person(pid):
+    """A person sheet: photo, short bio, what's in the library with them, and what they're known for."""
+    c = cat()
+    name = request.args.get("name") or ""
+    tmdb = pid[5:] if pid.startswith("tmdb-") else None
+    jf_id = None if tmdb else pid
     info = {}
     if jf_id and re.fullmatch(r"[0-9a-f]{32}", jf_id):
-        info = cached(f"person:jf:{jf_id}", 14 * DAY, fetch_jf) or {}
+        info = person_jf(jf_id)
         tmdb = info.get("tmdb") or tmdb
     known, t = [], {}
     if tmdb and str(tmdb).isdigit():

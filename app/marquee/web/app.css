@@ -1190,3 +1190,32 @@ a.r-chip:hover { transform: translateY(-2px); background: var(--btn-glass-hover)
 .dx-media video::-webkit-media-controls-overlay-play-button, .pop-media video::-webkit-media-controls-overlay-play-button,
 .epi .thumb video::-webkit-media-controls-overlay-play-button,
 .dx-media video::-internal-media-controls-overlay-cast-button { display: none !important; }
+
+/* ------------------------------------------------------------------ one catalogue: All · On this PC · To request */
+.home-filter { padding: 0 var(--gutter); margin: 0 0 18px; display: flex; min-height: 44px; }
+.page-library .home-filter, #lib-filter { margin-top: 10px; }
+.filter-seg { border-radius: 999px; padding: 5px; gap: 2px; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.filter-seg::-webkit-scrollbar { display: none; }
+.filter-seg button { padding: 8px 16px; }
+.filter-seg button:disabled { opacity: .55; cursor: default; font-weight: 500; }
+.filter-seg button:disabled:hover { color: var(--muted); }
+[data-filter="lib"] .card:not(.is-owned),
+[data-filter="req"] .card:not(.is-requestable),
+[data-filter="requested"] .card:not(.is-requested) { display: none !important; }
+.row.filtered-out, #search-results .filtered-out { display: none !important; }
+.page[data-filter="req"] .hero, .page[data-filter="requested"] .hero { display: none; }
+.skel-row .skel-line { margin-top: 8px; }
+.rows-more, .grid-more { padding-top: 6px; }
+.search-filter-note { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+@media (max-width: 600px) {
+  .home-filter { margin-bottom: 12px; }
+  .filter-seg button { padding: 7px 11px; font-size: 12.5px; }
+}
+
+/* preview subtitles: readable over any picture without a heavy box */
+.dx-media video::cue, .pop-media video::cue, .epi .thumb video::cue {
+  color: #fff; background: #0b143366; font-family: inherit; font-weight: 600; line-height: 1.35;
+  text-shadow: 0 1px 3px #000c, 0 0 12px #0009; }
+.dx-media video::cue { font-size: 22px; }
+.page:not([data-filter="lib"]) .row[data-libview] { display: none !important; }
+.page[data-filter="lib"] .row[data-mix]:not([data-key="series"]), .page[data-filter="lib"] .rows-more { display: none !important; }

@@ -59,7 +59,7 @@ class Seerr:
                 "overview": r.get("overview") or "", "anime": anime,
                 "poster": IMG + "w500" + r["posterPath"] if r.get("posterPath") else None,
                 "backdrop": IMG + "original" + r["backdropPath"] if r.get("backdropPath") else None,
-                "rating": r.get("voteAverage"), "status": info.get("status"),
+                "rating": r.get("voteAverage"), "status": info.get("status"), "genre_ids": r.get("genreIds") or [],
                 "jellyfin": info.get("jellyfinMediaId"), **Seerr._removed(r["mediaType"], r["id"], info)}
 
     removed_lookup = None  # set by the catalog: fn(kind, tmdb) -> {removed, played, state, ...} for removed titles

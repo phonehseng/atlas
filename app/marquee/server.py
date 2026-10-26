@@ -41,6 +41,11 @@ def catalog():
 
 def _catalog_updated(event, data):
     _cache.clear()
+    try:
+        from . import homemix
+        homemix.invalidate()
+    except Exception:
+        pass
     if event == "userdata-changed":  # smart season requests follow watch progress
         try:
             from . import smart
@@ -221,16 +226,80 @@ def logout():
 
 @app.get("/api/home")
 def home():
-    rows = catalog().home_rows()
-    featured = [c for r in rows for c in r["items"] if c.get("backdrop") and c["type"] in ("Movie", "Series")]
-    hero = random.sample(featured, min(5, len(featured))) if featured else []
+    """Home in one pass (marquee.homemix.assemble): the personal rows, then a capped, rotating mix of library and
+    requestable titles, one card per title, series in order. ?page=2,3...: more rows for infinite scroll."""
+    from . import homemix
+    page = request.args.get("page", 1, type=int) or 1
+    cat = catalog()
+    rows = cat.home_rows()
     try:  # rule-made rows (Classic mode's picks; cheap and offline, shown in every mode)
         from . import scripted
         keys = {r["key"] for r in rows}
         rows += [r for r in scripted.rows(APP) if r["key"] not in keys]
     except Exception as e:
         print("classic rows unavailable:", type(e).__name__, e)
-    return ok(rows=rows, hero=hero, user=settings.load()["user_name"], offline=APP.jf.configured and not APP.jf.online)
+    pending = []
+    av = ai.available()
+    picks = None
+    if av["mode"] == "classic":
+        try:
+            from . import scripted
+            picks = scripted.picks(APP).get("items")
+        except Exception:
+            picks = None
+    else:
+        hit = _cache.get("picks")
+        picks = (hit[1] or {}).get("items") if hit else None
+        if not hit:
+            pending.append("ai-picks")
+    if picks:
+        rows.append({"key": "ai-picks", "title": "Picked for you", "ai": av["name"], "items": picks, "style": "poster"})
+    hit = _cache.get("home-discover-ai")
+    if hit and hit[1]:
+        rows.append({**hit[1], "ai": av["name"]})
+    elif not hit and APP.seerr.ready:
+        pending.append("ai-discover")
+    taste = None
+    try:
+        from .taste_api import taste_row
+        taste = taste_row()
+    except Exception as e:
+        print("taste row unavailable:", type(e).__name__, e)
+    mylist = []
+    try:
+        mylist = [k if card is None else homemix.key_of(cat, card) for k, _, card, _ in cat.mylist()]
+    except Exception as e:
+        print("my list unavailable:", type(e).__name__, e)
+    out = homemix.assemble(APP, rows, mylist, page=page, taste=taste)
+    library = homemix.library_view(APP, rows) if page <= 1 else []
+    # the hero comes from what Home recommends (so never a later part of a series you haven't reached)
+    featured, seen = [], set()
+    for r in out["rows"] + library:
+        for c in r["items"]:
+            if c.get("backdrop") and c.get("type") in ("Movie", "Series") and c["id"] not in seen:
+                seen.add(c["id"])
+                featured.append(c)
+    hero = random.sample(featured, min(5, len(featured))) if featured and page <= 1 else []
+    return ok(rows=out["rows"], library=library, hero=hero, more=out["more"], page=page, warming=out["warming"],
+              seerr=out["seerr"], pending=pending, user=settings.load()["user_name"],
+              offline=APP.jf.configured and not APP.jf.online)
+
+
+@app.get("/api/home/warm")
+def home_warm():
+    """Is Home still filling its cache from Seerr? The page asks again for its rows when this says no."""
+    from . import homemix
+    return ok(busy=homemix.warming())
+
+
+@app.get("/api/discover/<kind>")
+def discover_kind(kind):
+    """Requestable titles for a library page's grid, a page at a time (infinite scroll)."""
+    if kind not in ("movies", "shows", "anime"):
+        return fail("unknown library", 404)
+    from . import homemix
+    return ok(**homemix.discover_page(APP, kind, request.args.get("page", 1, type=int) or 1,
+                                      request.args.get("sort") or "popular", request.args.get("genre") or None))
 
 
 @app.get("/api/home/discover")
@@ -314,17 +383,33 @@ def home_discover_ai():
                 "items": items, "style": "request"} if items else None
     hit = _cache.get("home-discover-ai")
     if hit and time.time() - hit[0] < (12 * 3600 if hit[1] else 600):  # failures retry after 10 minutes
-        return ok(row=hit[1])
-    row = build()
-    _cache["home-discover-ai"] = (time.time(), row)
-    return ok(row=row)
+        row = hit[1]
+    else:
+        row = build()
+        _cache["home-discover-ai"] = (time.time(), row)
+    return ok(row=_late_row(row))
+
+
+def _late_row(row):
+    """A row that lands after Home was drawn: series order and de-duplication against what Home shows."""
+    if not row:
+        return None
+    from . import homemix
+    items = homemix.filter_late(APP, row.get("items"))
+    return {**row, "items": items, "style": "poster"} if items else None
 
 
 @app.get("/api/library/<kind>")
 def library(kind):
     if kind not in ("movies", "shows", "anime"):
         return fail("unknown library", 404)
-    return ok(rows=catalog().library_rows(kind))
+    from . import homemix
+    rows = catalog().library_rows(kind)
+    try:  # genre rows also carry Seerr's popular titles in that genre (one card per title)
+        rows = homemix.library_extra(APP, kind, rows)
+    except Exception as e:
+        print("library mix unavailable:", type(e).__name__, e)
+    return ok(rows=rows, seerr={"ready": homemix.seerr_ready(APP), "online": homemix.seerr_online(APP)})
 
 
 def _fetch_similar(item_id):
@@ -400,6 +485,15 @@ def search():
                 req = [c for c in APP.seerr.search(q) if c.get("status") != 5][:20]
         except Exception:
             req = []
+    # one card per title: a requestable result that's in the library already is the library card above
+    shown = {i["id"] for i in items}
+    for c in list(req):
+        r = cat.by_tmdb(c.get("type"), c.get("id")) if c.get("type") in ("movie", "tv") else None
+        if r:
+            req.remove(c)
+            if r["id"] not in shown:
+                items.append(cat.card(r))
+                shown.add(r["id"])
     # "prompt": the page should also call /api/search/ai (a question or a mood, not a title)
     return ok(items=items, requestable=req, prompt=intent["prompt"] and ai.available()["on"] and jf_ready(),
               genres=intent["genres"])
@@ -601,8 +695,9 @@ def ai_picks():
     llm = ai.available().get("llm", True)
     if llm and (APP.player.playing or not jf_ready()):
         return ok(items=[])
-    return ok(**(cached("picks", 12 * 3600, lambda: (lambda r: r if r.get("items") else None)(ai.picks(APP)), retry=600)
-                 or {"items": []}))
+    res = cached("picks", 12 * 3600, lambda: (lambda r: r if r.get("items") else None)(ai.picks(APP)), retry=600)
+    row = _late_row({"items": (res or {}).get("items") or []})
+    return ok(items=row["items"] if row else [])
 
 
 # ------------------------------------------------------------------ parts that live in their own modules

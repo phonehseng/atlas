@@ -172,9 +172,11 @@ function tmdbCard(c, n = 0, withBtn = false) {
     </div>`;
 }
 
+/* One card per title: a Seerr card ("movie" / "tv") is requestable, anything else is the library item. */
+const isReq = it => it && (it.type === 'movie' || it.type === 'tv');
 function rowHTML(row, n) {
   const wide = row.style === 'wide';
-  const cards = row.items.map((it, k) => (row.tmdb || row.style === 'request') ? tmdbCard(it, k) : (wide ? wideCard(it, k) : posterCard(it, k))).join('');
+  const cards = row.items.map((it, k) => isReq(it) ? tmdbCard(it, k) : (wide ? wideCard(it, k) : posterCard(it, k))).join('');
   return `<section class="row" style="--i:${n}" data-key="${esc(row.key)}">
     <div class="row-head"><h2>${row.ai ? `<span class="eyebrow orange" style="display:inline-flex;margin-right:10px">${esc(row.ai)}</span>` : ''}${esc(row.title)}</h2><span class="count">${row.items.length}</span></div>
     <button class="row-arrow l" data-action="row-l" aria-label="Scroll left">${icon('left', 20)}</button>
@@ -192,7 +194,60 @@ function watchRows(scope) {
     r.style.setProperty('--i', n++ % 6);
     rowObserver.observe(r);
   }
+  refilter(scope);
 }
+
+/* ================================================================== All · On this PC · To request
+   One catalogue: library and Seerr titles side by side. The filter only hides cards already on the page (rows
+   left empty hide too), so switching is instant. Remembered per page; "To request" needs Seerr. */
+const FILTERS = [['all', 'All'], ['lib', 'On this PC'], ['req', 'To request'], ['requested', 'Requested']];
+const filterOf = route => { try { return localStorage.getItem('marquee.filter.' + route) || 'all'; } catch (e) { return 'all'; } };
+function filterBar(route, seerr) {
+  const off = !seerr || !seerr.online;
+  const cur = off && ['req', 'requested'].includes(filterOf(route)) ? 'all' : filterOf(route);
+  return `<div class="pill-toggle filter-seg glass" role="group" aria-label="Show" data-filter-bar="${route}">${FILTERS
+    .filter(([v]) => !(off && v === 'requested'))
+    .map(([v, n]) => {
+      const dis = off && v === 'req';
+      return `<button data-filter="${v}" aria-pressed="${cur === v}"${dis ? ` disabled title="${seerr && seerr.ready ? 'Seerr isn’t reachable right now' : 'Connect Seerr in Settings'}"` : ''}>${dis ? 'To request: needs Seerr' : n}</button>`;
+    }).join('')}</div>`;
+}
+const cardMatches = (c, f) => f === 'lib' ? c.classList.contains('is-owned')
+  : f === 'req' ? c.classList.contains('is-requestable') : f === 'requested' ? c.classList.contains('is-requested') : true;
+function applyFilter(scope, f) {
+  if (!scope) return;
+  scope.dataset.filter = f;
+  for (const row of $$('.row', scope)) {
+    const cards = $$('.card', row);
+    const show = f === 'all' || row.classList.contains('skel-row') || (cards.length ? cards.some(c => cardMatches(c, f)) : f === 'lib');
+    row.classList.toggle('filtered-out', !show);
+    if (show && row.classList.contains('in')) updateArrows(row);
+  }
+  scope.dispatchEvent(new CustomEvent('marquee:filter', { detail: f }));
+}
+function refilter(scope) {
+  const page = (scope && scope.closest && scope.closest('.page')) || $('#view .page');
+  if (page && page.dataset.filter && page.dataset.filter !== 'all') applyFilter(page, page.dataset.filter);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-filter-bar] [data-filter]');
+  if (!b || b.disabled) return;
+  const bar = b.closest('[data-filter-bar]');
+  try { localStorage.setItem('marquee.filter.' + bar.dataset.filterBar, b.dataset.filter); } catch (err) { /* private window */ }
+  $$('[data-filter]', bar).forEach(x => x.setAttribute('aria-pressed', x === b));
+  applyFilter(bar.closest('.page'), b.dataset.filter);
+});
+
+/* The personal rows keep this order at the top of Home, whichever arrives first. */
+const TOP = ['continue', 'nextup', 'mylist', 'arr-ready', 'arr-coming', 'leaving-soon', 'new'];
+function placeTop(rows, el) {
+  const i = TOP.indexOf(el.dataset.key);
+  const before = $$('.row', rows).filter(r => r !== el && TOP.includes(r.dataset.key) && TOP.indexOf(r.dataset.key) < i);
+  const after = before[before.length - 1];
+  if (after) after.after(el); else rows.prepend(el);
+  refilter(rows);
+}
+const lastTop = rows => $$('.row', rows).filter(r => TOP.includes(r.dataset.key)).pop();
 function updateArrows(row) {
   const sc = $('.scroller', row);
   if (!sc) return;
@@ -420,7 +475,11 @@ function addPreviewSubs(v, url) {
   if (!url) return;
   const t = document.createElement('track');
   t.kind = 'subtitles'; t.srclang = 'en'; t.label = 'Subtitles'; t.default = true; t.src = url;
-  t.addEventListener('load', () => { try { t.track.mode = 'showing'; } catch (e) { /* gone */ } });
+  // Where the lines sit: on the title page the bottom half is taken by the logo, details and buttons, so they go
+  // in the open sky above them; on cards and thumbnails a little above the bottom edge.
+  // (decided when the cues load: the title page appends its video to .dx-media only after this call)
+  const place = () => { const line = v.closest('.dx-media') ? 30 : 80; for (const c of t.track.cues || []) { c.snapToLines = false; c.line = line; c.size = 86; } };
+  t.addEventListener('load', () => { try { place(); t.track.mode = 'showing'; } catch (e) { /* gone */ } });
   v.append(t);
   try { t.track.mode = 'showing'; } catch (e) { /* not ready */ }
 }
@@ -525,63 +584,101 @@ async function renderHome(page, seq) {
   page.innerHTML = `<section class="greet"><span class="eyebrow">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }))}</span>
       <h1 style="margin-top:6px">${esc(hello)}${esc(name)} <span class="wave">👋</span></h1>
       <div class="ai-line" id="ai-line"><span>${esc(quip)}</span></div></section>
+    <div class="home-filter" id="home-filter"></div>
     <div class="hero skel" id="hero"></div>
-    <div class="rows" id="rows">${skeletonRows(3)}</div>`;
+    <div class="rows" id="rows">${skeletonRows(3)}</div><div class="rows-more" id="rows-more" hidden>${skeletonRows(1)}</div>`;
   welcomeLine(page);
+  /* Paint at once from what we have (a few minutes old at most), then catch up in the background. */
   let data = S.home;
+  const t0 = performance.now();
   if (!data || Date.now() - S.homeAt > 5 * 60e3) {
     try { data = await api('/api/home'); S.home = data; S.homeAt = Date.now(); }
     catch (e) { if (!stale(seq)) $('#rows', page).innerHTML = errorBox(e); return; }
   }
   if (stale(seq)) return;
+  S.homeLoadMs = Math.round(performance.now() - t0);
   if (data.user && !S.user) setUser(data.user);
+  $('#home-filter', page).innerHTML = filterBar('home', data.seerr);
+  page.dataset.filter = $('#home-filter [aria-pressed="true"]', page)?.dataset.filter || 'all';
   renderHero($('#hero', page), data.hero || []);
   const rows = $('#rows', page);
   rows.innerHTML = data.rows.length ? data.rows.map(rowHTML).join('')
     : `<div class="empty"><span class="big">🍿</span>Your library looks empty. Add some films in Jellyfin and they'll appear here.</div>`;
+  markMix(rows);
+  addLibraryView(rows, data.library || []);
   watchRows(rows);
   addMyListRow(rows, seq);
   if (window.MarqueeStorage) MarqueeStorage.leavingSoonRow().then(el => {
     if (!el || stale(seq) || !document.contains(rows)) return;
-    const after = $$('.row', rows).filter(r => ['continue', 'nextup'].includes(r.dataset.key)).pop();
-    after ? after.after(el) : rows.prepend(el);
+    placeTop(rows, el);
   }, () => {});
-  addPicksRow(rows, seq);
-  addTasteRow(rows, seq);
-  addDiscoverRows(rows, seq);
-  addAiDiscover(rows, seq);
+  if ((data.pending || []).includes('ai-picks')) addPicksRow(rows, seq);
+  if ((data.pending || []).includes('ai-discover')) addAiDiscover(rows, seq);
+  homePaging(page, rows, seq, data);
+  if (data.warming) homeWarming(page, rows, seq);
   startArrivals();
 }
 
-/* A row that follows the taste profile, under the top rows. */
-function addTasteRow(rows, seq) {
-  api('/api/taste/home-row').then(r => {
-    if (stale(seq) || !r.row || !document.contains(rows) || $('[data-key="taste"]', rows)) return;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = rowHTML(r.row, 0);
-    const el = tmp.firstElementChild;
-    const top = $$('.row', rows).filter(x => ['continue', 'mylist', 'nextup'].includes(x.dataset.key));
-    const after = top[top.length - 1];
-    if (after) after.after(el); else rows.prepend(el);
-    watchRows(rows);
-  }, () => {});
+/* Server rows below the personal ones are "the mix": rotating recommendation rows, swapped as a whole. */
+function markMix(rows) { for (const r of $$('.row:not([data-libview])', rows)) if (!TOP.includes(r.dataset.key)) r.dataset.mix = '1'; }
+
+/* "On this PC" shows the library's own rows (haven't watched yet, highest rated, genres) instead of the mix. */
+function addLibraryView(rows, lib) {
+  if (!lib.length) return;
+  const t = document.createElement('div');
+  t.innerHTML = lib.map(r => rowHTML({ ...r, key: 'lib-' + r.key })).join('');
+  for (const el of [...t.children]) { el.dataset.libview = '1'; rows.append(el); }
 }
 
-/* Titles to request, woven between the library rows: sequels, the rest of collections, "more like X". */
-async function addDiscoverRows(rows, seq) {
-  if (!S.discover || Date.now() - S.discover.at > 30 * 60e3) {
-    try { S.discover = { rows: (await api('/api/home/discover')).rows || [], at: Date.now() }; } catch (e) { return; }
+/* More rows as you scroll: the next few of today's mix, de-duplicated against the page by the server. */
+function homePaging(page, rows, seq, data) {
+  const more = $('#rows-more', page);
+  if (!more) return;
+  let next = (data.page || 1) + 1, busy = false;
+  more.hidden = !data.more;
+  if (more._io) more._io.disconnect();
+  if (!data.more) return;
+  const io = more._io = new IntersectionObserver(async ents => {
+    if (!ents.some(e => e.isIntersecting) || busy || stale(seq) || page.dataset.filter === 'lib') return;
+    busy = true;
+    let d;
+    try { d = await api(`/api/home?page=${next}`); } catch (e) { busy = false; return; }
+    if (stale(seq) || !document.contains(rows)) return io.disconnect();
+    rows.insertAdjacentHTML('beforeend', d.rows.map(rowHTML).join(''));
+    markMix(rows);
+    watchRows(rows);
+    next++;
+    busy = false;
+    if (!d.more) { io.disconnect(); more.hidden = true; }
+  }, { rootMargin: '0px 0px 600px 0px' });
+  io.observe(more);
+}
+
+/* First visit (or a stale cache): Seerr lists are still being fetched. Show skeleton rows, then swap the mix in. */
+async function homeWarming(page, rows, seq) {
+  rows.insertAdjacentHTML('beforeend', `<section class="row skel-row in" data-key="skel" data-mix="1"><div class="skel skel-line"></div><div class="skeleton-row">${'<i></i>'.repeat(10)}</div></section>`.repeat(2));
+  const until = Date.now() + 40e3;
+  while (Date.now() < until) {
+    await sleep(1500);
+    if (stale(seq) || !document.contains(rows)) return;
+    let w;
+    try { w = await api('/api/home/warm'); } catch (e) { break; }
+    if (!w.busy) break;
   }
+  let d;
+  try { d = await api('/api/home'); } catch (e) { $$('.skel-row', rows).forEach(r => r.remove()); return; }
   if (stale(seq) || !document.contains(rows)) return;
-  const anchors = $$('.row', rows).filter(r => r.dataset.key === 'recent' || r.dataset.key.startsWith('rec-'));
-  S.discover.rows.filter(r => r.items && r.items.length).forEach((row, k) => {
-    if ($(`.row[data-key="${CSS.escape('d-' + row.key)}"]`, rows)) return;
-    const html = rowHTML({ ...row, key: 'd-' + row.key, style: 'request' }, 0);
-    const at = anchors[k];
-    if (at && document.contains(at)) at.insertAdjacentHTML('afterend', html);
-    else rows.insertAdjacentHTML('beforeend', html);
-  });
+  S.home = d; S.homeAt = Date.now();
+  for (const r of $$('.row[data-mix]', rows)) if (!['ai-picks', 'ai-discover'].includes(r.dataset.key)) r.remove();
+  const html = d.rows.filter(r => !TOP.includes(r.key) && !$(`.row[data-key="${CSS.escape(r.key)}"]`, rows)).map(rowHTML).join('');
+  const at = lastTop(rows);
+  if (at) at.insertAdjacentHTML('afterend', html); else rows.insertAdjacentHTML('afterbegin', html);
+  const ai = $$('.row[data-key^="ai-"]', rows);   // the assistant's rows stay at the head of the mix
+  const head = lastTop(rows);
+  ai.reverse().forEach(r => head ? head.after(r) : rows.prepend(r));
+  markMix(rows);
   watchRows(rows);
+  homePaging(page, rows, seq, d);
 }
 
 /* The assistant's curated request row: can take minutes the first time, so it slides in whenever it lands. */
@@ -593,12 +690,13 @@ async function addAiDiscover(rows, seq) {
   const row = await S.discoverAi;
   if (stale(seq) || !row || !row.items || !row.items.length || !document.contains(rows) || $('[data-key="ai-discover"]', rows)) return;
   const tmp = document.createElement('div');
-  tmp.innerHTML = rowHTML({ ...row, key: 'ai-discover', style: 'request', ai: S.ai.name || 'Assistant' }, 0);
+  tmp.innerHTML = rowHTML({ ...row, key: 'ai-discover', ai: S.ai.name || 'Assistant' }, 0);
   const el = tmp.firstElementChild;
-  const top = $$('.row', rows).filter(r => ['continue', 'nextup', 'ai-picks'].includes(r.dataset.key));
-  const after = top[top.length - 1];
+  el.dataset.mix = '1';
+  const after = $('.row[data-key="ai-picks"]', rows) || lastTop(rows);
   if (after) after.after(el); else rows.prepend(el);
   el.classList.add('in');
+  refilter(rows);
   if (!reduced.matches) {
     const h = el.offsetHeight + 18;
     el.animate([{ opacity: 0, transform: 'translateY(30px) scale(.98)' }, { opacity: 1, transform: 'none' }], { duration: 800, easing: 'cubic-bezier(.34,1.3,.64,1)' });
@@ -631,16 +729,17 @@ async function addPicksRow(rows, seq) {
   }
   if (stale(seq) || !S.picks.length || $('[data-key="ai-picks"]', rows)) return;
   const html = rowHTML({ key: 'ai-picks', title: 'Picked for you', ai: S.ai.name || 'Assistant', items: S.picks, style: 'poster' }, 0);
-  const wideRows = $$('.row', rows).filter(r => ['continue', 'nextup'].includes(r.dataset.key));
-  const after = wideRows[wideRows.length - 1];
+  const after = lastTop(rows);
   if (after) after.insertAdjacentHTML('afterend', html); else rows.insertAdjacentHTML('afterbegin', html);
+  const el = $('.row[data-key="ai-picks"]', rows);
+  if (el) el.dataset.mix = '1';
   watchRows(rows);
 }
 
 /* ------------------------------------------------------------------ live refresh
    Rows are reconciled card by card: changed cards are swapped in place, new ones slide in, gone ones fold away.
    Rows Home shuffles on every load (genres, random picks) only get their cards' watched state refreshed. */
-const STABLE_ROWS = new Set(['continue', 'nextup', 'recent', 'new-movies', 'new-shows', 'top']);
+const STABLE_ROWS = new Set(['continue', 'nextup', 'new']);
 const sigOf = i => i ? [i.played, (i.progress || 0).toFixed(2), i.unplayed ?? '', i.favorite, i.name].join('|') : '';
 let refreshing = null;
 async function refreshHomeRows() {
@@ -661,7 +760,7 @@ async function refreshHomeRows() {
         const tmp = document.createElement('div');
         tmp.innerHTML = rowHTML(fresh, 0);
         const el = tmp.firstElementChild;
-        if (prev) prev.after(el); else rows.prepend(el);
+        placeTop(rows, el);
         el.classList.add('in');
         if (!reduced.matches) el.animate([{ opacity: 0, transform: 'translateY(20px)' }, { opacity: 1, transform: 'none' }], { duration: 600, easing: 'cubic-bezier(.34,1.3,.64,1)' });
         prev = el;
@@ -675,7 +774,7 @@ async function refreshHomeRows() {
 function reconcileRow(rowEl, fresh, full) {
   const sc = $('.scroller', rowEl);
   const wide = fresh.style === 'wide';
-  const make = i => { const t = document.createElement('div'); t.innerHTML = wide ? wideCard(i) : posterCard(i); return t.firstElementChild; };
+  const make = i => { const t = document.createElement('div'); t.innerHTML = isReq(i) ? tmdbCard(i) : wide ? wideCard(i) : posterCard(i); return t.firstElementChild; };
   const byId = new Map($$('.card[data-id]', sc).map(c => [c.dataset.id, c]));
   const wanted = new Set(fresh.items.map(i => i.id));
   if (full) for (const [id, c] of byId) if (!wanted.has(id)) foldAway(c, true);
@@ -803,7 +902,7 @@ function arrRow(rows, key, title, items, ready, after) {
       <button class="row-arrow l" data-action="row-l" aria-label="Scroll left">${icon('left', 20)}</button><div class="scroller"></div>
       <button class="row-arrow r" data-action="row-r" aria-label="Scroll right">${icon('right', 20)}</button></section>`;
     row = t.firstElementChild;
-    if (after && document.contains(after)) after.after(row); else rows.prepend(row);
+    placeTop(rows, row);
     if (!reduced.matches) row.animate([{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }], { duration: 600, easing: 'cubic-bezier(.34,1.3,.64,1)' });
   }
   const sc = $('.scroller', row);
@@ -833,6 +932,7 @@ function arrRow(rows, key, title, items, ready, after) {
   }
   $('.count', row).textContent = items.length;
   updateArrows(row);
+  refilter(rows);
   return row;
 }
 
@@ -966,8 +1066,9 @@ addEventListener('scroll', () => {
 const LIB_TITLES = { movies: ['Movies', 'film', 'films'], shows: ['Shows', 'show', 'shows'], anime: ['Anime', 'title', 'titles'] };
 async function renderLibrary(kind, page, seq) {
   const [title, one, many] = LIB_TITLES[kind];
-  page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Your library</span><h1 style="margin-top:8px">${title}</h1><p id="lib-sub">Loading…</p></div>
+  page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Library and more</span><h1 style="margin-top:8px">${title}</h1><p id="lib-sub">Loading…</p></div>
       ${kind === 'movies' ? `<button class="btn ghost" data-action="surprise">${icon('dice')} Surprise me</button>` : ''}</div>
+    <div class="home-filter" id="lib-filter"></div>
     <div class="rows" id="rows">${skeletonRows(2)}</div><div id="everything"></div>`;
   let data = S.lib[kind];
   if (!data || Date.now() - data.at > 5 * 60e3) {
@@ -975,37 +1076,73 @@ async function renderLibrary(kind, page, seq) {
     catch (e) { if (!stale(seq)) $('#rows', page).innerHTML = errorBox(e); return; }
   }
   if (stale(seq)) return;
+  $('#lib-filter', page).innerHTML = filterBar(kind, data.seerr);
+  page.dataset.filter = $('#lib-filter [aria-pressed="true"]', page)?.dataset.filter || 'all';
   const all = data.rows.find(r => r.key === 'all');
   const rest = data.rows.filter(r => r.key !== 'all');
   const total = all ? all.items.length : 0;
-  $('#lib-sub', page).textContent = total ? `${total} ${total === 1 ? one : many}, ${all.items.filter(i => !i.played).length} you haven't finished` : '';
+  $('#lib-sub', page).textContent = total ? `${total} ${total === 1 ? one : many} on this PC, ${all.items.filter(i => !i.played).length} you haven't finished${data.seerr && data.seerr.online ? `, and every other ${one} to request` : ''}` : '';
   const rows = $('#rows', page);
   rows.innerHTML = rest.map(rowHTML).join('');
   watchRows(rows);
-  if (!all || !all.items.length) {
+  if ((!all || !all.items.length) && !(data.seerr && data.seerr.online)) {
     $('#everything', page).innerHTML = `<div class="empty"><span class="big">🎞️</span>Nothing here yet.</div>`;
     return;
   }
-  renderEverything($('#everything', page), all.items, kind);
+  renderEverything($('#everything', page), all ? all.items : [], kind, data.seerr);
 }
 
-function renderEverything(box, items, kind) {
-  const st = { q: '', sort: 'az', unwatched: false, removed: true, gone: [] };
+/* The grid: the library first (sorted as chosen), then requestable titles sorted the same way where TMDB can,
+   a Seerr page at a time as you scroll. "On this PC" never loads them; offline they're simply not there. */
+function renderEverything(box, items, kind, seerr) {
+  const st = { q: '', sort: 'az', unwatched: false, removed: true, gone: [], req: [], page: 0, more: !!(kind && seerr && seerr.online), busy: false, gen: 0 };
   box.innerHTML = `<div class="grid-tools"><h2>Everything</h2>
       <label class="field-pill">${icon('search', 17)}<input type="search" placeholder="Filter by title" aria-label="Filter by title"></label>
       <div class="pill-toggle" role="group" aria-label="Sort">
         <button data-sort="az" aria-pressed="true">A–Z</button><button data-sort="new" aria-pressed="false">Newest</button><button data-sort="rating" aria-pressed="false">Top rated</button></div>
       <div class="pill-toggle"><button data-unw aria-pressed="false">Unwatched</button></div>
-      <div class="pill-toggle" hidden id="rm-toggle"><button data-rm aria-pressed="true" title="Titles deleted to save space (watched ones keep their check)">Show removed</button></div></div><div class="grid"></div>`;
-  const grid = $('.grid', box);
+      <div class="pill-toggle" hidden id="rm-toggle"><button data-rm aria-pressed="true" title="Titles deleted to save space (watched ones keep their check)">Show removed</button></div></div><div class="grid"></div>
+      <div class="grid-more" hidden><div class="skeleton-row">${'<i></i>'.repeat(8)}</div></div>`;
+  const grid = $('.grid', box), moreEl = $('.grid-more', box);
+  const page = box.closest('.page');
+  const filt = () => (page && page.dataset.filter) || 'all';
+  const goneKeys = () => new Set(st.gone.map(c => `${c.type}:${c.id}`));
+  const reqVisible = c => !st.q || (c.title || '').toLowerCase().includes(st.q);
   const draw = () => {
     let list = items.filter(i => (!st.q || (i.name || '').toLowerCase().includes(st.q)) && (!st.unwatched || !i.played));
     if (st.sort === 'new') list = [...list].sort((a, b) => String(b.added || '').localeCompare(String(a.added || '')));
     if (st.sort === 'rating') list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     const gone = st.removed && !st.unwatched ? st.gone.filter(c => !st.q || (c.title || '').toLowerCase().includes(st.q)) : [];
-    grid.innerHTML = list.length || gone.length ? list.map((i, k) => posterCard(i, k)).join('') + gone.map((c, k) => tmdbCard(c, k + list.length)).join('')
+    const gk = goneKeys();
+    const req = st.req.filter(c => reqVisible(c) && !gk.has(`${c.type}:${c.id}`));
+    grid.innerHTML = list.length || gone.length || req.length ? list.map((i, k) => posterCard(i, k)).join('') + gone.map((c, k) => tmdbCard(c, k + list.length)).join('')
+      + req.map((c, k) => tmdbCard(c, Math.min(k, 12))).join('')
       : `<div class="empty" style="grid-column:1/-1"><span class="big">🔍</span>No matches.</div>`;
+    moreEl.hidden = !st.more || filt() === 'lib';
   };
+  const loadMore = async () => {
+    if (st.busy || !st.more || filt() === 'lib') return;
+    st.busy = true;
+    const gen = st.gen;
+    let d;
+    try { d = await api(`/api/discover/${kind}?page=${st.page + 1}&sort=${st.sort}`); } catch (e) { d = { items: [], more: false }; }
+    st.busy = false;
+    if (gen !== st.gen || !document.contains(box)) return;
+    st.page++;
+    st.more = !!d.more;
+    const have = new Set(st.req.map(c => `${c.type}:${c.id}`));
+    const gk = goneKeys();
+    const fresh = (d.items || []).filter(c => !have.has(`${c.type}:${c.id}`) && !gk.has(`${c.type}:${c.id}`));
+    st.req.push(...fresh);
+    $('.empty', grid)?.remove();
+    grid.insertAdjacentHTML('beforeend', fresh.filter(reqVisible).map((c, k) => tmdbCard(c, Math.min(k, 12))).join(''));
+    moreEl.hidden = !st.more || filt() === 'lib';
+    if (st.more && moreEl.getBoundingClientRect().top < innerHeight + 600) loadMore();   // still short of the fold
+  };
+  const io = new IntersectionObserver(ents => { if (ents.some(e => e.isIntersecting)) loadMore(); }, { rootMargin: '0px 0px 800px 0px' });
+  io.observe(moreEl);
+  if (page) page.addEventListener('marquee:filter', () => { moreEl.hidden = !st.more || filt() === 'lib'; if (filt() !== 'lib') loadMore(); });
+  const resetReq = () => { st.gen++; st.req = []; st.page = 0; st.busy = false; st.more = !!(kind && seerr && seerr.online); };
   if (kind) {   // removed titles (storage): kept visible, darker glass, watched ones with their check
     const kinds = kind === 'movies' ? ['movie'] : kind === 'shows' ? ['tv'] : ['movie', 'tv'];
     Promise.all(kinds.map(k => api(`/api/storage/removed?kind=${k}`).then(r => r.items || [], () => [])))
@@ -1019,13 +1156,14 @@ function renderEverything(box, items, kind) {
   $('input', box).addEventListener('input', e => { st.q = e.target.value.trim().toLowerCase(); draw(); });
   box.addEventListener('click', e => {
     const s = e.target.closest('[data-sort]');
-    if (s) { st.sort = s.dataset.sort; $$('[data-sort]', box).forEach(b => b.setAttribute('aria-pressed', b === s)); draw(); }
+    if (s) { st.sort = s.dataset.sort; $$('[data-sort]', box).forEach(b => b.setAttribute('aria-pressed', b === s)); resetReq(); draw(); loadMore(); }
     const u = e.target.closest('[data-unw]');
     if (u) { st.unwatched = !st.unwatched; u.setAttribute('aria-pressed', st.unwatched); draw(); }
     const rm = e.target.closest('[data-rm]');
     if (rm) { st.removed = !st.removed; rm.setAttribute('aria-pressed', st.removed); draw(); }
   });
   draw();
+  loadMore();
 }
 
 function errorBox(e) {
@@ -1892,10 +2030,9 @@ function drawMyListRow(rows, d) {
     <div class="scroller">${d.items.slice(0, 30).map((e, k) => mlCard(e, k)).join('')}</div>
     <button class="row-arrow r" data-action="row-r" aria-label="Scroll right">${icon('right', 20)}</button></section>`;
   const el = t.firstElementChild;
-  if (old) { old.replaceWith(el); el.style.cssText = 'animation:none;opacity:1;transform:none'; }
+  if (old) { old.replaceWith(el); el.style.cssText = 'animation:none;opacity:1;transform:none'; refilter(rows); }
   else {
-    const after = $('.row[data-key="continue"]', rows) || null;
-    if (after) after.after(el); else rows.prepend(el);
+    placeTop(rows, el);
     if (!reduced.matches) el.animate([{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }], { duration: 600, easing: 'cubic-bezier(.34,1.3,.64,1)' });
   }
   updateArrows(el);
@@ -1977,7 +2114,22 @@ async function runSearch(q) {
     <section id="s-lib"${lib.length ? '' : ' hidden'}><h3>${icon('film', 16)} In your library</h3><div class="grid" id="s-lib-grid">${lib.map((i, k) => posterCard(i, k)).join('')}</div></section>
     <section id="s-req"${req.length ? '' : ' hidden'}><h3>${icon('plus', 16)} Not in your library yet</h3><div class="grid" id="s-req-grid">${req.map((c, k) => tmdbCard(c, k + lib.length, true)).join('')}</div></section>
     <div class="search-hint" id="s-none"${!lib.length && !req.length && !res.prompt ? '' : ' hidden'}><span style="font-size:40px;display:block">🔭</span>Nothing found for “${esc(q)}”.</div>`;
+  searchFilter(box);
   if (res.prompt) aiSearch(q, seq);
+}
+
+/* Search keeps the filter of the page it was opened from (Home, Movies, Shows, Anime). */
+function searchFilter(box) {
+  const f = ['home', 'movies', 'shows', 'anime'].includes(S.route) ? ($('#view .page')?.dataset.filter || 'all') : 'all';
+  box.dataset.filter = f;
+  const lib = $('#s-lib', box), req = $('#s-req', box);
+  const any = sec => sec && $$('.card', sec).some(c => cardMatches(c, f));
+  if (lib) lib.classList.toggle('filtered-out', f !== 'all' && !any(lib));
+  if (req) req.classList.toggle('filtered-out', f !== 'all' && !any(req));
+  let note = $('#s-filter', box);
+  if (f === 'all') { note?.remove(); return; }
+  if (!note) { box.insertAdjacentHTML('afterbegin', '<div class="search-filter-note" id="s-filter"></div>'); note = $('#s-filter', box); }
+  note.textContent = `Showing ${FILTERS.find(x => x[0] === f)[1].toLowerCase()} only, like the page you searched from`;
 }
 
 /* Questions and moods ("something funny tonight") also go to the assistant: slow, so it never holds up the
@@ -2017,6 +2169,7 @@ async function aiSearch(q, seq) {
   mergeResults($('#s-lib-grid'), $('#s-lib'), res.items || [], i => posterCard(i), i => i.id, '[data-id]', el => el.dataset.id);
   mergeResults($('#s-req-grid'), $('#s-req'), res.requestable || [], c => tmdbCard(c, 0, true), c => `${c.type}:${c.id}`, '[data-tmdb]', el => el.dataset.tmdb, 3);
   if ($('#s-lib-grid .card') || $('#s-req-grid .card')) $('#s-none').hidden = true;
+  searchFilter($('#search-results'));
 }
 
 /* Put the assistant's picks first (highlighted), keep the rest after; FLIP so cards glide to their new places. */
