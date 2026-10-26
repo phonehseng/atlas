@@ -20,10 +20,10 @@ import (
 //	MarqueeSHA256 = lowercase hex of the zip
 //	MarqueeSize   = the zip's size in bytes
 const (
-	MarqueeVersion = "1.4.0"
-	MarqueeURL     = "https://github.com/phonehseng/marquee/releases/download/v1.4.0/Marquee-windows-x64.zip"
-	MarqueeSHA256  = "eec82b7e8363c8972a0e45e544f81da367d9bd8f8606d051f7e12b6002cd0037"
-	MarqueeSize    = 75335041
+	MarqueeVersion = "1.4.4"
+	MarqueeURL     = "https://github.com/phonehseng/marquee/releases/download/v1.4.4/Marquee-windows-x64.zip"
+	MarqueeSHA256  = "2cbb44dc0a8882f6bd82d90ee97c55e7902358169e81977960f3b72086e9700d"
+	MarqueeSize    = 75430396
 )
 
 // Overrides for testing a local build:
@@ -243,7 +243,7 @@ func marqueeShortcuts(c *Ctx) {
 
 // marqueeSecret are the settings Marquee keeps DPAPI-encrypted (settings.py SECRET).
 var marqueeSecret = map[string]bool{"token": true, "seerr_cookie": true, "ai_key": true, "gdrive_client_secret": true,
-	"gdrive_token": true, "radarr_key": true, "sonarr_key": true, "hub_token": true}
+	"gdrive_token": true, "radarr_key": true, "sonarr_key": true, "hub_token": true, "bazarr_key": true}
 
 // MarqueeSettings is what the installer fills in so Marquee works on first launch. Secrets are plain here
 // and encrypted when written. No password is ever part of it: the user signs in to Jellyfin in Marquee.
@@ -268,7 +268,7 @@ func MarqueeSettings(st *core.Stack) map[string]string {
 	if st.IsDeployed("hub") && st.Port("hub") != core.BasePorts["hub"] {
 		s["hub_url"] = local("hub")
 	}
-	for _, id := range []string{"radarr", "sonarr"} {
+	for _, id := range []string{"radarr", "sonarr", "bazarr"} {
 		if st.IsDeployed(id) && st.Key(id) != "" {
 			s[id+"_url"] = local(id)
 			s[id+"_key"] = st.Key(id)

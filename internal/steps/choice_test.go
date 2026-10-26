@@ -162,10 +162,10 @@ func TestMarqueeSettings(t *testing.T) {
 	root := t.TempDir()
 	st := core.New(root)
 	st.OS, st.PortOffset, st.Name, st.AdminUser = "windows", 20000, "Media Stack Test", "stacktest"
-	for _, id := range []string{"jellyfin", "seerr", "qbittorrent", "hub", "radarr", "sonarr"} {
+	for _, id := range []string{"jellyfin", "seerr", "qbittorrent", "hub", "radarr", "sonarr", "bazarr"} {
 		st.Deployed[id] = "x"
 	}
-	st.Keys["radarr"], st.Keys["sonarr"] = "radarr-key-123", "sonarr-key-456"
+	st.Keys["radarr"], st.Keys["sonarr"], st.Keys["bazarr"] = "radarr-key-123", "sonarr-key-456", "bazarr-key-789"
 	os.MkdirAll(filepath.Dir(appConfigFile(st)), 0o755)
 	os.WriteFile(appConfigFile(st), []byte("{}"), 0o644)
 	home := MarqueeHome(st)
@@ -184,17 +184,24 @@ func TestMarqueeSettings(t *testing.T) {
 	json.Unmarshal(b, &m)
 	for k, v := range map[string]string{"server": "http://localhost:28096", "seerr": "http://localhost:25055",
 		"qbt_url": "http://127.0.0.1:28080", "hub_url": "http://127.0.0.1:28585", "radarr_url": "http://127.0.0.1:27878",
-		"sonarr_url": "http://127.0.0.1:28989", "mobile_bind": "tailscale", "theme": "light", "user_name": "stacktest",
+		"sonarr_url": "http://127.0.0.1:28989", "bazarr_url": "http://127.0.0.1:26767", "mobile_bind": "tailscale", "theme": "light", "user_name": "stacktest",
 		"stack_config": appConfigFile(st)} {
 		if m[k] != v {
 			t.Errorf("%s = %v, want %s", k, m[k], v)
 		}
 	}
-	if strings.Contains(string(b), "radarr-key-123") {
-		t.Error("API key stored in the clear")
+	for k, v := range map[string]string{"radarr_key": "radarr-key-123", "sonarr_key": "sonarr-key-456", "bazarr_key": "bazarr-key-789"} {
+		if strings.Contains(string(b), v) {
+			t.Errorf("%s stored in the clear", k)
+		}
+		if got, err := ReadMarqueeSecret(filepath.Join(home, "settings.json"), k); err != nil || got != v {
+			t.Errorf("%s round trip: %q %v", k, got, err)
+		}
 	}
-	if got, err := ReadMarqueeSecret(filepath.Join(home, "settings.json"), "radarr_key"); err != nil || got != "radarr-key-123" {
-		t.Errorf("radarr_key round trip: %q %v", got, err)
+	// MARQUEE_SETTINGS_OUT=<dir>: keep a copy, to check that Marquee itself reads it (MARQUEE_HOME=<dir>).
+	if out := os.Getenv("MARQUEE_SETTINGS_OUT"); out != "" {
+		os.MkdirAll(out, 0o755)
+		os.WriteFile(filepath.Join(out, "settings.json"), b, 0o600)
 	}
 	for _, k := range []string{"password", "token"} {
 		if _, ok := m[k]; ok {
