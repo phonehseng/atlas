@@ -67,13 +67,13 @@ type Ctx struct {
 // Order is the wizard's sequence. Steps register themselves from several files, and Go doesn't promise
 // which file's init runs first, so the order lives here.
 var Order = []string{
-	"welcome", "folders", "account",
+	"welcome", "folders", "choose", "account",
 	"jellyfin",
 	"vpn", "qbittorrent", "qui",
 	"prowlarr", "sonarr", "radarr", "lidarr", "recyclarr", "trawl", "byparr", "bazarr", "unpackerr", "cleanuparr",
 	"seerr", "jfago", "requestrr", "autobrr",
-	"mediasorter", "hub",
-	"remote", "finish",
+	"mediasorter", "hub", "marquee",
+	"remote", "finish", "update",
 }
 
 // All is the wizard, in order (sorted on first use).

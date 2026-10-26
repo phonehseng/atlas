@@ -213,7 +213,8 @@ func Unzip(src, dest string, strip int) error {
 		if !strings.HasPrefix(target, destAbs+string(os.PathSeparator)) && target != destAbs {
 			return fmt.Errorf("unsafe path in archive: %s", f.Name)
 		}
-		if f.FileInfo().IsDir() {
+		// Windows PowerShell's Compress-Archive writes "folder\" entries that zip readers don't see as folders.
+		if f.FileInfo().IsDir() || strings.HasSuffix(f.Name, "\\") || strings.HasSuffix(f.Name, "/") {
 			if err := os.MkdirAll(target, 0o755); err != nil {
 				return err
 			}

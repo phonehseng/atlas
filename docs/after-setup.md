@@ -24,6 +24,26 @@ Open **Seerr** (`http://<server>:5055`), sign in with your Jellyfin login, searc
 
 You can also request from the Media Hub's **Request** tab, or add shows/films directly in Sonarr/Radarr.
 
+## Marquee (Windows)
+
+If you chose Marquee as your stack app, open it from the Start menu or the desktop. The first screen is
+*Sign in with your Jellyfin account*: the Jellyfin address and your username are already filled in, so type
+your admin password and press **Sign in**. To connect requests at the same time, open
+*+ Requests with Seerr (optional)* first (its address is filled in too); otherwise connect Seerr later in
+Marquee's *Settings* with the same password. Setup never stored your password: Marquee keeps only the sign-in
+it gets back, encrypted for your Windows account.
+
+Setup already told Marquee where everything is: Seerr, qBittorrent (for "just arrived" downloads), the Media
+Hub (its *Your stack* page), and Sonarr/Radarr (for storage clean-up; their API keys are encrypted the same
+way). After signing in, Marquee asks a few optional questions about what you like and opens on your library.
+
+- **Your stack** in Marquee shows the Media Hub's status, problems, requests, downloads and backups. The hub
+  itself keeps running in the background; its page only points to Marquee (with a link to open it anyway).
+- **Marquee Mobile** lets you watch on your phone over Tailscale. Turn it on in Marquee's *Settings*; the
+  *Phones, TVs & away from home* step already added the Windows Firewall rule (private networks only, which
+  includes Tailscale).
+- Marquee's optional AI features download from its own *Settings*.
+
 ## 3. Watch on phones and TVs
 
 Install the **Jellyfin** app (Android, iPhone/iPad, Android TV / Google TV, Fire TV, Roku, LG/Samsung TVs,
@@ -114,7 +134,12 @@ anime. Films with no audio in your languages keep all their audio. Change the la
 
 ## Updating
 
-Run the setup program again and press **Run again** on a step to update that app. Your settings are kept.
+Run the setup program again and press **Update my stack** (or start it with `--update`): it updates the
+stack's own files, pinned apps and Marquee, starts anything that isn't running, and shows what changed.
+When a newer Media Stack Setup exists, the wizard offers it at the top first. Press **Run again** on a step
+to update just that app. Your settings are kept either way. See the [Windows guide](windows.md#updating).
+
+To add parts you skipped, open **Choose your stack** (or *Change what's installed* on the last page).
 
 ## Your dashboard
 

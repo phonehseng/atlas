@@ -76,7 +76,11 @@ func runSeerr(c *Ctx) error {
 		if len(ps) == 0 {
 			return profile{}, fmt.Errorf("%s has no quality profiles", id)
 		}
-		c.J.Warn("%s has no %q profile (was the quality-profile step skipped?) - using %q", platform.Get(id).Name, wants[0], ps[0].Name)
+		why := "was the quality-profile step skipped?"
+		if st.HasParts() && !st.Picked("recyclarr") {
+			why = "Recyclarr isn't part of this stack"
+		}
+		c.J.Warn("%s has no %q profile (%s) - using %q", platform.Get(id).Name, wants[0], why, ps[0].Name)
 		return ps[0], nil
 	}
 	// Films go up to 4K; shows stop at 1080p (the "1080p" profile; older installs named it "WEB-1080p").

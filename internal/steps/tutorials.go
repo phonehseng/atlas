@@ -30,6 +30,7 @@ Every step explains what it installs before it does anything.</p>
 <li><b>Unpackerr</b> &amp; <b>Cleanuparr</b> - unpack archived releases; remove stuck or fake downloads.</li>
 <li><b>MediaSorter</b> &amp; the <b>Media Hub</b> - sort files you download yourself; one dashboard for everything, with nightly
 backups, a VPN leak check, phone alerts, and a request doctor that explains (and fixes) why a request isn't here yet.</li>
+{{if win}}<li><b>Marquee</b> - a Netflix-style player, requests and your stack's dashboard in one app for this PC.</li>{{end}}
 <li><b>Tailscale</b> - private access from your phone or TV away from home. Optional extras: <b>jfa-go</b> (invite friends),
 <b>Requestrr</b> (requests from Discord), <b>autobrr</b> (IRC), <b>trawl</b>/<b>Byparr</b> (Cloudflare-protected sites),
 <b>Lidarr</b> (music), <b>Qui</b> (a faster qBittorrent page with seeding rules).</li>
@@ -40,7 +41,7 @@ The first time Jellyfin, Seerr (Node.js), jfa-go and the Media Hub/Bazarr (Pytho
 to allow them on networks: click <b>Allow</b> so phones and TVs can connect.</p>
 {{else}}<p>On Linux every app runs as a Docker container that starts with the computer. Run this program with <code>sudo</code>.</p>{{end}}
 <p>You can close this program at any time and run it again later - finished steps are remembered.</p>`,
-		After: `<p>Everything this computer needs is in place. Next, choose where the media server keeps its files.</p>`},
+		After: `<p>Everything this computer needs is in place. Next, choose where the media server keeps its files, then which parts you want.</p>`},
 
 	"folders": {Intro: `
 <p>Everything lives in one folder, so it's easy to back up or move:</p>
@@ -55,6 +56,51 @@ to allow them on networks: click <b>Allow</b> so phones and TVs can connect.</p>
 <p>Downloads and the library sit on the same drive on purpose: finished downloads are <i>hardlinked</i> into the library,
 which is instant and uses no extra space while a torrent keeps seeding.</p>`,
 		After: `<p>Folders are ready. Your library is in <code>{{media}}</code>.</p>`},
+
+	"choose": {Intro: `
+<p>Pick the parts of the stack you want. Each card says what that part is for and roughly what it takes; ticking one also adds what
+it needs, and unticking one tells you what depends on it. Start from a preset:</p>
+<ul><li><b>Recommended</b> - everything most homes want: watch, request, download through the VPN, quality rules, subtitles,
+tidying, the dashboard with nightly backups, and Tailscale{{if win}}, with Marquee as your app{{end}}.</li>
+<li><b>Minimal</b> - just watch, request and download: Jellyfin, Seerr, Sonarr, Radarr, Prowlarr and qBittorrent behind your VPN.</li>
+<li><b>Everything</b> - every part, including the extras for private trackers, Discord and music.</li></ul>
+<p>Only the parts you pick appear as steps. You can come back here any time ("Change what's installed" on the last page) to add
+more; unticking something already installed hides its step but doesn't uninstall it.</p>`,
+		After: `<p>Saved. The steps on the left are now exactly the parts you picked. Next: your admin login.</p>`},
+
+	"marquee": {Intro: `
+<p><b>Marquee</b> is your stack's app for this PC: a Netflix-style player for your Jellyfin library (it plays the files directly,
+with your graphics card), requests through Seerr, and your stack's dashboard (the Media Hub's <i>Your stack</i> page) in one window.
+The Media Hub keeps running in the background either way: health checks, the watchdog, alerts and backups.</p>
+<p>This step downloads Marquee (about 75 MB), installs it in <code>{{.Root}}\apps\Marquee</code>, adds Start menu and desktop
+shortcuts, and fills in Marquee's settings for this stack: the Jellyfin and Seerr addresses, qBittorrent, the Media Hub, and
+Sonarr/Radarr (for its storage clean-up). Your password is never stored: you sign in inside Marquee.</p>
+<p>Marquee's optional AI features aren't installed here; Marquee offers them in its own Settings.</p>`,
+		After: `
+<ol><li>Open <b>Marquee</b> from the Start menu or the desktop.</li>
+<li>The first screen is <i>Sign in with your Jellyfin account</i>. The Jellyfin address and your username are already filled in:
+type your admin password and press <b>Sign in</b>. To connect requests at the same time, open
+<i>+ Requests with Seerr (optional)</i> first (its address is filled in too); otherwise connect Seerr later in Marquee's
+Settings with the same password.</li>
+<li>Marquee then asks a few quick questions about what you like to watch (you can skip them), and opens on your library.</li>
+<li><b>Your stack</b> (in Marquee's menu) shows the same status, problems, requests, downloads and backups as the Media Hub.</li>
+<li><b>Marquee Mobile</b> (watching on your phone over Tailscale) is off until you turn it on in Marquee's Settings; the
+next step lets it through Windows Firewall.</li></ol>
+<p>To uninstall Marquee: delete <code>{{.Root}}\apps\Marquee</code>, its Start menu and desktop shortcuts, and
+<code>%APPDATA%\Marquee</code> (its settings).</p>`},
+
+	"update": {Intro: `
+<p>Brings an existing install up to date, without wiping anything: settings, logins, requests, the library and downloads stay
+exactly as they are.</p>
+<ul><li>MediaSorter, the Media Hub and the health check get the files this version of Media Stack Setup carries
+(only when they changed), and restart.</li>
+<li>Apps this installer pins to a version (trawl) are moved to that version.</li>
+<li>Ticked below: every app that follows its newest release is updated, but only if a newer release exists.</li>
+<li>Marquee is updated to the newest release (its settings are kept).</li>
+<li>Anything that should be running but isn't is started again.</li></ul>
+<p>The log ends with a summary of what changed. If a newer Media Stack Setup exists, the banner at the top offers it first:
+update the installer, then run this step.</p>`,
+		After: `<p>Done. Run this step again whenever a new version comes out, or start the program with <code>--update</code>.</p>`},
 
 	"account": {Intro: `
 <p>Choose <b>one</b> username and password for everything you manage:</p>
@@ -244,12 +290,16 @@ and tells you if a restart didn't fix it.</p>
 	"remote": {Intro: `
 <p><b>At home</b>, phones and TVs on the same Wi-Fi can reach Jellyfin and Seerr directly{{if win}} once Windows Firewall allows it (first option){{end}}.</p>
 <p><b>Away from home</b>, <b>Tailscale</b> makes a private network between your devices: nothing is opened to the internet,
-and it's free for personal use. This step installs it on this computer and signs it in.</p>`,
+and it's free for personal use. This step installs it on this computer{{if win}} (the official installer, checked against its
+published fingerprint; Windows asks once for permission, together with the firewall rules){{else}} (Tailscale's official install
+script){{end}}, then opens Tailscale's sign-in page: sign in there with Google, Microsoft, GitHub or a new free account.
+This program never sees your Tailscale account. If Tailscale is already installed and signed in, it's left exactly as it is.</p>`,
 		After: `
 <ol><li>Install <b>Tailscale</b> on your phone/tablet/TV (App Store, Google Play - Google TV and Fire TV too) and sign in with the same account.</li>
 <li>In the Jellyfin app, the server address is <code>{{remote "jellyfin"}}</code>. If the name doesn't work, use <code>http://{{tsip}}:{{port "jellyfin"}}</code>.</li>
 <li>Requests: <code>{{remote "seerr"}}</code>{{if deployed "hub"}}; Media Hub: <code>{{remote "hub"}}</code>{{end}}.</li>
 <li><b>Friends</b>: Tailscale admin console → <i>Machines</i> → this computer → <i>Share</i> → send the link. They install Tailscale, accept, and use the same addresses.</li>
+{{if marquee}}<li><b>Marquee Mobile</b>: turn it on in Marquee's Settings to watch on your phone over Tailscale. Windows Firewall lets it through on private networks only (Tailscale counts as private).</li>{{end}}
 {{if nord}}<li><b>NordVPN</b>: add <code>C:\Program Files\Tailscale\tailscaled.exe</code> to split tunnelling (like qBittorrent), or Tailscale can't sign in while NordVPN is on.</li>{{end}}
 </ol>`},
 
@@ -260,7 +310,8 @@ and it's free for personal use. This step installs it on this computer and signs
 <li>Request something in <a href="{{url "seerr"}}" target="_blank">Seerr</a> and watch it arrive in the Media Hub.</li>
 <li>Install the Jellyfin app on your TV and phone.</li>
 <li>Invite friends with jfa-go and share Tailscale with them.</li></ol>
-<p>Run this program again any time to update the apps (re-run a step) or add the optional ones.</p>`},
+<p>Run this program again any time: <b>Update my stack</b> keeps everything current, and
+<button class="b" type="button" data-step="choose">Change what's installed</button> adds more parts.</p>`},
 }
 
 type guideData struct {
@@ -284,6 +335,7 @@ func RenderGuide(id string, st *core.Stack, root string) (intro, after string) {
 		"port":     func(id string) int { return st.Port(id) },
 		"deployed": st.IsDeployed,
 		"nvidia":   hasNvidia,
+		"marquee":  func() bool { return marqueeWanted(st) },
 		"nord": func() bool {
 			return st.VPN.Mode == "app" && containsFold(st.VPN.Adapter, "nord")
 		},

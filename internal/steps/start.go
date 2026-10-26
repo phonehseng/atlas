@@ -20,6 +20,7 @@ type Defaults struct {
 	Root       string
 	PortOffset int
 	Name       string
+	Update     bool // started with --update: open "Update my stack"
 }
 
 func init() {
@@ -28,7 +29,7 @@ func init() {
 	step(&Step{ID: "folders", Title: "Choose a folder", Group: "Get started", Button: "Use this folder",
 		Needs: []string{"welcome"}, Fields: folderFields, Run: runFolders})
 	step(&Step{ID: "account", Title: "Your admin login", Group: "Get started", Button: "Save",
-		Needs: []string{"folders"}, Fields: accountFields, Run: runAccount})
+		Needs: []string{"choose"}, Fields: accountFields, Run: runAccount})
 }
 
 // ---------------------------------------------------------------------------------------------- welcome

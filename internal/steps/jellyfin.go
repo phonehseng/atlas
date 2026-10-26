@@ -15,7 +15,7 @@ func init() {
 	step(&Step{ID: "jellyfin", Title: "Jellyfin", Group: "Watch", Button: "Install Jellyfin",
 		Needs: []string{"account"}, Password: true, Run: runJellyfin,
 		Fields: func(c *Ctx) []Field {
-			return []Field{{Name: "introskipper", Type: "checkbox", Default: "true",
+			return []Field{{Name: "introskipper", Type: "checkbox", Default: fmt.Sprint(Chosen(c.St, "introskipper")),
 				Label: "Add a \"Skip Intro\" button (the Intro Skipper plugin)",
 				Help:  "Finds the intro and credits of every episode and offers to skip them, like Netflix."}}
 		},

@@ -4,8 +4,9 @@ package assets
 
 import "embed"
 
-// Version of Media Stack Setup (also tags the MediaSorter/Media Hub image on Linux).
-const Version = "1.3.1"
+// Version of Media Stack Setup (also tags the MediaSorter/Media Hub image on Linux). A variable so a test
+// build can be stamped with -ldflags "-X mediastack/assets.Version=...".
+var Version = "1.4.0"
 
 // Python holds MediaSorter (mediasorter/) and the Media Hub (mediahub/).
 //

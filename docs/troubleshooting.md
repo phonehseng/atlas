@@ -24,6 +24,14 @@ start it with `--root D:\Test --port-offset 20000 --name "Media Stack Test"`.
 
 **SmartScreen blocks the program**: *More info → Run anyway* (the program isn't code-signed).
 
+**A step I want isn't in the list**: it wasn't chosen. Open **Choose your stack**, tick it, and press *Use this
+selection*. Unticking something already installed only hides its step.
+
+**"Update the installer" failed**: the download didn't match the release's checksum or couldn't be saved next
+to the program. Download the new version from the Releases page instead; your install is unaffected.
+
+**Update my stack: "Marquee is open"**: close Marquee (and its tray icon), then run *Update my stack* again.
+
 **Seerr's build fails (Windows)**: it needs about 4 GB of free memory and 3 GB of disk space. Close other
 programs and run the step again.
 
@@ -95,7 +103,28 @@ Tasks*). Some apps don't show the button yet; Jellyfin's web page and official a
 
 **Subtitles sit too high or too low**: in the Jellyfin app, *Settings → Subtitles → Vertical position*.
 
+## Marquee
+
+**Marquee asks for the Jellyfin address**: it was already signed in to another Jellyfin server, so setup left
+its settings alone (the step's log says so). In Marquee: *Settings → Sign out*, then sign in with
+`http://localhost:8096`.
+
+**Marquee's "Your stack" page says it can't find the Media Hub**: check that the Media Hub task is running
+(Task Scheduler → *Media Stack* → *Media Hub*). Run the *Marquee* step again to rewrite Marquee's settings
+for this stack (your other Marquee settings are kept).
+
+**Marquee Mobile doesn't load on the phone**: the phone must be on Tailscale; check that the firewall rule
+*Marquee Mobile (Tailscale)* exists (*Windows Defender Firewall → Inbound Rules*) and run the
+*Phones, TVs & away from home* step again with the firewall box ticked if it doesn't.
+
 ## Access and network
+
+**The Tailscale install failed (Windows)**: its installer log is `<folder>\logs\tailscale-install.log`.
+Run the step again, or install Tailscale from tailscale.com yourself: the step then only signs it in.
+
+**"Tailscale sign-in didn't finish"**: sign in from the Tailscale icon in the taskbar (or `tailscale up` on
+Linux), then run the step again; once Tailscale is connected it just reads this computer's name and address.
+If Tailscale was set up earlier with other options, the step doesn't change them.
 
 **Tailscale won't sign in while NordVPN is connected (Windows)**: add
 `C:\Program Files\Tailscale\tailscaled.exe` to NordVPN's split tunnelling, then reconnect NordVPN.

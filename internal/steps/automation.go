@@ -177,6 +177,8 @@ func WriteAppConfig(st *core.Stack) error {
 		"tailscale_name":         st.Opt("tailscale_name"),
 		"task_folder":            `\` + st.Name + `\`,
 		"compose_project":        platform.Project(st),
+		// Linux: the hub container makes the nightly backup itself (Windows: a scheduled task).
+		"backups": core.M{"nightly": Chosen(st, "backups")},
 	}
 	if st.Docker() && st.AdminPass != "" {
 		// Containers can't use qBittorrent's "no login from this computer" exception.
@@ -294,15 +296,48 @@ func runHub(c *Ctx) error {
 		} else {
 			c.J.OK("Hourly health check scheduled")
 		}
-		if err := c.P.Deploy(c, st, c.J, "backup"); err != nil {
-			c.J.Warn("Nightly backup: %v", err)
-		} else {
-			c.J.OK("Every app's settings are backed up nightly at 3:30 to %s", filepath.Join(st.Root, "backups"))
+		if Chosen(st, "backups") {
+			if err := c.P.Deploy(c, st, c.J, "backup"); err != nil {
+				c.J.Warn("Nightly backup: %v", err)
+			} else {
+				c.J.OK("Every app's settings are backed up nightly at 3:30 to %s", filepath.Join(st.Root, "backups"))
+			}
+		} else if st.IsDeployed("backup") {
+			c.P.Remove(st, "backup")
+			st.Remove("backup")
+			c.J.Info("Nightly backups are off (not chosen); existing backups stay in %s", filepath.Join(st.Root, "backups"))
 		}
-		desktopShortcut(c, "Media Hub", OpenURL(st, "hub"))
+		if StackApp(st) != "marquee" {
+			desktopShortcut(c, "Media Hub", OpenURL(st, "hub"))
+		}
+	} else if Chosen(st, "backups") {
+		c.J.OK("Every app's settings are backed up nightly at 3:30 to %s", filepath.Join(st.Root, "backups"))
 	}
 	hubHooks(c)
+	// Marquee is the dashboard only once it's installed (its step sets "marquee").
+	if !st.IsDeployed("marquee") || StackApp(st) != "marquee" {
+		if err := setHubSettings(st, map[string]any{"ui": "hub"}); err != nil {
+			c.J.Warn("hub.json: %v", err)
+		}
+	}
+	if Chosen(st, "alerts") {
+		phoneAlerts(c)
+	}
 	return WriteAppConfig(st)
+}
+
+// phoneAlerts turns on the hub's ntfy alerts with a private topic and says how to subscribe.
+func phoneAlerts(c *Ctx) {
+	st := c.St
+	topic, _ := hubSetting(st, "ntfy_topic").(string)
+	if topic == "" {
+		topic = "mediahub-" + core.RandomHex(8) // the topic name is the only key: keep it long
+	}
+	if err := setHubSettings(st, map[string]any{"phone": true, "ntfy_topic": topic}); err != nil {
+		c.J.Warn("Phone alerts: %v", err)
+		return
+	}
+	c.J.OK("Phone alerts are on. Install the ntfy app (Android/iPhone), tap +, and subscribe to the topic %s", topic)
 }
 
 // hubHooks makes Sonarr, Radarr, Prowlarr and Seerr report to the Media Hub's activity feed.

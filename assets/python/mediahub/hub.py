@@ -83,13 +83,27 @@ def allowed():
     return CFG["hub"].get("access") == "lan-login" and (ip.is_private or ip.is_loopback)
 
 
+def token_ok():
+    """Marquee on another computer (or talking to a Docker hub) sends the hub's API token instead of signing in."""
+    tok = hub_settings().get("api_token")
+    got = request.headers.get("X-Hub-Token") or ""
+    return bool(tok and got and secrets.compare_digest(tok, got))
+
+
 @app.before_request
 def guard():
     if request.path.startswith("/api/hook/"):
         # Webhooks from the apps themselves (same computer / Docker network).
         ip = client_ip()
         return None if ip.is_loopback or ip.is_private else ("Forbidden", 403)
+    if request.method in ("POST", "PUT", "DELETE"):
+        # A web page open in a browser on this PC must not be able to press the hub's buttons for it.
+        origin = request.headers.get("Origin")
+        if origin and origin != "null" and origin.split("://", 1)[-1] != request.host:
+            return jsonify(ok=False, message="Forbidden"), 403
     if is_local():
+        return None
+    if allowed() and token_ok():
         return None
     if not allowed():
         return "The Media Hub is only available on your own network and over Tailscale.", 403
@@ -667,7 +681,9 @@ _db_lock = threading.Lock()
 
 
 def hub_settings():
-    defaults = {"notifications": not DOCKER, "watchdog": True, "phone": False}
+    # "ui": "hub" (this page is the dashboard) or "marquee" (Marquee's "Your stack" page is; this page only says so,
+    # the API and every background job keep running exactly the same).
+    defaults = {"notifications": not DOCKER, "watchdog": True, "phone": False, "ui": "hub"}
     try:
         return {**defaults, **json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))}
     except Exception:
@@ -880,12 +896,57 @@ def events():
 def settings_route():
     s = hub_settings()
     if request.method == "POST":
-        s.update({k: bool(v) for k, v in (request.get_json(force=True) or {}).items()
-                  if k in ("notifications", "watchdog", "phone")})
+        body = request.get_json(force=True) or {}
+        s.update({k: bool(v) for k, v in body.items() if k in ("notifications", "watchdog", "phone")})
+        if body.get("ui") in ("hub", "marquee"):
+            s["ui"] = body["ui"]
+        srv = body.get("ntfy_server")
+        if isinstance(srv, str) and (srv == "" or re.fullmatch(r"https?://[^\s/]+(/[^\s]*)?", srv.strip())):
+            s["ntfy_server"] = srv.strip().rstrip("/")  # "" = the public ntfy.sh
+        if body.get("new_topic"):
+            s["ntfy_topic"] = "mediahub-" + secrets.token_hex(8)
         if s.get("phone") and not s.get("ntfy_topic"):
             s["ntfy_topic"] = "mediahub-" + secrets.token_hex(8)  # the topic name is the only key: keep it long
         SETTINGS_FILE.write_text(json.dumps(s), encoding="utf-8")
-    return jsonify({**s, "can_notify": not DOCKER})
+    return jsonify({**{k: v for k, v in s.items() if k != "api_token"}, "can_notify": not DOCKER})
+
+
+# --------------------------------------------------------------------------- Marquee (the stack's app)
+# Marquee's "Your stack" page is a second face for this hub: it reads the JSON routes below and presses the same
+# actions. Nothing is duplicated there; the hub keeps doing the work (watchdog, VPN check, webhooks, Linux jobs).
+API_VERSION = 2
+FEATURES = ["status", "events", "incidents", "requests", "backups", "restore", "actions", "settings", "phone",
+            "addresses", "logs", "health", "info", "token"]
+
+
+@app.get("/api/info")
+def info():
+    """What this hub is and can do, so a client (Marquee) knows which routes exist."""
+    s = hub_settings()
+    return jsonify(ok=True, app="mediahub", api=API_VERSION, features=FEATURES, ui=s.get("ui", "hub"),
+                   name=cfg().get("name"), platform=cfg().get("platform"), docker=DOCKER,
+                   watchdog=watchdog_summary(), apps=sorted(APPS()))
+
+
+@app.get("/api/health")
+def health_report():
+    """The last hourly health check (healthcheck.py): {ok, report: {time, fixed[], attention[], ok[]}}."""
+    try:
+        data = json.loads((STATE / "health.json").read_text(encoding="utf-8"))
+    except Exception:
+        data = {"time": None, "fixed": [], "attention": [], "ok": []}
+    return jsonify(ok=True, report=data)
+
+
+@app.get("/api/token")
+def api_token():
+    """The token Marquee on another computer sends as X-Hub-Token (made on first use). Only reachable from this
+    PC or by a signed-in administrator (see guard)."""
+    s = hub_settings()
+    if not s.get("api_token"):
+        s["api_token"] = secrets.token_urlsafe(32)
+        SETTINGS_FILE.write_text(json.dumps(s), encoding="utf-8")
+    return jsonify(ok=True, token=s["api_token"])
 
 
 @app.post("/api/phone/test")
@@ -1248,8 +1309,35 @@ def action(action):
     return jsonify(ok=False, message="Unknown action"), 400
 
 
+MARQUEE_NOTE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#eef3fc"><title>Media Hub</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap">
+<style>
+ :root{color-scheme:light;--bg:#eef3fc;--ink:#14203f;--muted:#4b5a7a;--line:#d2dcf0}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;color:var(--ink);
+  font:15px/1.6 "Google Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:radial-gradient(900px 480px at 50% -160px,#d9e5fb 0%,#eef3fc00 70%),var(--bg)}
+ .card{width:100%;max-width:460px;padding:30px 26px;border-radius:28px;border:1px solid #ffffffd9;text-align:center;
+  background:linear-gradient(140deg,#ffffffc4 0%,#ffffff9c 55%,#ffffffb8 100%);
+  box-shadow:inset 0 1px 0 #fff,0 1px 2px #0b14330d,0 16px 40px #0b14331f;backdrop-filter:blur(22px) saturate(1.8)}
+ h1{font-size:24px;font-weight:650;letter-spacing:-.8px;margin:0 0 6px}
+ p{color:var(--muted);margin:6px 0}
+ a{display:inline-block;margin-top:16px;padding:10px 20px;border-radius:999px;color:#14203f;font-weight:700;text-decoration:none;
+  background:#fff;border:1px solid var(--line);box-shadow:0 2px 8px #14203f12}
+ .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#1f9a63;box-shadow:0 0 0 4px #1f9a6322}
+</style></head><body><div class="card">
+<h1>This stack is managed in Marquee</h1>
+<p>Open the Marquee app and choose <b>Your stack</b> for status, problems, requests, downloads and backups.</p>
+<p><span class="dot"></span>The Media Hub keeps running in the background: health checks, the watchdog, alerts and backups.</p>
+<a href="/?full=1">Open the Media Hub anyway</a>
+</div></body></html>"""
+
+
 @app.get("/")
 def index():
+    if hub_settings().get("ui") == "marquee" and not request.args.get("full"):
+        return MARQUEE_NOTE
     resp = send_from_directory(HERE / "static", "index.html")
     resp.headers["Cache-Control"] = "no-cache"  # always check for a newer page
     return resp
@@ -1291,7 +1379,8 @@ if __name__ == "__main__":
     from waitress import serve
     if DOCKER:
         threading.Thread(target=hourly_healthcheck, daemon=True).start()
-        threading.Thread(target=nightly_backup, daemon=True).start()
+        if (CFG.get("backups") or {}).get("nightly", True):
+            threading.Thread(target=nightly_backup, daemon=True).start()
     if "qbittorrent" in CFG.get("apps", {}):
         threading.Thread(target=vpn_leak_loop, daemon=True).start()
     threading.Thread(target=watchdog_loop, daemon=True, name="watchdog").start()

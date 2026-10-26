@@ -37,6 +37,17 @@ type Server struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	quitOnce sync.Once
+
+	// A newer Media Stack Setup from the update manifest (nil if none), and whether to restart into it.
+	upd     *installerUpdate
+	restart bool
+}
+
+type installerUpdate struct {
+	Version string `json:"version"`
+	Notes   string `json:"notes,omitempty"`
+	file    core.ManifestFile
+	m       *core.Manifest
 }
 
 // New loads an earlier install (from --root or the remembered folder) if there is one.
@@ -110,6 +121,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/run", s.api(s.handleRun))
 	mux.HandleFunc("POST /api/skip", s.api(s.handleSkip))
 	mux.HandleFunc("GET /api/job", s.api(s.handleJob))
+	mux.HandleFunc("POST /api/self-update", s.api(s.handleSelfUpdate))
 	mux.HandleFunc("POST /api/quit", s.api(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, core.M{"ok": true})
 		go func() { time.Sleep(300 * time.Millisecond); s.Stop() }()
@@ -204,6 +216,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	ctx := s.ctxFor(nil, nil)
 	var views []stepView
 	for _, step := range steps.For(goos) {
+		if !steps.Visible(st, step) {
+			continue
+		}
 		status, msg := s.status(step.ID)
 		v := stepView{ID: step.ID, Title: step.Title, Group: step.Group, Optional: step.Optional, Status: status,
 			Message: msg, Button: step.Button}
@@ -220,8 +235,19 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		v.Password = step.Password && st != nil && st.AdminPass == "" && st.AdminUser != ""
 		views = append(views, v)
 	}
-	out := core.M{"os": goos, "version": assets.Version, "steps": views}
+	out := core.M{"os": goos, "version": assets.Version, "steps": views,
+		"components": steps.ComponentsFor(goos), "groups": steps.ComponentGroups,
+		"marquee_available": steps.MarqueeAvailable()}
+	s.mu.Lock()
+	if s.upd != nil {
+		out["installer_update"] = s.upd
+	}
+	s.mu.Unlock()
+	if s.def.Update && steps.HasInstall(st) {
+		out["start"] = "update"
+	}
 	if st != nil {
+		out["stack_app"] = steps.StackApp(st)
 		out["root"] = st.Root
 		out["name"] = st.Name
 		out["addresses"] = steps.Addresses(st)
@@ -280,11 +306,15 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, core.M{"error": "no such step"})
 		return
 	}
+	st := s.Stack()
+	if !steps.Visible(st, step) {
+		writeJSON(w, 409, core.M{"error": step.Title + " isn't part of your stack. Add it on \"Choose your stack\" first."})
+		return
+	}
 	if b := s.blockedBy(step); b != "" {
 		writeJSON(w, 409, core.M{"error": "Finish these steps first: " + b})
 		return
 	}
-	st := s.Stack()
 	if st == nil && step.ID != "welcome" && step.ID != "folders" {
 		writeJSON(w, 409, core.M{"error": "Choose a folder first."})
 		return
@@ -435,4 +465,84 @@ func Listen(addr string, port int) (net.Listener, error) {
 		}
 	}
 	return net.Listen("tcp", addr+":0")
+}
+
+// ---------------------------------------------------------------------------------------------- self-update
+
+// CheckUpdates looks for a newer Media Stack Setup in the update manifest (quietly: no internet, no offer).
+func (s *Server) CheckUpdates() string {
+	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	defer cancel()
+	m, err := core.FetchManifest(ctx)
+	if err != nil || m.Installer == nil || !core.VersionNewer(m.Installer.Version, assets.Version) {
+		return ""
+	}
+	f, ok := m.Installer.File(core.PlatformKey())
+	if !ok {
+		return ""
+	}
+	s.mu.Lock()
+	s.upd = &installerUpdate{Version: m.Installer.Version, Notes: m.Installer.Notes, file: f, m: m}
+	s.mu.Unlock()
+	return m.Installer.Version
+}
+
+// Restart reports whether the wizard closed to start its newer version.
+func (s *Server) Restart() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.restart
+}
+
+// handleSelfUpdate downloads the newer program (checked against the manifest's SHA-256), puts it in place
+// of this one, and closes so main can start it.
+func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	upd := s.upd
+	busy := s.running != nil
+	if busy {
+		_, done, _ := s.running.Since(0)
+		busy = !done
+	}
+	s.mu.Unlock()
+	if upd == nil {
+		writeJSON(w, 404, core.M{"error": "No update is available."})
+		return
+	}
+	if busy {
+		writeJSON(w, 409, core.M{"error": "Wait for the running step to finish first."})
+		return
+	}
+	self, err := os.Executable()
+	if err == nil {
+		self, err = filepath.EvalSymlinks(self)
+	}
+	if err != nil {
+		writeJSON(w, 500, core.M{"error": err.Error()})
+		return
+	}
+	fresh := self + ".new"
+	if err := core.FetchFile(r.Context(), nil, upd.m, upd.file, fresh); err != nil {
+		writeJSON(w, 502, core.M{"error": "The download failed: " + err.Error()})
+		return
+	}
+	os.Chmod(fresh, 0o755)
+	old := self + ".old"
+	os.Remove(old)
+	// A running program can't be overwritten on Windows, but it can be renamed.
+	if err := os.Rename(self, old); err != nil {
+		os.Remove(fresh)
+		writeJSON(w, 500, core.M{"error": "Couldn't replace the program: " + err.Error()})
+		return
+	}
+	if err := os.Rename(fresh, self); err != nil {
+		os.Rename(old, self)
+		writeJSON(w, 500, core.M{"error": "Couldn't replace the program: " + err.Error()})
+		return
+	}
+	s.mu.Lock()
+	s.restart = true
+	s.mu.Unlock()
+	writeJSON(w, 200, core.M{"ok": true, "version": upd.Version})
+	go func() { time.Sleep(500 * time.Millisecond); s.Stop() }()
 }

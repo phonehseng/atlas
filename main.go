@@ -40,6 +40,7 @@ func main() {
 	noBrowser := flag.Bool("no-browser", false, "don't open a browser")
 	token := flag.String("token", "", "use this access key for the setup page instead of a random one (for automation)")
 	version := flag.Bool("version", false, "print the version")
+	flag.BoolVar(&def.Update, "update", false, "open \"Update my stack\" (update the installed apps and files)")
 	flag.Parse()
 	if *version {
 		fmt.Println("Media Stack Setup", assets.Version)
@@ -59,6 +60,9 @@ func main() {
 			}
 			return
 		}
+	}
+	if self, err := os.Executable(); err == nil {
+		os.Remove(self + ".old") // left by a self-update
 	}
 	srv := wizard.New(def)
 	if len(*token) >= 16 {
@@ -93,9 +97,26 @@ func main() {
 	go server.Serve(ln)
 	if *token == "" {
 		saveSession(url)
-		defer os.Remove(sessionFile())
 	}
+	go func() {
+		if v := srv.CheckUpdates(); v != "" {
+			fmt.Printf("  Media Stack Setup %s is available: the wizard offers it at the top of the page.\n\n", v)
+		}
+	}()
 	<-srv.Quit
+	if *token == "" {
+		os.Remove(sessionFile())
+	}
+	if srv.Restart() {
+		server.Close()
+		self, _ := os.Executable()
+		fmt.Println("  Starting the new version...")
+		cmd := exec.Command(self, os.Args[1:]...)
+		if err := cmd.Start(); err != nil {
+			fail("Couldn't start the new version (%v). Start it again yourself.", err)
+		}
+		return
+	}
 	fmt.Println("  Setup closed. Run this program again any time to continue or update.")
 }
 
@@ -163,16 +184,7 @@ func launcher(args []string) int {
 }
 
 func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	if err := cmd.Start(); err != nil {
+	if err := platform.OpenBrowser(url); err != nil {
 		fmt.Println("  (Couldn't open a browser automatically.)")
 	}
 }

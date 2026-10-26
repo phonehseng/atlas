@@ -1,5 +1,15 @@
 # How it works
 
+## Choosing the parts
+
+The *Choose your stack* page lists every part with a one-line description, a rough size and an OS badge. The
+choice is saved in `stack.json` (`parts`), and only the chosen parts' steps appear in the wizard. Each part
+declares what it needs (Seerr needs Jellyfin, Sonarr and Radarr; Marquee needs Jellyfin and Seerr; the Media
+Hub needs MediaSorter...): ticking a part adds its needs, and unticking one explains what depends on it before
+removing those too. Media folders and Jellyfin are always included. In this version Recyclarr, Bazarr,
+Unpackerr, Cleanuparr, MediaSorter, Seerr and autobrr work with Sonarr and Radarr together, so a films-only or
+TV-only stack isn't offered yet.
+
 ## The flow
 
 ```
@@ -20,7 +30,14 @@
               │
            Media Hub: status, problems, logs, activity, hourly health check, 5-minute watchdog,
                       request doctor, nightly backups, VPN leak check, phone alerts (ntfy)
+              ▲
+           Marquee (Windows, optional): the player for this PC, requests, and the hub's dashboard
+                      ("Your stack"); Marquee Mobile serves phones over Tailscale
 ```
+
+With Marquee as the stack app, the Media Hub's `hub.json` has `"ui": "marquee"`: the hub's own page then only
+points to Marquee (with a link to open it anyway), while its API and every background job keep running exactly
+as before, so monitoring works with Marquee closed.
 
 Lidarr (optional) does the same for music: you add artists in Lidarr itself, and albums land in
 `data/media/Music` (Jellyfin's *Music* library).
@@ -36,7 +53,7 @@ Lidarr (optional) does the same for music: you add artists in Lidarr itself, and
 ├─ config/<app>/    each app's settings and database
 ├─ config/shared/mediastack.json   the whole install described for MediaSorter, the Media Hub and the health check
 ├─ backups/         nightly zips of every app's settings and databases (newest 7)
-├─ apps/            Windows: the programs (plus MediaStack.exe, the background launcher)
+├─ apps/            Windows: the programs (plus MediaStack.exe, the background launcher; Marquee in apps/Marquee)
 ├─ logs/            Windows: output of the background apps
 ├─ docker-compose.yml, .env   Linux
 └─ stack.json       what setup has done (versions, API keys; never passwords)
@@ -71,8 +88,48 @@ hours, or after 1 hour with nobody downloading, and Sonarr/Radarr then clean up 
 
 ## Where things come from
 
-Every app is downloaded from its official source at install time, so you get the current version:
-GitHub releases (Sonarr, Radarr, Prowlarr, Bazarr, Recyclarr, Unpackerr, Cleanuparr, autobrr, jfa-go,
-Requestrr, uv), repo.jellyfin.org, nodejs.org (checksum-verified), winget (qBittorrent, MKVToolNix,
-Tailscale), and official Docker images on Linux. trawl is pinned to a tested version because the installer
-patches it; its browser add-on is checksum-verified.
+Nothing big is built into the program: every app is downloaded from its official source when its step runs,
+so you get the current version: GitHub releases (Sonarr, Radarr, Prowlarr, Bazarr, Recyclarr, Unpackerr,
+Cleanuparr, autobrr, jfa-go, Requestrr, uv), repo.jellyfin.org, nodejs.org (checksum-verified), winget
+(qBittorrent, MKVToolNix), and official Docker images on Linux. Pinned to a tested version and checked against
+a SHA-256 written into the program:
+
+- **trawl** (the installer patches it) and its browser add-on;
+- **Tailscale for Windows**: the official MSI from `pkgs.tailscale.com/stable`, installed silently with
+  `msiexec /qn`. Tailscale keeps itself up to date afterwards;
+- **Marquee**: its release zip (version, address, size and SHA-256 are set when a release is made).
+
+On Linux, Tailscale is installed on the server itself with Tailscale's official script, which adds Tailscale's
+signed package repository (so it updates with the system), rather than as a container next to the stack: every
+app already publishes its port on the server, so one Tailscale on the host reaches all of them with no extra
+networking, and the Media Hub and the wizard read the server's Tailscale name and address from it. A
+container would need host networking, `/dev/net/tun` and its own state volume to do the same.
+
+## Updates
+
+Each release publishes an update list, `marquee-update.json`, next to its downloads
+(`https://github.com/phonehseng/marquee/releases/latest/download/marquee-update.json`; the
+`MEDIASTACK_UPDATE_MANIFEST` environment variable points the installer at another address or a local file
+for testing). The installer reads three entries:
+
+```json
+{
+  "schema": 1,
+  "installer":    { "version": "1.4.1", "notes": "...",
+                    "files": { "windows-x64": { "url": "...", "sha256": "...", "size": 0 },
+                               "linux-x64":   { "url": "...", "sha256": "...", "size": 0 },
+                               "linux-arm64": { "url": "...", "sha256": "...", "size": 0 } } },
+  "stack-assets": { "version": "1.4.1", "min_installer": "1.4.1", "notes": "..." },
+  "marquee":      { "version": "1.0.1", "notes": "...",
+                    "files": { "windows-x64": { "url": "...", "sha256": "...", "size": 0 } } }
+}
+```
+
+- `installer`: a newer version is offered at the top of the wizard; the download must match `sha256` and
+  `size`, then the program replaces itself and restarts.
+- `stack-assets`: the version of the MediaSorter / Media Hub / health check files the newest installer
+  carries. They are built into the installer, so a newer version here means "update the installer first".
+- `marquee`: *Update my stack* installs it when it's newer than the installed Marquee. An entry may also give
+  `url`, `sha256` and `size` directly instead of `files`.
+
+Only `https` downloads are accepted, except from a local test manifest.

@@ -67,6 +67,9 @@ type Stack struct {
 	Steps      map[string]*StepState `json:"steps"`
 	Opts       map[string]string     `json:"opts"`     // small facts discovered on the way (GPU, versions...)
 	Deployed   map[string]string     `json:"deployed"` // app id -> installed version / image
+	// Parts are the components picked on "Choose your stack" (nil: an install from before that page, where
+	// every step is shown).
+	Parts []string `json:"parts,omitempty"`
 
 	// AdminPass is the admin password while the wizard runs. It is never saved.
 	AdminPass string `json:"-"`
@@ -212,6 +215,34 @@ func (st *Stack) Opt(k string) string {
 func (st *Stack) SetOpt(k, v string) error {
 	st.mu.Lock()
 	st.Opts[k] = v
+	st.mu.Unlock()
+	return st.Save()
+}
+
+// HasParts reports whether the components were chosen on "Choose your stack".
+func (st *Stack) HasParts() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.Parts != nil
+}
+
+// Picked reports whether a component was chosen (false when nothing was chosen yet).
+func (st *Stack) Picked(id string) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	for _, p := range st.Parts {
+		if p == id {
+			return true
+		}
+	}
+	return false
+}
+
+// SetParts saves the chosen components.
+func (st *Stack) SetParts(parts []string) error {
+	st.mu.Lock()
+	st.Parts = append([]string{}, parts...)
+	sort.Strings(st.Parts)
 	st.mu.Unlock()
 	return st.Save()
 }

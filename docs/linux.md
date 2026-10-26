@@ -48,8 +48,9 @@ They're the same as on Windows (see the [Windows guide](windows.md#the-steps)), 
 
 - **VPN for downloads** creates the Gluetun container instead of using a VPN app.
 - Nothing installs system-wide and there are no permission prompts.
-- **Phones, TVs & away from home** installs Tailscale on the server with its official script and prints a
-  sign-in link.
+- **Phones, TVs & away from home** installs Tailscale on the server with its official script (nothing if
+  it's already installed) and prints a sign-in link.
+- **Marquee** is Windows-only for now: on Linux the Media Hub is your stack app, and Jellyfin the player.
 - Admin pages (Sonarr, Radarr...) always ask for your login, even on your home network, because a container
   can't tell "this computer" apart from other devices.
 - The Media Hub container makes the nightly settings backup (into `/srv/mediastack/backups`) and runs the
@@ -65,7 +66,8 @@ sudo docker compose restart radarr     # restart one app
 sudo docker compose pull && sudo docker compose up -d   # update every app
 ```
 
-Or run the setup program again and press **Run again** on a step to update that app.
+Or run the setup program again and press **Update my stack** (or start it with `--update`), or **Run again**
+on a step to update just that app.
 
 Containers restart by themselves after a crash or reboot (`restart: unless-stopped`).
 

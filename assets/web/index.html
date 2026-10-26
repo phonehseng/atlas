@@ -80,6 +80,34 @@
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-size: 12px; }
   .bye { text-align: center; padding: 80px 20px; }
+  /* Choose your stack */
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+  .presets .b.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .cgroup { margin: 18px 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .comp { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel); display: flex; gap: 10px;
+          cursor: pointer; align-items: flex-start; }
+  .comp.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+  .comp.locked, .comp.off { cursor: default; }
+  .comp.off { opacity: .55; }
+  .comp input { margin-top: 3px; }
+  .comp .av { width: 30px; height: 30px; border-radius: 8px; flex: none; display: grid; place-items: center; font-weight: 700; color: #fff;
+              background: var(--accent); }
+  .comp .nm { font-weight: 650; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .comp .wh { font-size: 13px; margin-top: 2px; }
+  .comp .sz { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .comp .why { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; gap: 5px; align-items: flex-start; }
+  .comp .note { color: var(--ok); font-size: 12px; margin-top: 4px; }
+  .badge { font-size: 11px; font-weight: 600; padding: 0 7px; border-radius: 10px; background: var(--panel-2); color: var(--muted);
+           display: inline-flex; gap: 3px; align-items: center; }
+  .ask { border-left: 4px solid var(--warn); background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 6px;
+         padding: 8px 10px; margin-top: 8px; font-size: 13px; cursor: default; }
+  .ask ul { margin: 4px 0 8px; padding-left: 18px; }
+  .appchoice { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel); }
+  .appchoice label { display: flex; gap: 9px; align-items: flex-start; padding: 6px 4px; cursor: pointer; }
+  .appchoice label input { margin-top: 4px; }
+  .total { margin-top: 14px; color: var(--muted); font-size: 13px; }
+  .banner { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; }
     nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
@@ -127,6 +155,7 @@ async function load(keepCurrent) {
   if (!keepCurrent || !state.steps.find(s => s.id === current)) {
     const next = state.steps.find(s => s.status !== "done" && s.status !== "skipped");
     current = (next || state.steps[state.steps.length - 1]).id;
+    if (!keepCurrent && state.start && state.steps.find(s => s.id === state.start)) current = state.start;
   }
   renderNav();
   renderStep();
@@ -145,6 +174,10 @@ function renderNav() {
 
 function field(f) {
   const id = "f-" + f.name, v = f.default ?? "";
+  if (f.type === "components") {
+    if (!chooser || chooser.saved !== v) { chooserInit(v); chooser.saved = v; }
+    return `<div id="chooser">${renderChooser()}</div>`;
+  }
   if (f.type === "checkbox")
     return `<div class="f"><label class="check"><input type="checkbox" id="${id}" name="${f.name}" ${v === "true" ? "checked" : ""}>
       <span>${esc(f.label)}${f.help ? `<div class="help">${esc(f.help)}</div>` : ""}</span></label></div>`;
@@ -168,6 +201,12 @@ function renderStep() {
   const status = running ? "running" : s.status;
   let h = `<div class="eyebrow">Step ${idx + 1} of ${state.steps.length} · ${esc(s.group)}</div>
     <h1>${esc(s.title)} ${STATUS[status] ? `<span class="chip ${status}">${STATUS[status]}</span>` : ""}</h1>`;
+  if (state.installer_update) h += `<div class="msg ok banner"><span>Media Stack Setup <b>${esc(state.installer_update.version)}</b> is available
+    (you have ${esc(state.version)}).${state.installer_update.notes ? " " + esc(state.installer_update.notes) : ""}</span>
+    <button class="b p" id="selfupd" ${busy ? "disabled" : ""}>Update the installer</button></div>`;
+  if (s.id === "welcome" && state.steps.find(x => x.id === "update")) h += `<div class="card banner"><span>An install was found in
+    <code>${esc(state.root)}</code>.</span><button class="b p" type="button" data-step="update">Update my stack</button>
+    <button class="b" type="button" data-step="choose">Change what's installed</button></div>`;
   if (s.status === "failed" && s.message && !running) h += `<div class="msg err">${esc(s.message)}</div>`;
   if (lastError) h += `<div class="msg err">${esc(lastError)}</div>`;
   if (s.intro) h += `<div class="card guide">${s.intro}</div>`;
@@ -199,6 +238,7 @@ function renderStep() {
   $("#main").innerHTML = h;
   if (running) replayLog();
   $("#run").onclick = () => run(s);
+  if ($("#selfupd")) $("#selfupd").onclick = selfUpdate;
   if ($("#skip")) $("#skip").onclick = () => skip(s);
   if ($("#refresh")) $("#refresh").onclick = () => { lastError = ""; load(true); };
   if ($("#next")) $("#next").onclick = () => { current = state.steps[idx + 1].id; lastError = ""; renderNav(); renderStep(); window.scrollTo(0, 0); };
@@ -208,6 +248,7 @@ function values() {
   const out = {};
   document.querySelectorAll("#form input, #form select").forEach(el => {
     if (!el.name || el.name === "__password") return;
+    if (el.type === "radio" && !el.checked) return;
     out[el.name] = el.type === "checkbox" ? String(el.checked) : el.value;
   });
   return out;
@@ -220,6 +261,17 @@ async function run(s) {
     const r = await api("/api/run", { step: s.id, values: values(), password: pw ? pw.value : "" });
     logLines = [];
     follow(r.job, s.id);
+  } catch (e) { lastError = e.message; renderStep(); }
+}
+
+async function selfUpdate() {
+  const v = state.installer_update.version;
+  $("#selfupd").disabled = true;
+  $("#selfupd").textContent = "Downloading…";
+  try {
+    await api("/api/self-update", {});
+    document.body.innerHTML = `<div class="bye"><h1>Updating to ${esc(v)}</h1><p>The new Media Stack Setup is starting and opens
+      in a new tab in a moment. You can close this one.</p></div>`;
   } catch (e) { lastError = e.message; renderStep(); }
 }
 
@@ -272,6 +324,142 @@ document.addEventListener("click", e => {
   current = b.dataset.step; lastError = "";
   renderNav(); renderStep();
   window.scrollTo(0, 0);
+});
+
+/* ================================================================== choose your stack */
+const LOCK = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+let chooser = null; // {sel: Set, notes: {id: text}, ask: {id, deps}}
+
+function compById(id) { return (state.components || []).find(c => c.id === id); }
+function compUsable(c) { return !!c && !(c.id === "marquee" && !state.marquee_available); }
+function needsOf(id, out = new Set()) {
+  for (const n of (compById(id) || {}).needs || []) if (!out.has(n)) { out.add(n); needsOf(n, out); }
+  return out;
+}
+// Chosen parts that need id (directly or through another part), each with what it used id (or that part) for.
+function dependentsOf(id, sel) {
+  const gone = new Set([id]), out = [];
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const c of state.components) {
+      if (!sel.has(c.id) || gone.has(c.id)) continue;
+      const hit = (c.needs || []).find(n => gone.has(n));
+      if (hit) {
+        gone.add(c.id); changed = true;
+        out.push({ id: c.id, text: (c.why && c.why[hit]) || ("needs " + compById(hit).name) });
+      }
+    }
+  }
+  return out;
+}
+function presetSet(name) {
+  return new Set(state.components.filter(c => compUsable(c) &&
+    (c.locked || name === "everything" || (name === "minimal" && c.minimal) || (name === "recommended" && c.recommended))).map(c => c.id));
+}
+function sameSet(a, b) { return a.size === b.size && [...a].every(x => b.has(x)); }
+function fmtMB(mb) { return mb >= 1000 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`; }
+
+function chooserInit(def) {
+  chooser = { sel: new Set((def || "").split(",").filter(id => compUsable(compById(id)))), notes: {}, ask: null };
+}
+function chooserAdd(id) {
+  const added = [...needsOf(id)].filter(n => !chooser.sel.has(n) && compUsable(compById(n)));
+  chooser.sel.add(id);
+  added.forEach(n => chooser.sel.add(n));
+  chooser.notes = {}; chooser.ask = null;
+  if (added.length) chooser.notes[id] = "Also adds " + added.map(n => compById(n).name).join(", ") + " (needed for it)";
+}
+function chooserRemove(id, confirmed) {
+  const deps = dependentsOf(id, chooser.sel);
+  if (deps.length && !confirmed) { chooser.ask = { id, deps }; return; }
+  chooser.sel.delete(id);
+  deps.forEach(d => chooser.sel.delete(d.id));
+  chooser.ask = null; chooser.notes = {};
+}
+
+function renderChooser() {
+  const comps = state.components || [], sel = chooser.sel;
+  let h = `<input type="hidden" name="parts" value="${esc([...sel].join(","))}"><div class="presets"><b style="margin-right:4px">Start from:</b>`;
+  for (const [k, label] of [["recommended", "Recommended"], ["minimal", "Minimal"], ["everything", "Everything"]])
+    h += `<button type="button" class="b ${sameSet(sel, presetSet(k)) ? "on" : ""}" data-preset="${k}">${label}</button>`;
+  h += `</div>`;
+  for (const g of state.groups || []) {
+    const list = comps.filter(c => c.group === g && c.id !== "marquee");
+    if (!list.length) continue;
+    h += `<div class="cgroup">${esc(g)}</div><div class="cgrid">` + list.map(compCard).join("") + (g === "Watch" ? appChoice() : "") + `</div>`;
+  }
+  let disk = 0, ram = 0;
+  sel.forEach(id => { const c = compById(id); if (c) { disk += c.disk_mb || 0; ram += c.ram_mb || 0; } });
+  h += `<div class="total">${sel.size} parts: roughly ${fmtMB(disk)} for the programs and ${fmtMB(ram)} of memory while they run,
+    plus your media. The figures are approximate.</div>`;
+  return h;
+}
+
+function compCard(c) {
+  const on = chooser.sel.has(c.id), usable = compUsable(c);
+  const size = [c.disk_mb ? `~${fmtMB(c.disk_mb)} disk` : "", c.ram_mb ? `~${fmtMB(c.ram_mb)} RAM` : ""].filter(Boolean).join(" · ");
+  const badge = c.os ? `<span class="badge">${c.os === "windows" ? "Windows only" : "Linux only"}</span>` : "";
+  let h = `<div class="comp ${on ? "on" : ""} ${c.locked ? "locked" : ""} ${usable ? "" : "off"}" data-comp="${c.id}">
+    <input type="checkbox" ${on ? "checked" : ""} ${c.locked || !usable ? "disabled" : ""} aria-label="${esc(c.name)}">
+    <div class="av" aria-hidden="true">${esc(c.name[0].toUpperCase())}</div><div style="flex:1;min-width:0">
+    <div class="nm">${esc(c.name)} ${c.locked ? `<span class="badge" title="Always installed">${LOCK} Required</span>` : ""}${badge}</div>
+    <div class="wh">${esc(c.what)}</div>${size ? `<div class="sz">${size}</div>` : ""}`;
+  if (c.locked) h += `<div class="why">${LOCK}<span>${esc(c.locked)}</span></div>`;
+  if (!usable) h += `<div class="why">Not available in this version of Media Stack Setup yet.</div>`;
+  if (chooser.notes[c.id]) h += `<div class="note">${esc(chooser.notes[c.id])}</div>`;
+  if (chooser.ask && chooser.ask.id === c.id) {
+    h += `<div class="ask">Unticking <b>${esc(c.name)}</b> also removes:<ul>` +
+      chooser.ask.deps.map(d => `<li><b>${esc(compById(d.id).name)}</b>: ${esc(d.text)}</li>`).join("") +
+      `</ul><button type="button" class="b" data-ask="yes">Remove them too</button> <button type="button" class="b" data-ask="no">Keep ${esc(c.name)}</button></div>`;
+  }
+  return h + `</div></div>`;
+}
+
+// "Your stack app": Marquee or the Media Hub only (Windows); a note on Linux.
+function appChoice() {
+  if (state.os !== "windows") {
+    return `<div class="appchoice"><b>Your stack app: the Media Hub</b><div class="help">Marquee (the desktop player and stack app)
+      is Windows-only for now. On Linux the Media Hub is your dashboard in the browser, and Jellyfin is the player.</div></div>`;
+  }
+  const m = compById("marquee"), avail = compUsable(m);
+  const mOn = chooser.sel.has("marquee"), hOn = !mOn && chooser.sel.has("hub");
+  const note = id => chooser.notes[id] ? `<div class="help" style="color:var(--ok)">${esc(chooser.notes[id])}</div>` : "";
+  return `<div class="appchoice"><b>Your stack app</b>
+    <label><input type="radio" data-app="marquee" ${mOn ? "checked" : ""} ${avail ? "" : "disabled"}><span><b>Use Marquee as your stack app (recommended)</b>
+      <span class="badge">Windows only</span><div class="help">${esc(m.what)} The Media Hub keeps working in the background
+      (health checks, alerts, backups). ~${fmtMB(m.disk_mb)} disk · ~${fmtMB(m.ram_mb)} RAM while open.
+      ${avail ? "" : "<b>Not available in this version of Media Stack Setup yet.</b>"}</div>${note("marquee")}</span></label>
+    <label><input type="radio" data-app="hub" ${hOn ? "checked" : ""}><span><b>Media Hub only</b><div class="help">Today's dashboard
+      in your browser for status, problems and requests, with Jellyfin as the player.</div>${note("hub")}</span></label>
+    ${chooser.ask && chooser.ask.id === "marquee" ? "" : ""}</div>`;
+}
+
+function chooserRedraw() {
+  const box = $("#chooser");
+  if (box) box.innerHTML = renderChooser();
+}
+
+document.addEventListener("click", e => {
+  if (!chooser || !e.target.closest("#chooser")) return;
+  const p = e.target.closest("[data-preset]");
+  if (p) { chooser.sel = presetSet(p.dataset.preset); chooser.notes = {}; chooser.ask = null; return chooserRedraw(); }
+  const a = e.target.closest("[data-ask]");
+  if (a) {
+    if (a.dataset.ask === "yes") chooserRemove(chooser.ask.id, true); else chooser.ask = null;
+    return chooserRedraw();
+  }
+  const r = e.target.closest("[data-app]");
+  if (r) {
+    if (r.dataset.app === "marquee") chooserAdd("marquee");
+    else { chooserRemove("marquee", true); if (!chooser.sel.has("hub")) chooserAdd("hub"); }
+    return chooserRedraw();
+  }
+  const card = e.target.closest(".comp[data-comp]");
+  if (!card || card.classList.contains("locked") || card.classList.contains("off") || e.target.closest(".ask")) return;
+  e.preventDefault();
+  const id = card.dataset.comp;
+  if (chooser.sel.has(id)) chooserRemove(id, false); else chooserAdd(id);
+  chooserRedraw();
 });
 
 $("#quit").onclick = async () => {

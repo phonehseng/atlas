@@ -1,7 +1,10 @@
 # Test helper: starts the setup wizard for a throwaway test install next to the real media server
 # (D:\StackTest, every port +20000, Task Scheduler folder "Media Stack Test"). It runs as a one-shot
 # scheduled task so it behaves exactly as if the user had double-clicked it.
-param([string] $Exe = "$PSScriptRoot\..\dist\MediaStackSetup.exe", [string] $Root = 'D:\StackTest', [int] $Port = 8599)
+#   -Env @{ MEDIASTACK_MARQUEE_ZIP = 'D:\...\Marquee-windows-x64.zip' }   environment for the installer
+#   -Extra '--update'                                                    more command-line options
+param([string] $Exe = "$PSScriptRoot\..\dist\MediaStackSetup.exe", [string] $Root = 'D:\StackTest', [int] $Port = 8599,
+      [hashtable] $Env = @{}, [string] $Extra = '')
 $ErrorActionPreference = 'Stop'
 $fixture = "$PSScriptRoot\test-install.json"
 if (-not (Test-Path $fixture)) {
@@ -13,8 +16,16 @@ if (-not (Test-Path $fixture)) {
 }
 $t = Get-Content $fixture -Raw | ConvertFrom-Json
 $exePath = (Resolve-Path $Exe).Path
-$arg = "--root `"$Root`" --port-offset 20000 --name `"Media Stack Test`" --no-browser --port $Port --token $($t.token)"
-$action = New-ScheduledTaskAction -Execute $exePath -Argument $arg -WorkingDirectory (Split-Path $exePath)
+$arg = "--root `"$Root`" --port-offset 20000 --name `"Media Stack Test`" --no-browser --port $Port --token $($t.token) $Extra"
+if ($Env.Count -gt 0) {
+    # Task Scheduler can't set environment variables: start the installer from a hidden PowerShell that does.
+    $set = ($Env.GetEnumerator() | ForEach-Object { "`$env:$($_.Key) = '$($_.Value -replace "'", "''")'" }) -join '; '
+    $cmd = "$set; Start-Process -FilePath '$exePath' -ArgumentList '$($arg -replace "'", "''")' -WorkingDirectory '$(Split-Path $exePath)'"
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $enc"
+} else {
+    $action = New-ScheduledTaskAction -Execute $exePath -Argument $arg -WorkingDirectory (Split-Path $exePath)
+}
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 8)
 Register-ScheduledTask -TaskName 'MediaStackSetup-Test' -Action $action -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName 'MediaStackSetup-Test'
