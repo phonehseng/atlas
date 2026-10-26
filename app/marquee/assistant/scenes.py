@@ -233,7 +233,7 @@ def _frame_for(app, item, t, w=448):
         return r.data
     from . import frame
     path = (item.get("MediaSources") or [{}])[0].get("Path") or item.get("Path")
-    return frame.from_file(path, t, w)
+    return frame.from_file(path, t, w, hdr=frame.is_hdr(item))
 
 
 def verify(app, item, text, cands, sub_hits, end=None):

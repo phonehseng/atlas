@@ -41,18 +41,32 @@ def from_mpv(m, width=WIDTH):
             pass
 
 
-def from_file(path, t, width=WIDTH):
-    """A frame of a file at t seconds through ffmpeg (when the player can't give one)."""
+TONEMAP = ("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,"
+           "zscale=t=bt709:m=bt709:r=tv,format=yuv420p")
+
+
+def is_hdr(item):
+    """Does the item's video carry HDR (PQ/HLG, Dolby Vision)? Its frames need tone mapping to look right."""
+    v = next((s for s in (item.get("MediaSources") or [{}])[0].get("MediaStreams") or [] if s.get("Type") == "Video"), {})
+    return (v.get("VideoRangeType") or v.get("VideoRange") or "SDR").upper() not in ("SDR", "UNKNOWN", "")
+
+
+def from_file(path, t, width=WIDTH, hdr=False):
+    """A frame of a file at t seconds through ffmpeg (when the player can't give one); HDR is tone mapped."""
     from ..index import deps
     ff = deps.find_ffmpeg()
     if not ff:
         raise RuntimeError("ffmpeg not found")
-    r = subprocess.run([ff, "-v", "error", "-ss", f"{max(0, t):.2f}", "-i", path, "-frames:v", "1",
-                        "-vf", f"scale={width}:-2", "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "pipe:1"],
-                       capture_output=True, timeout=30, creationflags=0x08000000)
-    if r.returncode or not r.stdout:
-        raise RuntimeError("couldn't read a frame: " + r.stderr.decode(errors="replace")[-200:])
-    return r.stdout
+    chains = ([f"scale={width}:-2:flags=bicubic,{TONEMAP}"] if hdr else []) + [f"scale={width}:-2"]
+    err = b""
+    for vf in chains:  # an ffmpeg without zscale: the plain frame
+        r = subprocess.run([ff, "-v", "error", "-ss", f"{max(0, t):.2f}", "-i", path, "-frames:v", "1",
+                            "-vf", vf, "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "pipe:1"],
+                           capture_output=True, timeout=30, creationflags=0x08000000)
+        if not r.returncode and r.stdout:
+            return r.stdout
+        err = r.stderr
+    raise RuntimeError("couldn't read a frame: " + err.decode(errors="replace")[-200:])
 
 
 def grab(player, width=WIDTH):

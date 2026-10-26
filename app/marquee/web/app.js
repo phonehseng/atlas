@@ -2709,7 +2709,7 @@ function onConnection(d) {
 /* ================================================================== "Up next" (credits roll) */
 /* The video shrinks into the bottom-right tile; this page sits behind it: the next pick's hero, the assistant's
    comment (fades in when it's ready), more picks with reasons. Enter plays next, Esc/B goes back to the credits. */
-const UN = { open: false, id: null, p: null, next: null, timer: 0, ends: 0, local: null, atlas: null };
+const UN = { open: false, id: null, p: null, next: null, timer: 0, ends: 0, local: null, atlas: null, moments: null };
 async function fetchEnding(id) {
   // The assistant's comment and picks; without it (not installed, or failing) Classic mode's prepared ones.
   for (const url of [`/api/assistant/ending/${encodeURIComponent(id)}`, `/api/classic/ending/${encodeURIComponent(id)}`]) {
@@ -2724,7 +2724,7 @@ async function fetchEnding(id) {
 }
 async function openUpNext(p) {
   if (!p.item_id) return;
-  UN.open = true; UN.id = p.item_id; UN.p = p; UN.local = null; UN.atlas = null; UN.next = null;
+  UN.open = true; UN.id = p.item_id; UN.p = p; UN.local = null; UN.atlas = null; UN.next = null; UN.moments = null;
   stopHero();
   closePop(true);
   let el = $('#upnext');
@@ -2740,6 +2740,32 @@ async function openUpNext(p) {
   UN.local = local; UN.atlas = atlas;
   drawUpNext();
   pollEnding(p.item_id, 0);
+  loadMoments(p.item_id);
+}
+/* Key moments of what was just watched (frames from the file, made while the credits approached): click = replay. */
+async function loadMoments(id) {
+  let m = null;
+  try { m = await api(`/api/assistant/moments/${encodeURIComponent(id)}`); } catch (e) { return; }
+  if (!UN.open || UN.id !== id || !m || !m.moments || !m.moments.length) return;
+  UN.moments = m.moments;
+  drawMoments();
+}
+function drawMoments() {
+  const box = $('#un-moments');
+  if (!box) return;
+  const ms = UN.moments || [];
+  box.hidden = !ms.length;
+  if (!ms.length) return;
+  box.innerHTML = `<div class="un-picks-head">Moments</div><div class="un-moments-row">${ms.map((m, k) => `
+    <button class="un-moment" style="--i:${k}" data-action="upnext-moment" data-t="${+m.t || 0}" aria-label="Play from ${esc(m.label)}: ${esc(m.caption || '')}">
+      <span class="um-img"><img src="${esc(m.img)}" alt="" loading="lazy"><span class="play-glyph">${icon('play')}</span></span>
+      <span class="um-txt"><b>${esc(m.label)}</b> ${esc(m.caption || '')}</span></button>`).join('')}</div>`;
+}
+function upNextMoment(t) {
+  const id = UN.id;
+  if (!id) return;
+  closeUpNext();
+  play(id, Math.max(0, +t || 0));
 }
 /* The comment normally arrives as the "atlas-ending" event; ask again now and then in case it was missed. */
 async function pollEnding(id, n) {
@@ -2788,9 +2814,11 @@ function drawUpNext() {
         <button class="btn on-dark" data-action="upnext-full">${icon('film')} Keep watching credits</button>
         <button class="btn on-dark" data-action="upnext-home">Home</button></div>
       <div class="un-atlas glass" id="un-atlas" hidden></div>
+      <div class="un-moments" id="un-moments" hidden></div>
       ${picks.some(x => !hero || (x.card.play_id || x.card.id) !== (hero.play_id || hero.id)) ? `<div class="un-picks-head">More for you</div><div class="un-picks">${picks.filter(x => !hero || (x.card.play_id || x.card.id) !== (hero.play_id || hero.id)).slice(0, 8).map((x, k) => unPick(x, k)).join('')}</div>` : ''}
     </div>`;
   drawAtlasComment();
+  drawMoments();
   clearInterval(UN.timer);
   if (auto) {
     const tick = () => {
@@ -2842,6 +2870,7 @@ function onAtlasEnding(d) {
   const hadPicks = !!(UN.atlas && UN.atlas.picks && UN.atlas.picks.length);
   UN.atlas = d;
   if (!hadPicks && d.picks && d.picks.length) drawUpNext(); else drawAtlasComment();
+  if (d.state === 'ready' && !(UN.moments && UN.moments.length)) loadMoments(UN.id);
 }
 async function upNextPlay() {
   const n = UN.next;
@@ -3115,6 +3144,7 @@ document.addEventListener('click', e => {
       case 'upnext-play': return upNextPlay();
       case 'upnext-full': return upNextFull();
       case 'upnext-home': return upNextHome();
+      case 'upnext-moment': return upNextMoment(actEl.dataset.t);
       case 'atlas-close': return atlasToast({ state: 'clear', id: ATL.id });
       case 'share-close': return closeShareSheet();
       case 'row-l': case 'row-r': {

@@ -180,6 +180,33 @@ def sdh_fetch_now(item_id):
     return _ok(**sdh_fetch.fetch(server.APP, server.APP.jf.item(item_id), why="asked"))
 
 
+@bp.get("/api/assistant/moments/<path:item_id>/<int:n>.jpg")
+def moment_image(item_id, n):
+    from flask import send_file
+    from . import moments
+    f = moments.image_path(item_id, n)
+    if not f:
+        return _fail("no such moment", 404)
+    r = send_file(str(f), mimetype="image/jpeg")
+    r.headers["Cache-Control"] = "max-age=86400"
+    return r
+
+
+@bp.get("/api/assistant/moments/<path:item_id>")
+def moments_list(item_id):
+    """Key moments of a title (frames from the file + captions), as built in the prepare-ahead window. Never built
+    here while something plays; ?build=1 builds them now otherwise."""
+    from .. import server
+    from . import moments
+    got = moments.cached(item_id)
+    if got:
+        return _ok(moments=got["moments"])
+    app = server.APP
+    if request.args.get("build") and not getattr(getattr(app, "player", None), "playing", False):
+        return _ok(moments=moments.build(app, app.jf.item(item_id)))
+    return _ok(moments=[])
+
+
 @bp.post("/api/assistant/scene/choose")
 def scene_choose():
     n = int((request.get_json(force=True, silent=True) or {}).get("n") or 0)
@@ -290,6 +317,8 @@ def init(app):
     except Exception:
         pass
     threading.Thread(target=_sdh_watch, args=(app,), daemon=True).start()
+    from .watched import Tracker
+    threading.Thread(target=Tracker(app).run, daemon=True).start()  # what's really watched (whole-story comments)
     try:
         hook_player(app)
     except Exception as e:

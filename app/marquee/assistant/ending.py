@@ -46,6 +46,7 @@ class Job:
 
     def public(self):
         return {"item_id": self.item_id, "state": self.state, "thinking": self.state == "pending",
+                "whole": bool(self.notes.get("whole")), "moments": self.notes.get("moments", 0),
                 "comment": self.comment, "picks": self.picks, "credits_at": self.credits_at}
 
 
@@ -123,6 +124,23 @@ def _work(app, job):
         except Exception as e:
             print("ending subtitles failed:", e)
         job.notes["dialogue_chars"] = len(dialogue)
+        whole = None
+        try:  # watched (nearly) all of it: comment on the whole story, not just the last minutes
+            from . import watched
+            cov = watched.coverage(item["Id"], (item.get("RunTimeTicks") or 0) / TICKS, until=job.credits_at)
+            job.notes["watched"] = round(cov, 2)
+            if cov >= WHOLE and not getattr(job, "late", False) and not job.cancelled:
+                whole = whole_story(app, item, job.credits_at)
+                job.notes["whole"] = bool(whole)
+                job.notes["season_context"] = bool(whole and whole.get("season"))
+        except Exception as e:
+            print("whole-story outline failed:", e)
+        try:  # the moments for the Up-next screen (frames from the file), whatever was watched
+            if not getattr(job, "late", False) and not job.cancelled:
+                from . import moments
+                job.notes["moments"] = len(moments.build(app, item, 5, job.credits_at))
+        except Exception as e:
+            print("moments failed:", e)
         forbidden = future_names(app, item, job.picks)
         snippets = []
         if web_search_on() and not job.cancelled:
@@ -136,7 +154,9 @@ def _work(app, job):
         if job.cancelled:
             return
         try:
-            if not deadline or time.time() < deadline - 12:
+            if whole:  # one vision call over a few key moments and the final shot
+                scene = _look_at_story(app, item, job.credits_at)
+            elif not deadline or time.time() < deadline - 12:
                 scene = _look_at_end(item, job.credits_at)
         except Exception as e:
             print("ending frame failed:", e)
@@ -145,10 +165,10 @@ def _work(app, job):
             return
         try:
             budget = max(5, deadline - time.time() - 1) if deadline else 60  # prepared ahead: more time
-            comment, whys = _comment(item, dialogue, scene, job.picks, snippets, forbidden, budget)
+            comment, whys = _comment(item, dialogue, scene, job.picks, snippets, forbidden, budget, whole)
             if comment and mentions_future(comment, forbidden):
                 job.notes["regenerated"] = True  # touched on what comes next: again, from local data only
-                comment, whys = _comment(item, dialogue, scene, job.picks, None, forbidden, budget)
+                comment, whys = _comment(item, dialogue, scene, job.picks, None, forbidden, budget, whole)
                 if comment and mentions_future(comment, forbidden):
                     comment = None
             job.comment = comment
@@ -380,6 +400,75 @@ def _vision_loaded():
         return None
 
 
+WHOLE = 0.8   # share of the runtime really played for a whole-story comment
+
+
+def _outline(stretches, credits_at=None, limit=3000):
+    from .scene_search import clock
+    """The story by time from the stretch summaries, cut to fit (the last stretches are kept whole)."""
+    parts = [p for p in stretches if not credits_at or p["start"] < credits_at]
+    lines = [f"[{clock(p['start'])}] {p['summary']}" for p in parts]
+    if sum(len(x) + 1 for x in lines) <= limit:
+        return "\n".join(lines)
+    tail = lines[-4:]
+    head = lines[:-4]
+    room = limit - sum(len(x) + 1 for x in tail)
+    step = 1
+    while sum(len(x) + 1 for x in head[::step]) > room and step < len(head):
+        step += 1
+    return "\n".join(head[::step] + tail)
+
+
+def whole_story(app, item, credits_at=None):
+    """{"outline", "season"?} for a title watched (nearly) all the way: the whole plot from the story stretches
+    (SDH subtitles preferred; built now if missing, at low priority) and, for an episode, the season so far."""
+    from . import scene_search, watched
+    d = scene_search.summaries(app, item, build=True, workers=2)
+    if not d or not d.get("stretches"):
+        return None
+    out = {"outline": _outline(d["stretches"], credits_at)}
+    if item.get("Type") == "Episode" and item.get("SeriesId"):
+        try:
+            jf = app.jf
+            eps = jf.get(f"/Shows/{item['SeriesId']}/Episodes", userId=jf.user, Fields="RunTimeTicks,Path,MediaSources",
+                         seasonId=item.get("SeasonId") or None).get("Items", [])
+            earlier = [e for e in eps if e.get("ParentIndexNumber") == item.get("ParentIndexNumber")
+                       and (e.get("IndexNumber") or 0) < (item.get("IndexNumber") or 0)]
+            lines = []
+            for e in earlier[-6:]:
+                if watched.coverage(e["Id"], (e.get("RunTimeTicks") or 0) / TICKS) < 0.5:
+                    continue
+                cues = scene_search.search_cues(app, e)
+                got = scene_search._load(e, cues) if cues else None
+                if got and got.get("stretches"):
+                    st = got["stretches"]
+                    pick = [st[0]] + ([st[len(st) // 2]] if len(st) > 2 else []) + [st[-1]]
+                    lines.append(f"E{e.get('IndexNumber')} '{e.get('Name')}': " + " ".join(p["summary"][:110] for p in pick))
+            if lines:
+                out["season"] = "\n".join(lines)[:1400]
+        except Exception as e:
+            print("season context failed:", e)
+    return out
+
+
+def _look_at_story(app, item, credits_at):
+    """One vision call: a few key moments and the final shot -> two sentences about what they show."""
+    from . import frame, moments
+    path = (item.get("MediaSources") or [{}])[0].get("Path") or item.get("Path")
+    if not credits_at or not path or not os.path.exists(path) or not vision.available():
+        return None
+    imgs = []
+    for m in (moments.cached(item["Id"]) or {}).get("moments", [])[:4]:
+        f = moments.image_path(item["Id"], m["n"])
+        if f:
+            imgs.append(f.read_bytes())
+    imgs.append(frame.from_file(path, max(0, credits_at - 25), width=448, hdr=frame.is_hdr(item)))
+    text, _ms, _ = vision.ask(f"These {len(imgs)} frames are from across a film, in order; the last one is its final "
+                              "shot. In two short sentences, what do they show about the story (people, places, "
+                              "mood, how it ends)?", imgs, max_tokens=120, timeout=90)
+    return re.sub(r"\s+", " ", text).strip() or None
+
+
 def _look_at_end(item, credits_at):
     if not credits_at or not _vision_loaded():
         return None  # loading a vision model now would cost more than it's worth
@@ -387,7 +476,7 @@ def _look_at_end(item, credits_at):
     if not path or not os.path.exists(path):
         return None
     from . import frame
-    jpeg = frame.from_file(path, max(0, credits_at - 25), width=512)
+    jpeg = frame.from_file(path, max(0, credits_at - 25), width=512, hdr=frame.is_hdr(item))
     text, _ms, _ = vision.ask("Describe this final scene of a film in one short sentence.", [jpeg], max_tokens=50,
                               timeout=20)
     return text.strip() or None
@@ -508,7 +597,7 @@ def _json_reply(text):
     return {"comment": text}
 
 
-def _comment(item, dialogue, scene, picks_, snippets=None, forbidden=(), timeout=25):
+def _comment(item, dialogue, scene, picks_, snippets=None, forbidden=(), timeout=25, whole=None):
     if not llm.available():
         return None, {}
     about = item.get("Overview") or ""
@@ -519,8 +608,12 @@ def _comment(item, dialogue, scene, picks_, snippets=None, forbidden=(), timeout
         lines.append(f"Tagline: {tagline}")
     if about:
         lines.append(f"About it: {about[:500]}")
+    if whole and whole.get("season"):
+        lines.append(f"Season so far (episodes they watched):\n{whole['season']}")
+    if whole:
+        lines.append(f"The whole story, by time (they watched all of it):\n{whole['outline']}")
     if scene:
-        lines.append(f"Final shot: {scene}")
+        lines.append(("What frames across it show: " if whole else "Final shot: ") + scene)
     if dialogue:
         lines.append(f"Dialogue near the end: {dialogue}")
     if snippets:
@@ -528,13 +621,17 @@ def _comment(item, dialogue, scene, picks_, snippets=None, forbidden=(), timeout
     if sims:
         lines.append("Similar picks (number: title [genres]): " +
                      "; ".join(f"{p['n']}: {p['title']} [{', '.join(p.get('genres') or [])}]" for p in sims))
-    system = ("You comment on the ending a viewer just watched, like a friend on the couch: 1-2 short warm sentences "
-              "reacting to how it ended (spoilers about THIS title are fine). Say nothing about future episodes, "
+    react = ("2-3 short warm sentences about the whole thing they just watched: a character arc or two, what it "
+             "built up to and how the ending paid it off (name characters and moments from the outline)"
+             if whole else "1-2 short warm sentences reacting to how it ended")
+    system = ("You comment on the ending a viewer just watched, like a friend on the couch: " + react + " (spoilers "
+              "about THIS title are fine). Say nothing about future episodes, "
               "sequels, later seasons or what happens next, and don't hint at any pick's plot. For each similar pick "
               "give a short positive reason (max 8 words) why someone who enjoyed this would like it, based only on "
               'its genre or premise. Reply JSON only: {"comment": "...", "why": {"<number>": "..."}}')
     text, _ms, _ = llm.complete([{"role": "system", "content": system}, {"role": "user", "content": "\n".join(lines)}],
-                                max_tokens=220, temperature=0.6, timeout=timeout, json_mode=True)
+                                max_tokens=300 if whole else 220, temperature=0.4 if whole else 0.6, timeout=timeout,
+                                json_mode=True)
     data = _json_reply(text)
     comment = re.sub(r"\s+", " ", str(data.get("comment") or "")).strip() or None
     whys = {str(k): str(v).strip() for k, v in (data.get("why") or {}).items()

@@ -999,6 +999,16 @@ a.r-chip:hover { transform: translateY(-2px); background: var(--btn-glass-hover)
 .un-pick .card .label { color: #fff; }
 .un-pick .why { margin-top: 6px; padding: 6px 10px; border-radius: 12px; font-size: 12.5px; line-height: 1.35; color: #ffffffd9; background: #ffffff14; border: 1px solid #ffffff26; box-shadow: none; }
 .un-pick .why::before { content: "✦ "; color: var(--orange); }
+.un-moments { width: calc(100% - min(34vw, 520px)); }
+.un-moments-row { display: flex; gap: 14px; overflow-x: auto; padding: 6px 2px 4px; scrollbar-width: none; }
+.un-moment { flex: none; width: 200px; display: flex; flex-direction: column; gap: 7px; text-align: left; color: #fff; background: none; border: 0; padding: 0; cursor: pointer; animation: pop-in .6s var(--spring) both; animation-delay: calc(var(--i) * 60ms + .3s); }
+.um-img { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #ffffff14; border: 1px solid #ffffff26; box-shadow: 0 10px 28px #0006; transition: transform .35s var(--spring), box-shadow .35s var(--ease); }
+.um-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.um-img .play-glyph { position: absolute; inset: auto 10px 10px auto; opacity: 0; transform: scale(.8); transition: opacity .25s var(--ease), transform .35s var(--spring); }
+.un-moment:hover .um-img, .un-moment:focus-visible .um-img { transform: translateY(-3px) scale(1.03); box-shadow: 0 16px 36px #0008; }
+.un-moment:hover .play-glyph, .un-moment:focus-visible .play-glyph { opacity: 1; transform: none; }
+.um-txt { font-size: 12.5px; line-height: 1.35; color: #ffffffd9; }
+.um-txt b { color: var(--orange); font-weight: 700; margin-right: 4px; font-variant-numeric: tabular-nums; }
 
 /* Ask Atlas toast */
 .atlas-toast { position: fixed; z-index: 92; left: 50%; top: 86px; width: max-content; max-width: min(620px, calc(100% - 32px)); border-radius: 22px; padding: 14px 18px 16px; color: var(--ink);
