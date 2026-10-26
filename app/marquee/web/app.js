@@ -1162,7 +1162,7 @@ async function openDetails(id, opts = {}) {
   if (seed && (seed.type === 'Episode' || seed.type === 'Season') && seed.series_id) return openDetails(seed.series_id, { season: seed.season, focus: seed.type === 'Episode' ? seed.id : null, ...opts });
   const { seq, fresh } = beginDetails('item', id, opts);
   const box = $('#modal-box');
-  if (!opts.refresh) { box.innerHTML = dxShell(seed ? vmItem(seed) : null); if (fresh) flyIn(opts.from, seed); }
+  if (!opts.refresh) { box.innerHTML = dxShell(seed ? vmItem(seed) : null); if (fresh) flyIn(opts.from); }
   let item;
   try { item = (await api(`/api/item/${encodeURIComponent(id)}`)).item; }
   catch (e) { if (D.seq === seq) $('.dx-body', box).innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -1202,7 +1202,7 @@ async function openTmdb(key, opts = {}) {
   const box = $('#modal-box');
   const sv = seed ? { kind: 'tmdb', key, id: +id, type: type === 'tv' ? 'Series' : 'Movie', title: seed.title, year: seed.year, rating: seed.rating,
     genres: seed.genres || [], overview: seed.overview, backdrop: seed.backdrop, poster: seed.poster, status: seed.status, mlKey: key, media: {} } : null;
-  if (!opts.refresh) { box.innerHTML = dxShell(sv); if (fresh) flyIn(opts.from, sv); }
+  if (!opts.refresh) { box.innerHTML = dxShell(sv); if (fresh) flyIn(opts.from); }
   let d;
   try { d = await api(`/api/tmdb/${type}/${id}`); }
   catch (e) { if (D.seq === seq) $('.dx-body', box).innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -1726,34 +1726,44 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* --- shared-element open: the poster flies up into the hero while the page fades in */
-function flyIn(fromEl, seed) {
+function flyIn(fromEl) {
+  /* Opening a title: the page itself grows out of the poster you clicked (its corner of the screen is the
+     transform origin) while the scrim fades in; the poster dips as if pressed. No oversized copy of the artwork:
+     the real page is visible from the first frame, so nothing big sits in the middle while it loads. */
   const modal = $('#modal-box');
-  if (!fromEl || reduced.matches || !document.contains(fromEl)) return;
-  const media = fromEl.closest('.card') ? $('.media', fromEl.closest('.card')) : fromEl;
-  const img = media && $('img.loaded', media);
-  if (!media) return;
-  const C = media.getBoundingClientRect();
-  const hero = $('.dx-hero', modal);
-  const T = { left: modal.offsetLeft, top: modal.offsetTop - layers.modal.scrollTop, width: modal.offsetWidth, height: hero ? hero.offsetHeight : modal.offsetWidth * 0.46 };
-  if (!C.width || !T.width) return;
+  if (reduced.matches) return;
+  const media = fromEl && document.contains(fromEl) ? (fromEl.closest('.card') ? $('.media', fromEl.closest('.card')) : fromEl) : null;
+  const M = modal.getBoundingClientRect();
+  let ox = '50%', oy = '120px', from = 'translateY(26px) scale(.94)';
+  if (media) {
+    const C = media.getBoundingClientRect();
+    if (C.width) {
+      ox = `${Math.round(C.left + C.width / 2 - M.left)}px`;
+      oy = `${Math.round(Math.max(0, Math.min(C.top + C.height / 2 - M.top, innerHeight)))}px`;
+      from = 'scale(.62)';
+      media.animate([{ transform: 'scale(1)' }, { transform: 'scale(.95)', offset: .35 }, { transform: 'scale(1)' }],
+        { duration: 420, easing: 'cubic-bezier(.3,.7,.3,1)' });
+    }
+  }
   layers.modal.classList.add('zoom');
-  const fly = document.createElement('div');
-  fly.className = 'fly';
-  const s = C.height / T.height, w = C.width / s, inset = Math.max(0, (T.width - w) / 2);
-  const bd = seed && seed.backdrop;
-  fly.style.cssText = `left:${T.left}px;top:${T.top}px;width:${T.width}px;height:${T.height}px`;
-  fly.innerHTML = `${bd ? `<img class="f-bd" src="${esc(bd)}" alt="">` : `<div class="f-bd" style="background:${grad(seed ? seed.title || seed.name : '')}"></div>`}
-    ${img ? `<img class="f-poster" src="${esc(img.currentSrc || img.src)}" alt="" style="width:${w}px;left:${inset}px">` : ''}`;
-  document.body.append(fly);
-  const dx = (C.left + C.width / 2) - (T.left + T.width / 2), dy = (C.top + C.height / 2) - (T.top + T.height / 2);
-  const r = 18 / s;
-  const dur = 560, ease = 'cubic-bezier(.2,.8,.2,1)';
-  fly.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${s})`, clipPath: `inset(0 ${inset}px round ${r}px)` },
-    { transform: 'none', clipPath: 'inset(0 0px round 28px)' }], { duration: dur, easing: ease, fill: 'forwards' });
-  const p = $('.f-poster', fly);
-  if (p) p.animate([{ opacity: 1 }, { opacity: 1, offset: 0.35 }, { opacity: 0 }], { duration: dur, easing: 'ease', fill: 'forwards' });
-  modal.animate([{ opacity: 0 }, { opacity: 0, offset: 0.55 }, { opacity: 1 }], { duration: dur + 80, easing: 'ease' });
-  setTimeout(() => { fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' }).onfinish = () => fly.remove(); layers.modal.classList.remove('zoom'); }, dur);
+  modal.style.transformOrigin = `${ox} ${oy}`;
+  const a = modal.animate([
+    { transform: from, opacity: 0, borderRadius: '22px' },
+    { opacity: 1, offset: .45 },
+    { transform: 'none', opacity: 1, borderRadius: getComputedStyle(modal).borderTopLeftRadius }],
+    { duration: 560, easing: 'cubic-bezier(.16,1,.3,1)' });
+  const done = () => { modal.style.transformOrigin = ''; layers.modal.classList.remove('zoom'); };
+  a.onfinish = done; a.oncancel = done;
+  // the hero settles in after the page: backdrop eases back from a slight zoom, the words follow one by one
+  const art = $('.dx-art', modal);
+  if (art) art.animate([{ transform: 'scale(1.12)', filter: 'brightness(.6)' }, { transform: 'scale(1)', filter: 'brightness(1)' }],
+    { duration: 900, easing: 'cubic-bezier(.16,1,.3,1)' });
+  $$('.dx-copy > *', modal).forEach((el, i) => el.animate(
+    [{ opacity: 0, transform: 'translateX(-22px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 620, delay: 140 + i * 70, easing: 'cubic-bezier(.16,1,.3,1)', fill: 'backwards' }));
+  const close = $('[data-action="close-modal"].icon-btn, .dx-close', modal);
+  if (close) close.animate([{ opacity: 0, transform: 'scale(.6) rotate(-90deg)' }, { opacity: 1, transform: 'none' }],
+    { duration: 520, delay: 260, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'backwards' });
 }
 
 /* --- people */
