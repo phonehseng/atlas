@@ -350,6 +350,9 @@ class Scenes:
         try:
             from .. import index
             st = index.touch(item["Id"], urgent=True) or {}
+            if st.get("state") == "installing":
+                found["installing"] = st.get("download_mb") or True
+                return None
             eta = st.get("eta")
             if eta is None and st.get("state") in ("queued", "starting"):
                 run = (item.get("RunTimeTicks") or 0) / 10_000_000
@@ -408,6 +411,11 @@ class Scenes:
             return None
         note = ""
         if not found["indexed"]:
+            name = item.get("SeriesName") or item.get("Name") or "this one"
+            if found.get("installing") and not found["cands"]:
+                mb = found["installing"] if isinstance(found["installing"], (int, float)) else None
+                return (f"Setting up scene search for the first time ({f'a one-time {mb} MB download' if mb else 'a one-time download'}), "
+                        f"then I'll scan {name}. Ask again in a few minutes.")
             if found["cands"]:
                 note = "Still scanning this one: found it from the dialogue. "
             elif found.get("eta"):
