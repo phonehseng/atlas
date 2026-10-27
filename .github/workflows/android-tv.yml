@@ -1,0 +1,104 @@
+# Builds the Android TV app (android-tv/) and, for a release tag, attaches Atlas-AndroidTV.apk to that release.
+# Signing: repository secrets ANDROID_KEYSTORE_B64 (the keystore, base64), ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD. A manual run without them is signed with a throwaway debug key.
+name: Android TV app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version name for this build (default 0.0.0-test)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-tv-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: android-tv
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; else v="${INPUT_VERSION:-0.0.0-test}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building Atlas for Android TV $v"
+
+      - name: Signing key
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release-key.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release-key.jks" >> "$GITHUB_ENV"
+            echo "Release key ready"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "::error::The ANDROID_KEYSTORE_B64 secret is missing: a release APK must be signed with the release key"
+            exit 1
+          else
+            echo "::warning::No release key: this test build is signed with a debug key"
+          fi
+
+      - name: Build
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle assembleRelease -PatlasVersion="${{ steps.ver.outputs.version }}" --no-daemon --stacktrace
+
+      - name: Check the signature
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Atlas-AndroidTV.apk"
+          rm -f "$RUNNER_TEMP/release-key.jks"
+          signer=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$signer" verify --print-certs "$GITHUB_WORKSPACE/Atlas-AndroidTV.apk" > "$RUNNER_TEMP/certs.txt"
+          grep -i -E "certificate (DN|SHA-256)" "$RUNNER_TEMP/certs.txt" || cat "$RUNNER_TEMP/certs.txt"
+          ls -l "$GITHUB_WORKSPACE/Atlas-AndroidTV.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Atlas-AndroidTV-${{ steps.ver.outputs.version }}
+          path: Atlas-AndroidTV.apk
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # the release itself is made by tools/release.ps1, maybe a little after the tag: wait for it
+          for i in $(seq 1 60); do
+            if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              gh release upload "$GITHUB_REF_NAME" "$GITHUB_WORKSPACE/Atlas-AndroidTV.apk" --repo "$GITHUB_REPOSITORY" --clobber
+              echo "Attached Atlas-AndroidTV.apk to $GITHUB_REF_NAME"
+              exit 0
+            fi
+            echo "Waiting for the release $GITHUB_REF_NAME ($i/60)"
+            sleep 30
+          done
+          echo "::error::No release $GITHUB_REF_NAME after 30 minutes; the APK is in this run's artifacts"
+          exit 1

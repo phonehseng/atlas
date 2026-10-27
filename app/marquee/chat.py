@@ -412,6 +412,7 @@ def _stream_llm(msgs, timeout=90):
             if r.status_code == 503 and p["kind"] == "builtin":
                 raise RuntimeError("The built-in AI is busy")
             r.raise_for_status()
+            r.encoding = "utf-8"  # SSE has no charset, so requests would guess Latin-1 and garble dashes
             got = False
             for raw in r.iter_lines(decode_unicode=True):
                 if not raw or not raw.startswith("data:"):

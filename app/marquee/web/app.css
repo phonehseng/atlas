@@ -1188,6 +1188,9 @@ a.r-chip:hover { transform: translateY(-2px); background: var(--btn-glass-hover)
 
 /* ------------------------------------------------------------------ Settings > Atlas Mobile */
 .mobile-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.tv-pair-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.tv-pair-row .input { width: 170px; height: 36px; font-size: 16px; letter-spacing: .12em; text-transform: uppercase; }
+.tv-code-out b { font-size: 18px; letter-spacing: .12em; color: var(--ink); }
 .mobile-hint { color: #b85d06; }
 .mobile-err { color: var(--rose); }
 :root[data-theme="dark"] .mobile-hint { color: #ffc28a; }

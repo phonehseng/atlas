@@ -9,6 +9,9 @@ Friends who share this PC over Tailscale can instead sign in with their own Jell
 password is checked against Jellyfin once (AuthenticateByName) and never stored; only the session token Jellyfin hands
 back is kept (DPAPI-sealed), so their watch progress can be written to their own Jellyfin account.
 
+TVs have no camera, so they pair with a short code instead: the TV shows one and the owner types it into Settings
+on the PC (or the PC shows one and it's typed on the TV). Either way the TV ends up with its own device cookie.
+
 Cookie value: "<device id>.<secret>"; only a SHA-256 of the secret is stored.
 """
 import hashlib
@@ -134,6 +137,10 @@ def use_clone_token(tok):
 # ------------------------------------------------------------------ devices
 def device_name(ua):
     ua = ua or ""
+    if "AtlasTV" in ua:  # the Android TV app (its WebView says which TV it is)
+        m = re.search(r"Android [\d.]+; ([^;)]+?)(?: Build|\))", ua)
+        model = (m.group(1).strip() if m else "")
+        return (model if model and model not in ("K", "wv") and len(model) < 30 else "Android TV") + " · TV app"
     if "iPhone" in ua:
         os_ = "iPhone"
     elif "iPad" in ua or ("Macintosh" in ua and "Mobile" in ua):
@@ -155,7 +162,7 @@ def device_name(ua):
     return f"{os_} · {br}" if br else os_
 
 
-def create_device(user, ua="", ip="", jf_token=None, name=None):
+def create_device(user, ua="", ip="", jf_token=None, name=None, client=None):
     """A new paired device. user = {"kind": "owner"} or {"kind": "jellyfin", "id", "name"}.
     Returns (cookie value, public dict)."""
     did = secrets.token_hex(8)
@@ -163,6 +170,8 @@ def create_device(user, ua="", ip="", jf_token=None, name=None):
     now = time.time()
     dev = {"id": did, "name": (name or device_name(ua))[:60], "ua": (ua or "")[:240], "created": now,
            "last_seen": now, "ip": ip, "user": user, "hash": _h(secret)}
+    if client:
+        dev["client"] = client
     if jf_token:
         dev["jf_token"] = settings._seal(jf_token)
     with _lock:
@@ -208,7 +217,7 @@ def public(dev):
     return {"id": dev["id"], "name": dev.get("name"), "created": dev.get("created"),
             "last_seen": max(dev.get("last_seen") or 0, dev.get("_seen") or 0), "ip": dev.get("ip"),
             "user": u.get("name") or ("You" if u.get("kind") == "owner" else ""),
-            "kind": u.get("kind", "owner"), "browser": device_name(dev.get("ua"))}
+            "kind": u.get("kind", "owner"), "browser": device_name(dev.get("ua")), "tv": dev.get("client") == "tv"}
 
 
 def devices():
@@ -250,3 +259,108 @@ def revoke_all():
 
 def is_owner(dev):
     return bool(dev) and (dev.get("user") or {}).get("kind", "owner") == "owner"
+
+
+# ------------------------------------------------------------------ TVs: short pairing codes
+# Kept in memory only: a code lives for 10 minutes, and a restart just means asking for a new one.
+TV_TTL = 600
+TV_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no 0/O or 1/I to mix up on a TV screen
+_tv_waiting = {}      # code -> {"rid": sha256 of the TV's request id, "created", "ip", "ua", "cookie", "device"}
+_tv_pc = {}           # sha256 of a code the PC showed -> expires
+
+
+def _tv_code():
+    return "".join(secrets.choice(TV_ALPHABET) for _ in range(6))
+
+
+def tv_norm(code):
+    """What someone typed -> the canonical code (upper case, no spaces or dashes)."""
+    return re.sub(r"[^A-Za-z0-9]", "", str(code or "")).upper()[:12]
+
+
+def _tv_gc(now):
+    for k in [k for k, v in _tv_waiting.items() if now - v["created"] > TV_TTL]:
+        _tv_waiting.pop(k, None)
+    for k in [k for k, v in _tv_pc.items() if v < now]:
+        _tv_pc.pop(k, None)
+
+
+def tv_request(ip="", ua=""):
+    """A TV asks to pair: -> (code to show, secret request id the TV polls with). None when that address already
+    has a few codes waiting (or too many TVs are waiting at once)."""
+    now = time.time()
+    with _lock:
+        _tv_gc(now)
+        if len(_tv_waiting) >= 30 or sum(1 for v in _tv_waiting.values() if v["ip"] == ip) >= 3:
+            return None
+        code = _tv_code()
+        while code in _tv_waiting:
+            code = _tv_code()
+        rid = secrets.token_urlsafe(32)
+        _tv_waiting[code] = {"rid": _h(rid), "created": now, "ip": ip, "ua": (ua or "")[:240], "cookie": None}
+    _tell("tv-waiting", {"id": "", "name": device_name(ua)})
+    return code, rid
+
+
+def tv_waiting():
+    """How many TVs are showing a code right now (Settings mentions it)."""
+    with _lock:
+        _tv_gc(time.time())
+        return sum(1 for v in _tv_waiting.values() if not v["cookie"])
+
+
+def tv_approve(code):
+    """The owner typed the TV's code on the PC: that TV becomes a paired device. -> public device or None."""
+    code = tv_norm(code)
+    with _lock:
+        _tv_gc(time.time())
+        req = _tv_waiting.get(code)
+        if not req or req["cookie"]:
+            return None
+        cookie, dev = create_device({"kind": "owner"}, req["ua"], req["ip"], client="tv",
+                                    name=_tv_name(req["ua"]))
+        req["cookie"], req["device"] = cookie, dev
+        return dev
+
+
+def tv_poll(rid):
+    """The TV checks whether its code was typed in. -> ("waiting"|"expired", None, None) or ("paired", cookie, dev);
+    the cookie is handed out once."""
+    if not rid or len(rid) > 100:
+        return "expired", None, None
+    h = _h(rid)
+    with _lock:
+        _tv_gc(time.time())
+        for code, req in list(_tv_waiting.items()):
+            if hmac.compare_digest(req["rid"], h):
+                if not req["cookie"]:
+                    return "waiting", None, None
+                _tv_waiting.pop(code, None)
+                return "paired", req["cookie"], req["device"]
+    return "expired", None, None
+
+
+def tv_pc_code():
+    """A code the PC shows, to type on the TV instead (one use, 10 minutes). -> (code, expires)."""
+    now = time.time()
+    code = _tv_code()
+    with _lock:
+        _tv_gc(now)
+        _tv_pc.clear()  # only the newest code works
+        _tv_pc[_h(code)] = now + TV_TTL
+    return code, now + TV_TTL
+
+
+def use_tv_pc_code(code):
+    """True (and the code is used up) when `code` is the one the PC is showing."""
+    code = tv_norm(code)
+    if len(code) != 6:
+        return False
+    with _lock:
+        _tv_gc(time.time())
+        return _tv_pc.pop(_h(code), None) is not None
+
+
+def _tv_name(ua):
+    name = device_name(ua)
+    return name if "TV" in name else name + " · TV"

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" class="tv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, initial-scale=1, user-scalable=no">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#070c1d">
+  <title>Atlas</title>
+  <link rel="icon" href="/r/icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="/r/tv.css">
+</head>
+<body>
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.4" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-back10" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 3.5v4h4"/></symbol>
+  <symbol id="i-fwd10" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3.5v4h-4"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="3.5"/><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M17 10.2a2.2 2.2 0 1 0 0 3.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19z"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="13" rx="3"/><path d="M8 21h8"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 3.5v4h4"/></symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5.5v13l9-6.5z" fill="currentColor"/><path d="M18 5.5v13"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 6v12l8-6zM13 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="i-bksp" viewBox="0 0 24 24"><path d="M8.5 5.5H20a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H8.5L2.5 12z"/><path d="m11.5 9.5 5 5M16.5 9.5l-5 5"/></symbol>
+  <symbol id="i-space" viewBox="0 0 24 24"><path d="M4 10v4h16v-4"/></symbol>
+  <symbol id="i-hd" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M6.5 9v6M10 9v6M6.5 12H10M13.5 9v6h1.8a3 3 0 0 0 0-6z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 16l-4-4 4-4M5 12h11"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+</defs></svg>
+
+<div id="bg" aria-hidden="true"><img id="bg-a" alt=""><img id="bg-b" alt=""><i class="shade"></i></div>
+
+<div id="app" hidden>
+  <nav id="rail" class="rail" aria-label="Main">
+    <div class="brand"><img src="/r/icons/icon.svg" alt="" width="44" height="44"><span>atlas<b>.</b></span></div>
+    <div class="rail-items" data-vl>
+      <button class="f ri" data-go="search" data-k="rail:search"><svg><use href="#i-search"/></svg><span>Search</span></button>
+      <button class="f ri" data-go="home" data-k="rail:home"><svg><use href="#i-home"/></svg><span>Home</span></button>
+      <button class="f ri" data-go="movies" data-k="rail:movies"><svg><use href="#i-film"/></svg><span>Movies</span></button>
+      <button class="f ri" data-go="shows" data-k="rail:shows"><svg><use href="#i-tv"/></svg><span>Shows</span></button>
+      <button class="f ri" data-go="anime" data-k="rail:anime"><svg><use href="#i-star"/></svg><span>Anime</span></button>
+      <button class="f ri" data-go="mylist" data-k="rail:mylist"><svg><use href="#i-check"/></svg><span>My List</span></button>
+      <button class="f ri" data-go="settings" data-k="rail:settings"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
+    </div>
+  </nav>
+  <main id="views"></main>
+</div>
+
+<section id="pair" class="pair" hidden>
+  <div class="brand big"><img src="/r/icons/icon.svg" alt="" width="72" height="72"><span>atlas<b>.</b></span></div>
+  <h1>Pair this TV with your PC</h1>
+  <div class="pair-cards">
+    <div class="pcard glass">
+      <span class="eyebrow">On your PC</span>
+      <p>Open Atlas › <b>Settings</b> › <b>Phone &amp; casting</b>, and type this code under <b>Pair a TV</b>:</p>
+      <div id="pair-code" class="pair-code">· · ·</div>
+      <p class="hint" id="pair-code-hint">Getting a code…</p>
+    </div>
+    <div class="pcard glass">
+      <span class="eyebrow">Or the other way round</span>
+      <p>Click <b>Show a code for the TV</b> in the same place, then type it here:</p>
+      <div id="pair-slots" class="slots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="pair-keys" class="pkeys"></div>
+      <p class="hint err" id="pair-err"></p>
+    </div>
+  </div>
+</section>
+
+<section id="player" hidden>
+  <video id="pv" playsinline preload="auto"></video>
+  <div id="p-subs" class="p-subs"></div>
+  <div id="p-spin" class="spin"></div>
+  <div id="p-flash" class="p-flash"><svg><use href="#i-play"/></svg><span></span></div>
+  <div class="p-top"><h2 id="p-title"></h2><p id="p-sub"></p></div>
+  <div class="p-bottom">
+    <div class="p-bar"><i id="p-buf"></i><i id="p-play"></i><b id="p-knob"><span id="p-tip"></span></b><div id="p-marks"></div></div>
+    <div class="p-times"><span id="p-pos">0:00</span><span id="p-badge" class="p-badge"></span><span id="p-dur">0:00</span></div>
+    <div class="p-hints"><span><kbd>OK</kbd> Play / pause</span><span><kbd>◀ ▶</kbd> 10 seconds</span><span><kbd>▼</kbd> Subtitles &amp; audio</span><span><kbd>Back</kbd> Exit</span></div>
+  </div>
+  <button id="p-skip" class="p-skip glass" hidden><svg><use href="#i-skip"/></svg><span>Skip intro</span></button>
+  <div id="p-next" class="p-next glass" hidden>
+    <img id="p-next-img" alt="">
+    <div><span class="eyebrow">Next episode <b id="p-next-count"></b></span><b id="p-next-title"></b><span class="hint">OK to play now · Back to keep watching</span></div>
+  </div>
+  <div id="p-panel" class="p-panel glass" hidden>
+    <div class="col"><h3><svg><use href="#i-cc"/></svg>Subtitles</h3><div id="p-subs-list" class="opts" data-vl></div></div>
+    <div class="col"><h3><svg><use href="#i-audio"/></svg>Audio</h3><div id="p-audio-list" class="opts" data-vl></div></div>
+    <div class="col"><h3><svg><use href="#i-hd"/></svg>Quality</h3><div id="p-q-list" class="opts" data-vl></div></div>
+  </div>
+  <div id="p-err" class="p-err glass" hidden>
+    <h3>Can’t play this</h3><p id="p-err-msg"></p>
+    <div class="btns"><button class="f btn" id="p-err-retry" data-k="err:retry">Try again</button><button class="f btn ghost" id="p-err-close" data-k="err:close">Back</button></div>
+  </div>
+</section>
+
+<div id="toast" class="toast glass" role="status" aria-live="polite"></div>
+<script src="/r/vendor/hls.min.js"></script>
+<script src="/r/tv.js"></script>
+</body>
+</html>

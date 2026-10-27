@@ -2728,7 +2728,7 @@ async function loadAudioDevices() {
 
 /* Settings > Mobile: Atlas Mobile (the phone app on this PC's server: watch on the phone, or use it as a remote).
    Talks to /api/mobile* (marquee/remote.py). Replaces the old "Phone remote" panel. */
-const REM = { data: null, idx: 0, seq: 0, pairVersion: null };
+const REM = { data: null, idx: 0, seq: 0, pairVersion: null, tvCode: null };
 function remotePanel(s) {
   return `<section class="panel glass setx-card mobile-panel" data-card="mobile"><h2>${icon('phone')} Atlas Mobile</h2>
       <p>Your library on your phone: watch anything from this PC, or use the phone as a remote for the player here.</p>
@@ -2766,6 +2766,8 @@ function drawRemote() {
   const bind = S.settings.mobile_bind || d.bind || 'tailscale';
   const maxS = S.settings.mobile_max_streams || d.max_streams || 2;
   const qual = S.settings.mobile_quality || d.quality || 'auto';
+  const tvTyped = $('#tv-code') ? $('#tv-code').value : '', tvFocus = document.activeElement && document.activeElement.id === 'tv-code';
+  const tvc = REM.tvCode && REM.tvCode.expires * 1000 > Date.now() ? REM.tvCode : null;
   box.innerHTML = `<div class="remote-card glass">
       ${a.qr ? `<img class="qr" src="${esc(a.qr)}" alt="QR code to pair your phone">` : '<div class="qr"></div>'}
       <div class="remote-info">
@@ -2776,6 +2778,11 @@ function drawRemote() {
         <div class="mobile-btns"><button class="btn small ghost" data-action="mobile-pair">${icon('restart', 16)} New pairing code</button>
           <button class="btn small ghost" data-action="remote-reset">${icon('logout', 16)} Sign out all phones</button></div>
       </div></div>
+    <div class="set stack tv-pair"><div class="lbl"><b>Pair a TV</b><span>Open Atlas on the TV (the Android TV app, or ${esc((a.address || '') + '/tv')} in its browser) and type the code it shows.${d.tv_waiting ? ' <b>A TV is waiting for its code.</b>' : ''}</span></div>
+      <div class="tv-pair-row"><input class="input" id="tv-code" maxlength="9" placeholder="Code on the TV" autocomplete="off" spellcheck="false" aria-label="Code shown on the TV">
+        <button class="btn small" data-action="mobile-tv-pair">Pair TV</button>
+        <button class="btn small ghost" data-action="mobile-tv-code">Show a code for the TV</button></div>
+      ${tvc ? `<p class="remote-steps tv-code-out">Or type <b data-selectable>${esc(tvc.code.slice(0, 3) + ' ' + tvc.code.slice(3))}</b> on the TV. It works once, for 10 minutes.</p>` : ''}</div>
     ${fw.checked && !fw.allowed ? `<div class="set mobile-fw"><div class="lbl"><b>Windows Firewall blocks phones on Tailscale</b><span>Allow Atlas through: one rule, private networks only, for Atlas and this port. Windows asks for permission.</span></div>
       <button class="btn small" data-action="mobile-firewall">Allow Atlas</button></div>` : ''}
     <div class="set stack"><div class="lbl"><b>Default phone quality</b><span>Each phone can change its own.</span></div>
@@ -2794,6 +2801,12 @@ function drawRemote() {
     ${streams.length ? `<div class="set stack"><div class="lbl"><b>Streaming now</b></div><ul class="mobile-list">${streams.map(x => `<li><div class="grow"><b>${esc((x.item && x.item.title) || 'Video')}</b>
       <span>${esc([x.device, STREAM_MODE[x.mode] || x.mode, x.quality, x.progress && x.progress.speed ? x.progress.speed + '×' : null, x.suspended ? 'paused' : null].filter(Boolean).join(' · '))}</span></div>
       <button class="stk-mini" data-action="mobile-stop" data-id="${esc(x.id)}">Stop</button></li>`).join('')}</ul></div>` : ''}`;
+  const tvIn = $('#tv-code');
+  if (tvIn) {
+    tvIn.value = tvTyped;
+    if (tvFocus) tvIn.focus();
+    tvIn.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const b = $('[data-action="mobile-tv-pair"]'); b && b.click(); } };
+  }
 }
 async function resetRemote(btn) {
   if (!btn.dataset.sure) {
@@ -2809,6 +2822,14 @@ async function mobileAction(btn) {
   const a = btn.dataset.action;
   try {
     if (a === 'mobile-pair') { await api('/api/mobile/pair', {}); toast('New pairing code ready', { icon: 'check' }); }
+    else if (a === 'mobile-tv-pair') {
+      const inp = $('#tv-code'), code = inp ? inp.value.trim() : '';
+      if (!code) { toast('Type the code your TV shows'); inp && inp.focus(); return; }
+      btn.disabled = true;
+      const r = await api('/api/mobile/tv/approve', { code });
+      if (inp) inp.value = '';
+      toast(`Paired ${r.device && r.device.name ? r.device.name : 'the TV'}`, { icon: 'check' });
+    } else if (a === 'mobile-tv-code') { const r = await api('/api/mobile/tv/code', {}); REM.tvCode = { code: r.code, expires: r.expires }; }
     else if (a === 'mobile-firewall') { btn.disabled = true; const r = await api('/api/mobile/firewall', {}); toast(r.message || 'Done', { icon: 'check' }); }
     else if (a === 'mobile-https') { btn.disabled = true; const r = await api('/api/mobile/https', { on: btn.dataset.on === '1' }); toast(r.message || 'Done', { ms: 7000 }); }
     else if (a === 'mobile-stop') { await api(`/api/mobile/streams/${encodeURIComponent(btn.dataset.id)}/stop`, {}); }

@@ -3,6 +3,10 @@
 A Netflix-style home theatre for your own films and shows, and one guided installer that builds the whole
 media server behind it.
 
+<p align="center">
+  <img src="docs/images/demo.gif" width="960" alt="Atlas: browsing Home, a poster preview, and a title page opening">
+</p>
+
 - **Atlas** (Windows): rows of posters instead of folders, previews that play when you rest on a poster, and a
   player that plays your files directly (4K HDR, every audio track, full anime subtitles) with nothing in between
   to buffer. Requests, recommendations, your phone and the server's health live in the same app.
@@ -19,6 +23,33 @@ shows up to 1080p), and if a request is stuck, Atlas tells you why and fixes wha
   as the dashboard (Atlas is Windows-only for now). *Preview: the Linux version is newer and less tested.*
 
 ## Atlas, the app
+
+<table>
+  <tr>
+    <td width="50%"><a href="docs/images/home.jpg"><img src="docs/images/home.jpg" alt="Home"></a><br><sub><b>Home</b>: a greeting, the hero and your rows</sub></td>
+    <td width="50%"><a href="docs/images/home-rows.jpg"><img src="docs/images/home-rows.jpg" alt="Rows of glass posters"></a><br><sub><b>Glass posters</b>: clear is yours, dark you can request</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/title.jpg"><img src="docs/images/title.jpg" alt="Title page with its preview playing"></a><br><sub><b>Title page</b>: the preview plays as it opens</sub></td>
+    <td><a href="docs/images/title-details.jpg"><img src="docs/images/title-details.jpg" alt="Is this for you, ratings and cast"></a><br><sub><b>"Is this for you?"</b>, IMDb and Rotten Tomatoes scores, cast</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/episodes.jpg"><img src="docs/images/episodes.jpg" alt="Seasons and episodes"></a><br><sub><b>Seasons and episodes</b>, with what's up next</sub></td>
+    <td><a href="docs/images/request.jpg"><img src="docs/images/request.jpg" alt="Request sheet with quality picker and size estimate"></a><br><sub><b>Requests</b>: pick a quality and see the size first</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/ask-atlas.jpg"><img src="docs/images/ask-atlas.jpg" alt="Ask Atlas chat"></a><br><sub><b>Ask Atlas</b>: recommendations from your library and Seerr</sub></td>
+    <td><a href="docs/images/player.jpg"><img src="docs/images/player.jpg" alt="The player and its settings menu"></a><br><sub><b>The player</b>: mpv with Atlas's own controls</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/mobile.jpg"><img src="docs/images/mobile.jpg" alt="Atlas Mobile"></a><br><sub><b>Atlas Mobile</b>: browse, stream or use it as a remote</sub></td>
+    <td><a href="docs/images/your-stack.jpg"><img src="docs/images/your-stack.jpg" alt="Your stack"></a><br><sub><b>Your stack</b>: every service's health, with Fix buttons</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/settings-search.jpg"><img src="docs/images/settings-search.jpg" alt="Settings search"></a><br><sub><b>Settings</b>, searchable</sub></td>
+    <td><a href="docs/images/first-run.jpg"><img src="docs/images/first-run.jpg" alt="First-run taste question"></a><br><sub><b>First launch</b>: "What do you love to watch?"</sub></td>
+  </tr>
+</table>
 
 **Browsing**
 - Home is rows, not folders: continue watching, next up, My List, because-you-watched, sequels and recommended

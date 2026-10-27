@@ -1,31 +1,31 @@
 {
     "installer":  {
-                      "version":  "1.4.1",
-                      "notes":  "Media Stack Setup 1.4.1: installs Marquee at its latest version and connects it to Bazarr.",
+                      "version":  "1.5.0",
+                      "notes":  "Media Stack Setup 1.5.0: installs Atlas (formerly Marquee) and moves an existing Marquee install over during Update my stack.",
                       "files":  {
                                     "linux-arm64":  {
                                                         "name":  "MediaStackSetup-linux-arm64",
-                                                        "url":  "https://github.com/phonehseng/marquee/releases/download/v1.4.5/MediaStackSetup-linux-arm64",
-                                                        "sha256":  "930f30505b5c6acc5d474ae1be68af5c8c32bd4e14f4d1fe6db4dd7a5b833daf",
+                                                        "url":  "https://github.com/phonehseng/atlas/releases/download/v1.6.0/MediaStackSetup-linux-arm64",
+                                                        "sha256":  "37dd491d93eeafb5b5f1772f1a91350b4adab1f30a9205647bd64e341e6a9bab",
                                                         "size":  10748064
                                                     },
                                     "linux-x64":  {
                                                       "name":  "MediaStackSetup-linux-x64",
-                                                      "url":  "https://github.com/phonehseng/marquee/releases/download/v1.4.5/MediaStackSetup-linux-x64",
-                                                      "sha256":  "bdd4025d17702e8d6360376afce36873823267f4b64c923a05bdf482ea930412",
-                                                      "size":  11587744
+                                                      "url":  "https://github.com/phonehseng/atlas/releases/download/v1.6.0/MediaStackSetup-linux-x64",
+                                                      "sha256":  "4d3114db519df1dc6bd2eb418ded8aca896a14b728894766ba762c2baa29da8b",
+                                                      "size":  11595936
                                                   },
                                     "windows-x64":  {
                                                         "name":  "MediaStackSetup.exe",
-                                                        "url":  "https://github.com/phonehseng/marquee/releases/download/v1.4.5/MediaStackSetup.exe",
-                                                        "sha256":  "742c26b8266afc3045f655ed855c9e73106239565162c1c82ce5184c5c556115",
-                                                        "size":  11999232
+                                                        "url":  "https://github.com/phonehseng/atlas/releases/download/v1.6.0/MediaStackSetup.exe",
+                                                        "sha256":  "f4875283f2cca88717c42a25fe03aa53ff211895e828e55bea52d597a876f362",
+                                                        "size":  12008448
                                                     }
                                 }
                   },
     "stack-assets":  {
-                         "version":  "1.4.1",
-                         "min_installer":  "1.4.1",
-                         "notes":  "Media Stack Setup 1.4.1: installs Marquee at its latest version and connects it to Bazarr."
+                         "version":  "1.5.0",
+                         "min_installer":  "1.5.0",
+                         "notes":  "Media Stack Setup 1.5.0: installs Atlas (formerly Marquee) and moves an existing Marquee install over during Update my stack."
                      }
 }

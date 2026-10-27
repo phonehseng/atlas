@@ -57,7 +57,7 @@ const KW = {
   builtin: 'ai built-in local model download offline', seerr: 'requests jellyseerr overseerr server address', seerr_form: 'requests seerr password connect login sign in',
   qbt_url: 'qbittorrent torrent downloads progress', autosort_after: 'sort downloads organise organize move', watch_folders: 'downloads folders watch path',
   library_folders: 'folders media path offline drive', mylist_sync_favorites: 'favourites favorites my list sync', logout: 'sign out log out account jellyfin user server',
-  mobile: 'phone mobile iphone android remote tailscale vpn qr pair app', mobile_bind: 'tailscale vpn lan wifi home network bind', mobile_max_streams: 'phones streams transcode limit',
+  mobile: 'phone mobile iphone android remote tailscale vpn qr pair app tv television google tv code', mobile_bind: 'tailscale vpn lan wifi home network bind', mobile_max_streams: 'phones streams transcode limit',
   mobile_quality: 'phone quality 1080p 720p bitrate', mobile_jellyfin_signin: 'friends jellyfin users accounts phone', 'mobile-https': 'https certificate iphone tailscale',
   'mobile-firewall': 'firewall windows blocked', 'paired phones': 'phone devices remove rename pair', cast: 'cast chromecast airplay tv television',
   cast_quality: 'cast tv quality 1080p 4k', cast_4k_hdr: '4k hdr tv cast', 'tvs on your network': 'tv chromecast airplay devices cast', network: 'firewall cast tv port',
@@ -210,7 +210,7 @@ function search() {
   quietly(() => apply(true));
 }
 function clearMarks() {
-  for (const m of $$('mark.sx-mark', X.page)) { const p = m.parentNode; m.replaceWith(document.createTextNode(m.textContent)); p.normalize(); }
+  for (const m of $$('span.sx-txt', X.page)) { const p = m.parentNode; m.replaceWith(document.createTextNode(m.textContent)); p.normalize(); }
   $$('.sx-why, .sx-go', X.page).forEach(x => x.remove());
   $$('.sx-hide', X.page).forEach(x => x.classList.remove('sx-hide'));
   $$('.sx-hit', X.page).forEach(x => x.classList.remove('sx-hit', 'sx-in'));
@@ -287,7 +287,7 @@ function mark(u, toks) {
     if (lower.length !== v.length) continue;   // accented text: skip rather than mis-highlight
     re.lastIndex = 0;
     if (!re.test(lower)) continue;
-    const frag = document.createDocumentFragment();
+    const frag = Object.assign(document.createElement('span'), { className: 'sx-txt' });   // one inline box, so flex labels keep their spaces
     let at = 0;
     lower.replace(re, (m, pre, word, i) => { i += pre.length; frag.append(v.slice(at, i), Object.assign(document.createElement('mark'), { className: 'sx-mark', textContent: v.slice(i, i + word.length) })); at = i + word.length; return m; });
     frag.append(v.slice(at));

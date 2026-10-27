@@ -5,6 +5,14 @@ Atlas is a Windows desktop player for your own films and shows: a Netflix-style 
 through [Seerr](https://github.com/seerr-team/seerr), and shows the media stack's dashboard. What it does is
 described in the [main README](../README.md); this page is about installing it on its own and working on it.
 
+<table>
+  <tr>
+    <td width="33%"><a href="../docs/images/light-theme.jpg"><img src="../docs/images/light-theme.jpg" alt="Home in the light theme"></a><br><sub>Home, light theme</sub></td>
+    <td width="33%"><a href="../docs/images/player.jpg"><img src="../docs/images/player.jpg" alt="The player with its settings menu"></a><br><sub>The player (mpv with Atlas's controls)</sub></td>
+    <td width="33%"><a href="../docs/images/mobile.jpg"><img src="../docs/images/mobile.jpg" alt="Atlas Mobile"></a><br><sub>Atlas Mobile</sub></td>
+  </tr>
+</table>
+
 ## Install
 
 - **With the whole stack**: run `MediaStackSetup.exe` from the [Releases](../../../releases) page and keep
@@ -67,6 +75,15 @@ It needs a free Google OAuth client of your own (about 5 minutes, once): see
 
 You are responsible for having the rights to anything you share. Google may limit or remove files it considers
 copyrighted, and may temporarily block downloads of a file that many people open ("download quota exceeded").
+
+## On a TV
+
+Atlas also runs on Google TV and Android TV: the library and player for a TV remote, streamed from this PC by
+Atlas Mobile (direct play, or converted on the fly with HDR tone-mapping and subtitles). Install
+`Atlas-AndroidTV.apk` from the [Releases](../../../releases) page (or open `http://<PC address>:8737/tv` in a
+TV browser), then pair it with a short code in **Settings › Phone & casting › Pair a TV**. It finds the PC by
+itself on the home network, and works away from home over Tailscale. Step by step:
+[docs/google-tv.md](docs/google-tv.md). The app's source is in [android-tv/](../android-tv).
 
 ## Run from source
 

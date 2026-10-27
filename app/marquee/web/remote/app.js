@@ -279,8 +279,9 @@
     const target = isSeries ? d.next_up : d;
     const resume = target && target.position > 30 && target.progress < 0.95;
     const quality = d.quality ? `<span class="badge">${esc(d.quality)}</span>` : '';
-    const meta = [d.year, d.age ? `<span class="badge">${esc(d.age)}</span>` : '', isSeries ? `${(d.seasons || []).filter((s) => s.number).length} seasons` : (d.runtime ? M.mins(d.runtime) : ''),
-      d.rating ? `★ ${Number(d.rating).toFixed(1)}` : '', quality].filter(Boolean).join(' <span aria-hidden="true">·</span> ');
+    const seasons = (d.seasons || []).filter((s) => s.number).length;
+    const meta = [d.year, d.age && String(d.age).trim() ? `<span class="badge">${esc(d.age)}</span>` : '', isSeries ? (seasons ? `${seasons} season${seasons > 1 ? 's' : ''}` : '') : (d.runtime >= 60 ? M.mins(d.runtime) : ''),
+      Number(d.rating) > 0 ? `★ ${Number(d.rating).toFixed(1)}` : '', quality].map((x) => String(x ?? '').trim()).filter(Boolean).join(' <span aria-hidden="true">·</span> ');
     let playLabel = 'Play';
     if (isSeries && target) playLabel = `${resume ? 'Resume' : 'Play'} S${target.season ?? 0}:E${target.episode ?? 0}`;
     else if (resume) playLabel = 'Resume';

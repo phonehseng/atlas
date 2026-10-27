@@ -8,6 +8,10 @@ Friends can sign in with their own Jellyfin account instead, when that's allowed
 rate-limited per address. Nothing here hands out the Jellyfin or Seerr token: artwork comes from the local image
 cache and video straight from the files on this PC.
 
+TVs use the same server: /tv is a 10-foot version of the app for a TV remote (the Android TV app shows it full
+screen). A TV pairs with a short code typed into Settings on the PC (or the other way round), and finds the PC by
+itself on the home network through mDNS (`_atlas._tcp`, marquee.mobile.mdns).
+
 The desktop calls apply(app) at start (it then follows the settings by itself), stop() when closing; the local UI
 server registers `desk` for the Settings page (QR codes, addresses, devices, streams, HTTPS, firewall).
 """
@@ -24,7 +28,7 @@ from flask import Blueprint, Flask, Response, g, jsonify, redirect, request, sen
 
 from . import server, settings
 from .mobile import api as mapi
-from .mobile import auth, net, stream
+from .mobile import auth, mdns, net, stream
 
 WEB = Path(__file__).resolve().parent / "web" / "remote"
 ICON_SRC = Path(__file__).resolve().parent.parent / "assets" / "marquee.png"
@@ -34,7 +38,8 @@ FAIL_LIMIT, FAIL_WINDOW, BLOCK_FOR = 8, 600, 600   # 8 bad attempts in 10 minute
 OWNER_ONLY = ("/r/api/state", "/r/api/cmd", "/r/api/pcplay", "/r/api/mylist")
 STATIC = {"app.css", "app.js", "player.js", "remote.js", "sw.js", "vendor/hls.min.js", "vendor/hls.js-LICENSE.txt",
           "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png",
-          "icons/icon.svg"}
+          "icons/icon.svg", "tv.css", "tv.js"}
+TV_OPEN = ("/r/api/tv/hello", "/r/api/tv/code", "/r/api/tv/poll", "/r/api/tv/redeem")
 SETTING_KEYS = ("mobile", "remote", "remote_port", "mobile_bind")
 
 APP = None          # the marquee App while the server runs
@@ -167,12 +172,15 @@ def start(app, port=None, hosts=None):
                                     channel_timeout=120, connection_limit=200, outbuf_high_watermark=8 << 20)
         if srv is None:
             _last_error = f"Port {port} is in use by another program"
+            mdns.announce(None, port)
             return pairing_info(port)
         _last_error = None
         _srv, _port, _hosts = srv, port, good
         _thread = threading.Thread(target=_run, args=(srv,), name="marquee-mobile", daemon=True)
         _thread.start()
     mapi.warm(app)
+    lan = net.lan_ip() if _bind_mode() == "lan+tailscale" else None
+    mdns.announce(lan if lan in good else None, port)
     print(f"Atlas Mobile on {', '.join(good)} port {port}", flush=True)
     return pairing_info(port)
 
@@ -201,6 +209,7 @@ def _stop_locked(keep_streams=False):
 def stop():
     with _lock:
         _stop_locked()
+    mdns.stop()
 
 
 def apply(app):
@@ -314,7 +323,7 @@ def guard():
         return None  # media: the session key in the path is checked by the route
     if request.method not in ("GET", "HEAD") and request.headers.get("X-Marquee") != "1":
         return jsonify(ok=False, message="bad request"), 400
-    if p in ("/r/api/pair", "/r/api/login", "/r/api/login-info"):
+    if p in ("/r/api/pair", "/r/api/login", "/r/api/login-info") or p in TV_OPEN:
         return None
     dev = auth.device_for(request.cookies.get(COOKIE), ip)
     if dev:
@@ -368,6 +377,20 @@ def root():
 @rapp.get("/r/")
 def page():
     r = send_from_directory(WEB, "index.html")
+    r.headers["Cache-Control"] = "no-cache"
+    return r
+
+
+@rapp.get("/tv")
+@rapp.get("/tv/")
+def tv_root():
+    return redirect("/r/tv", 302)
+
+
+@rapp.get("/r/tv")
+@rapp.get("/r/tv/")
+def tv_page():
+    r = send_from_directory(WEB, "tv.html")
     r.headers["Cache-Control"] = "no-cache"
     return r
 
@@ -461,6 +484,46 @@ def api_pair():
     except Exception:
         pass
     return r
+
+
+# ------------------------------------------------------------------ TV pairing (short codes: TVs have no camera)
+@rapp.get("/r/api/tv/hello")
+def api_tv_hello():
+    """The TV app's setup screen checks an address with this: is it Atlas, and is this TV already paired?"""
+    from . import __version__
+    dev = auth.device_for(request.cookies.get(COOKIE), _client_ip())
+    return ok(atlas=True, version=__version__, pc=os.environ.get("COMPUTERNAME", "PC").title(), paired=bool(dev))
+
+
+@rapp.post("/r/api/tv/code")
+def api_tv_code():
+    """The TV shows this code; the owner types it into Settings on the PC. The TV polls with the secret rid."""
+    got = auth.tv_request(_client_ip(), request.headers.get("User-Agent", ""))
+    if not got:
+        return jsonify(ok=False, message="Too many TVs are waiting to pair - try again in a few minutes"), 429
+    code, rid = got
+    return ok(code=code, rid=rid, expires_in=auth.TV_TTL)
+
+
+@rapp.post("/r/api/tv/poll")
+def api_tv_poll():
+    b = request.get_json(force=True, silent=True) or {}
+    state, cookie, dev = auth.tv_poll(str(b.get("rid", "")))
+    if state != "paired":
+        return ok(state=state)
+    return _set_cookie(ok(state="paired", device=dev), cookie)
+
+
+@rapp.post("/r/api/tv/redeem")
+def api_tv_redeem():
+    """The other way round: a code the PC shows (Settings > Phone & casting), typed on the TV."""
+    b = request.get_json(force=True, silent=True) or {}
+    ip, ua = _client_ip(), request.headers.get("User-Agent", "")
+    if not auth.use_tv_pc_code(b.get("code")):
+        count_failure(ip)
+        return jsonify(ok=False, message="That code didn't work. Check it in Atlas's Settings on your PC."), 401
+    cookie, dev = auth.create_device({"kind": "owner"}, ua, ip, client="tv", name=auth._tv_name(ua))
+    return _set_cookie(ok(device=dev), cookie)
 
 
 @rapp.get("/r/api/login-info")
@@ -795,7 +858,24 @@ def desk_mobile():
                    firewall=_firewall(), devices=auth.devices(), streams=stream.active(),
                    max_streams=stream.setting_max(), quality=st.get("mobile_quality") or "auto",
                    jellyfin_signin=bool(st.get("mobile_jellyfin_signin")),
-                   encoders=stream._enc.get("h264") if stream._enc else None)
+                   encoders=stream._enc.get("h264") if stream._enc else None, tv_waiting=auth.tv_waiting())
+
+
+@desk.post("/api/mobile/tv/approve")
+def desk_tv_approve():
+    """Settings: the code a TV shows was typed in."""
+    code = (request.get_json(force=True, silent=True) or {}).get("code")
+    dev = auth.tv_approve(code)
+    if not dev:
+        return jsonify(ok=False, message="No TV is showing that code. Check it, or get a new one on the TV.")
+    return jsonify(ok=True, device=dev, devices=auth.devices())
+
+
+@desk.post("/api/mobile/tv/code")
+def desk_tv_code():
+    """Settings: a code to type on the TV instead (one use, 10 minutes)."""
+    code, expires = auth.tv_pc_code()
+    return jsonify(ok=True, code=code, expires=expires)
 
 
 @desk.post("/api/mobile/pair")
