@@ -1207,17 +1207,19 @@ class Player:
 
     # ------------------------------------------------------------------ credits: mini video + "Up next"
     def credits_start(self):
-        """Where the credits begin: Jellyfin/catalog/chapter markers, then the media index's outro, then a guess
-        (the last 2.5 % of a film, the last 90 s of an episode)."""
+        """Where the credits begin: Jellyfin/catalog/chapter markers, then the media index's outro (or a film's
+        subtitles), then a closing stretch of black screen with text found in the file itself. Episodes with none
+        of those get no credits screen (the normal end-of-episode autoplay takes over); films fall back to the
+        last 2.5 %."""
         if self._credits:
             return self._credits
         if self._index_outro:
             return self._index_outro
+        if getattr(self, "_black_credits", None):
+            return self._black_credits
         dur = (self.mpv.duration if self.mpv else 0) or 0
-        if not dur:
+        if not dur or (self.item or {}).get("Type") == "Episode":
             return None
-        if (self.item or {}).get("Type") == "Episode":
-            return max(dur - 90, dur * 0.9)
         return dur * 0.975
 
     def _credits_tick(self, pos):
@@ -1236,7 +1238,9 @@ class Player:
         # ask the media index for the outro once we're past halfway (no work at the start of a film)
         if self._index_outro is None and not self._credits and pos > dur * 0.5 and item.get("Type") == "Episode":
             self._index_outro = 0
+            self._black_credits = None
             threading.Thread(target=self._fetch_index_outro, args=(item.get("Id"),), daemon=True).start()
+            threading.Thread(target=self._find_black_credits, args=(item.get("Id"), dur, 240), daemon=True).start()
         # films: where the talking stops for good (the subtitles), instead of guessing the last few minutes
         if self._index_outro is None and not self._credits and pos > dur * 0.5 and item.get("Type") != "Episode":
             self._index_outro = 0
@@ -1319,8 +1323,34 @@ class Player:
             if start and self.item and self.item.get("Id") == item_id:
                 self._index_outro = start
                 print(f"credits: film credits from subtitles at {start / 60:.1f} min", flush=True)
+            elif self.item and self.item.get("Id") == item_id:
+                self._find_black_credits(item_id, dur, 900)
         except Exception as e:
             print("credits from subtitles failed:", e)
+
+    def _find_black_credits(self, item_id, dur, scan):
+        """Credits rolling as text on a black screen, from the file's last `scan` seconds (one small frame a second,
+        low priority): the first stretch of 6+ seconds that is mostly black and stays mostly black to the end."""
+        try:
+            path = self.mpv.path if self.mpv else None
+            if not path or not os.path.exists(str(path)):
+                return
+            from . import details
+            ff = details._ffmpeg()
+            if not ff:
+                return
+            start = max(0.0, dur - scan)
+            p = subprocess.run([ff, "-hide_banner", "-nostats", "-ss", f"{start:.1f}", "-i", path, "-an", "-sn", "-dn",
+                                "-vf", "fps=1,scale=320:-2,blackframe=amount=80:threshold=40", "-f", "null", "-"],
+                               capture_output=True, timeout=600)
+            black = sorted({int(start + float(m.group(1))) for m in
+                            re.finditer(r"blackframe.*? t:([\d.]+)", p.stderr.decode("utf-8", "replace"))})
+            at = credits_from_black(black, start, dur)
+            if at and self.item and self.item.get("Id") == item_id:
+                self._black_credits = at
+                print(f"credits: black-screen credits at {at / 60:.1f} min", flush=True)
+        except Exception as e:
+            print("credits from black frames failed:", e)
 
     def to_mini(self, reason="ui"):
         """Shrink the video into the bottom-right of the app window (about a quarter wide, rounded), so the page
@@ -2102,4 +2132,18 @@ def credits_from_cues(cues, dur):
         prev_end = max(prev_end or 0, b)
     if prev_end and prev_end >= floor and dur - prev_end >= 150:  # the talking simply stops before the end
         return prev_end + 20
+    return None
+
+
+def credits_from_black(black_seconds, scan_start, dur, run=6, rest=0.6):
+    """black_seconds: whole seconds (from one sampled frame a second) that were mostly black. The credits start at
+    the first run of `run` consecutive black seconds after which at least `rest` of the remaining seconds up to the
+    end are black too, and at least 10 s from the end (a fade-out isn't credits). None when there's no such run."""
+    secs = set(black_seconds)
+    end = int(dur)
+    for t in sorted(secs):
+        if all(t + i in secs for i in range(run)) and end - t >= 10:
+            left = range(t, end)
+            if len(left) and sum(1 for x in left if x in secs) / len(left) >= rest:
+                return float(t)
     return None
