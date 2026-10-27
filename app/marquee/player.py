@@ -431,6 +431,9 @@ class Player:
         self._set("fullscreen", bool(self.app.fullscreen))
         self._set("segments", [])
         self._set("intro", None)
+        self._set("after_credits", None)
+        self._set("credits_at", None)
+        self._after_credits = []
         self._set("bookmarks", bookmarks.for_item(item["Id"]))
         self._credits = None
         self._auto_skip = None
@@ -1322,7 +1325,8 @@ class Player:
                 p = subprocess.run([ff, "-hide_banner", "-loglevel", "error", "-ss", f"{offset:.1f}", "-i", path,
                                     "-map", f"0:{idx}", "-f", "srt", "pipe:1"], capture_output=True, timeout=120)
                 cues = details._parse_cues(p.stdout.decode("utf-8", "replace")) if p.returncode == 0 else []
-            hint = credits_from_cues([(a + offset, b + offset, t) for a, b, t in cues], dur)
+            cues_abs = [(a + offset, b + offset, t) for a, b, t in cues]
+            hint = credits_from_cues(cues_abs, dur)
         except Exception as e:
             print("credits from subtitles failed:", e)
             hint = None
@@ -1336,13 +1340,24 @@ class Player:
             block = None
         start = None
         if block:
-            start = block
-            if hint and block - 300 <= hint < block and hint >= dur - 15 * 60:
-                start = hint
+            # the crawl often follows a minute or two of titles over the last pictures: start just after the last
+            # spoken line before it (a dark final scene can look "black", but people still talk in it)
+            spoken = [b for a, b, t in (locals().get("cues_abs") or []) if b <= block and _SOUND_ONLY.sub("", t or "")]
+            last_line = max(spoken) if spoken else None
+            start = last_line + 15 if last_line and block - last_line <= 300 else block
         elif hint and hint >= dur - 12 * 60:
             start = hint
         if start and self.item and self.item.get("Id") == item_id:
             self._index_outro = start
+            try:  # a scene after (or during) the credits: the talking comes back a while into them
+                after = after_credits(locals().get("cues_abs") or [], start, dur)
+            except Exception:
+                after = []
+            self._after_credits = after
+            self._set("after_credits", after or None)
+            self._set("credits_at", start)
+            if after:
+                print("credits: scene after the credits at " + ", ".join(f"{t / 60:.1f} min" for t in after), flush=True)
             print(f"credits: film credits at {start / 60:.1f} min (black {block and round(block / 60, 1)}, "
                   f"subtitles {hint and round(hint / 60, 1)})", flush=True)
         elif self.item and self.item.get("Id") == item_id:
@@ -1362,7 +1377,7 @@ class Player:
             return None
         start = max(0.0, dur - scan)
         p = subprocess.run([ff, "-hide_banner", "-nostats", "-skip_frame", "nokey", "-ss", f"{start:.1f}", "-i", path,
-                            "-an", "-sn", "-dn", "-vf", "scale=320:-2,showinfo,blackframe=amount=70:threshold=40",
+                            "-an", "-sn", "-dn", "-vf", "scale=320:-2,showinfo,blackframe=amount=80:threshold=32",
                             "-vsync", "0", "-f", "null", "-"], capture_output=True, timeout=900)
         err = p.stderr.decode("utf-8", "replace")
         keys = sorted({round(start + float(x), 1) for x in re.findall(r"showinfo.*?pts_time:([\d.]+)", err)})
@@ -1408,7 +1423,7 @@ class Player:
         payload = {"item_id": item.get("Id"), "next_episode_id": nxt.get("Id") or item.get("_next_id"),
                    "position": pos, "remaining": max(0.0, dur - pos), "reason": reason,
                    "autoplay": bool(settings.load()["autoplay_next"] and nxt), "type": item.get("Type"),
-                   "title": self.state().get("title")}
+                   "title": self.state().get("title"), "after_credits": list(getattr(self, "_after_credits", []) or [])}
         if self.next_item:  # the next-episode countdown starts now (the Up-next page shows it)
             nx = self.next_item
             self._set("next", {"title": f"S{nx.get('ParentIndexNumber', 0)}:E{nx.get('IndexNumber', 0)} · {nx.get('Name', '')}",
@@ -1416,6 +1431,17 @@ class Player:
         self.app.notify_ui("credits", payload)
         for fn in list(self.on_credits):
             threading.Thread(target=fn, args=(payload,), daemon=True).start()
+
+    def skip_after_credits(self):
+        """Jump to the scene after the credits (the next one still ahead), back at full size."""
+        times = [t for t in (getattr(self, "_after_credits", None) or []) if t > self._position() + 2] or             list(getattr(self, "_after_credits", None) or [])
+        if not times or not self.mpv:
+            return False
+        if self.mini:
+            self.restore_full()
+        self.mpv.command("seek", str(times[0]), "absolute", "exact")
+        self.mpv.pause = False
+        return True
 
     def restore_full(self):
         """Back to the full video (keep watching the credits)."""
@@ -2213,3 +2239,17 @@ def credits_block(keys, black, dur, min_run=30, max_gap=240, end_slack=25, min_f
         else:
             break
     return float(start)
+
+
+
+def after_credits(cues, credits_at, dur, quiet=60, gap=40):
+    """Scenes after (or in the middle of) the credits, from subtitle cues [(start, end, text)]: spoken lines that
+    come back at least `quiet` seconds into the credits, grouped (a pause of `gap`+ seconds starts a new scene).
+    Returns where each scene starts (a few seconds before its first line), at most two."""
+    spoken = sorted(a for a, b, t in cues if a > credits_at + quiet and a < dur - 30 and _SOUND_ONLY.sub("", t or ""))
+    out, last = [], None
+    for a in spoken:
+        if last is None or a - last > gap:
+            out.append(round(max(credits_at, a - 4), 1))
+        last = a
+    return out[:2]

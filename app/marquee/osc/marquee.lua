@@ -910,6 +910,22 @@ local function draw()
     icon(ass, px + pw - 26 * S, py + ph / 2, 14 * S, G.next, 1, hv and GLASS or WHITE)
   end
 
+  -- skip to the scene after the credits (shown during the credits, until a few seconds before that scene)
+  local ac, cat = ud("after_credits", nil), ud("credits_at", nil)
+  if ac and cat and #ac > 0 and not state.pip and not state.mini and pos >= cat then
+    local target
+    for _, t in ipairs(ac) do if pos < t - 5 then target = t; break end end
+    if target then
+      local pw, ph = 268 * S, 46 * S
+      local px, py = W - pw - m, state.above - ph
+      local b, hv = button("aftercredits", px, py, pw, ph, function() mp.commandv("seek", tostring(target), "absolute", "exact") end)
+      if hv then box(ass, px, py, pw, ph, ph / 2, "FFFFFF", 0.95, 1, WHITE, 0.6)
+      else glass(ass, px, py, pw, ph, ph / 2, 1, {tint = 0.6}) end
+      text(ass, px + pw / 2 - 12 * S, py + ph / 2, 5, 18 * S, "Skip to after-credits scene", hv and GLASS or WHITE, 1, FONT)
+      icon(ass, px + pw - 24 * S, py + ph / 2, 14 * S, G.next, 1, hv and GLASS or WHITE)
+    end
+  end
+
   -- next episode card near the end (credits if Jellyfin knows them, else the last 30 s)
   local nxt = ud("next", nil)
   if nxt and dur > 60 and not state.next_cancelled and not state.pip then

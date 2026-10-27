@@ -575,6 +575,14 @@ def player_mini():
     return ok()
 
 
+@app.post("/api/player/after-credits")
+def player_after_credits():
+    fn = getattr(APP.player, "skip_after_credits", None)
+    if not fn or not fn():
+        return fail("No scene after the credits here", 409)
+    return ok()
+
+
 @app.post("/api/player/full")
 def player_full():
     fn = getattr(APP.player, "restore_full", None)

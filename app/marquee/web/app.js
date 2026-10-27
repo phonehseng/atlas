@@ -3246,6 +3246,7 @@ function drawUpNext() {
         <div class="un-sub">${esc(sub)}</div>${hero.overview ? `<p class="un-ov">${esc(hero.overview)}</p>` : ''}</div>` : `<h1 class="un-title">${esc(p.title || 'The end')}</h1>`}
       <div class="un-actions">
         ${hero ? `<button class="btn light un-play" data-action="upnext-play">${icon('play')} ${ep ? 'Play next' : 'Play'}${auto ? ' <span class="un-count" aria-live="polite"></span>' : ''}</button>` : ''}
+        ${p.after_credits && p.after_credits.length ? `<button class="btn on-dark" data-action="upnext-after">${icon('right')} Skip to after-credits scene</button>` : ''}
         <button class="btn on-dark" data-action="upnext-full">${icon('film')} Keep watching credits</button>
         <button class="btn on-dark" data-action="upnext-home">Home</button></div>
       <div class="un-atlas glass" id="un-atlas" hidden></div>
@@ -3314,6 +3315,10 @@ async function upNextPlay() {
   closeUpNext();
   if (n.type === 'Series') return playItem(id);
   play(id, n.type === 'Episode' ? undefined : undefined);
+}
+async function upNextAfter() {
+  try { await api('/api/player/after-credits', {}); } catch (e) { toast(e.message || 'No scene after the credits here'); return; }
+  closeUpNext();
 }
 async function upNextFull() {
   try { await api('/api/player/full', {}); } catch (e) { /* the player may already be full size */ }
@@ -3578,6 +3583,7 @@ document.addEventListener('click', e => {
       case 'close-person': return closeLayer(layers.person);
       case 'upnext-play': return upNextPlay();
       case 'upnext-full': return upNextFull();
+      case 'upnext-after': return upNextAfter();
       case 'upnext-home': return upNextHome();
       case 'upnext-moment': return upNextMoment(actEl.dataset.t);
       case 'atlas-close': return atlasToast({ state: 'clear', id: ATL.id });
