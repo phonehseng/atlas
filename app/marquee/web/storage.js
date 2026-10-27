@@ -336,8 +336,9 @@ async function smartLine(el, tmdb) {
 }
 
 /* ================================================================== Settings > Storage */
-function mountSettings(el) {
+function mountSettings(el, opts = {}) {
   el.classList.add('mqs-settings');
+  const smartEl = opts.smartEl || null;   // Settings shows smart seasons with the request settings
   el.innerHTML = `<div class="mqs-skel tall"></div>`;
   const st = { data: null, plan: null, showLog: false };
   async function load(refresh) {
@@ -363,6 +364,12 @@ function mountSettings(el) {
     const disk = u.disk || {};
     const enforce = s.storage_enforce || 'warn';
     const rulesOn = s.delete_after_watch || s.delete_unwatched_days || (enforce === 'auto' && s.storage_limit_gb);
+    const smart = `
+      ${sw('smart_request', 'Request the next season as you watch', 'Shows requested "Smart" start with season 1; the next one is requested once you\'re partway through.', s.smart_request !== false)}
+      <div class="set"><div class="lbl"><b>Request the next season at</b><span>Earlier (30%) for 4K or very big seasons.</span></div>
+        <div class="opt-row">${[30, 50, 75].map(v => `<button class="opt" data-mqs-seg="smart_request_at" data-v="${v}" aria-pressed="${+(s.smart_request_at || 50) === v}">${v}%</button>`).join('')}</div></div>
+    `;
+    if (smartEl) smartEl.innerHTML = smart;
     el.innerHTML = `
     <section class="panel glass mqs-dash" style="--i:0"><h2>${ico('film', 20)} Storage</h2>
       <div class="mqs-headline"><span class="mqs-big">${size(u.used)}</span><span class="mqs-range">${u.limit ? `of your ${size(u.limit)} limit` : 'in your library'}${disk.free != null ? ` · ${size(disk.free)} free on ${esc(disk.drive || 'the disk')}` : ''}</span>
@@ -394,11 +401,7 @@ function mountSettings(el) {
       <div class="mqs-actions"><button class="btn small ghost" data-mqs-act="preview">${ico('search', 15)} Preview cleanup</button></div>
       <div class="mqs-plan" ${st.plan ? '' : 'hidden'}>${st.plan ? planHTML(st.plan) : ''}</div>
     </section>
-    <section class="panel glass" style="--i:3"><h2>${ico('sparkle', 20)} Smart requests</h2>
-      ${sw('smart_request', 'Request the next season as you watch', 'Shows requested "Smart" start with season 1; the next one is requested once you\'re partway through.', s.smart_request !== false)}
-      <div class="set"><div class="lbl"><b>Request the next season at</b><span>Earlier (30%) for 4K or very big seasons.</span></div>
-        <div class="opt-row">${[30, 50, 75].map(v => `<button class="opt" data-mqs-seg="smart_request_at" data-v="${v}" aria-pressed="${+(s.smart_request_at || 50) === v}">${v}%</button>`).join('')}</div></div>
-    </section>
+    ${smartEl ? '' : `<section class="panel glass" style="--i:3"><h2>${ico('sparkle', 20)} Smart requests</h2>${smart}</section>`}
     ${listPanel('Leaving soon', d.leaving, i => `${esc(i.title)}${i.subtitle && !/^\d{4}$/.test(i.subtitle) ? ` · ${esc(i.subtitle)}` : ''}`, i => `${esc(i.reason || '')} · leaves ${esc(when(i.leave_at))}`, i => `<button class="btn small ghost" data-keep="${esc(i.keep_key)}">Keep</button>`, 4)}
     ${listPanel(`Watched, could be removed · ${size(d.could_size)}`, d.could, i => `${esc(i.title)}${i.subtitle && !/^\d{4}$/.test(i.subtitle) ? ` · ${esc(i.subtitle)}` : ''}`, i => esc(i.reason || ''), i => `<span class="mqs-dim">${size(i.size)}</span>`, 5)}
     ${listPanel('Largest', u.largest, i => `${esc(i.title)}${i.year ? ` (${i.year})` : ''}`, i => `${i.kind === 'series' ? `${i.files || ''} episodes · ` : ''}${esc({ movies: 'Movies', tv: 'TV', anime: 'Anime' }[i.group] || '')}`, i => `<b>${size(i.size)}</b>`, 6)}
@@ -408,10 +411,10 @@ function mountSettings(el) {
         ${d.log.length > 6 ? `<button class="mqs-more" data-mqs-act="log">${st.showLog ? 'Show less' : `Show all ${d.log.length}`}</button>` : ''}` : '<p>Nothing has been removed yet.</p>'}
     </section>
     <section class="panel glass" style="--i:8"><h2>${ico('gear', 20)} Radarr &amp; Sonarr</h2>
-      <p>${d.arrs.length ? `Connected: ${d.arrs.map(a => `${esc(a.name)}${a.source === 'seerr' ? ' (through Seerr)' : ''}`).join(', ')}.` : 'Not connected. Marquee asks Seerr for these when you\'re a Seerr admin; otherwise enter them here.'}</p>
-      ${['radarr', 'sonarr'].map(k => `<div class="set stack"><div class="lbl"><b>${k === 'radarr' ? 'Radarr' : 'Sonarr'}</b></div>
+      <p class="mqs-arr-status">${d.arrs.length ? `Connected: ${d.arrs.map(a => `${esc(a.name)}${a.source === 'seerr' ? ' (through Seerr)' : ''}`).join(', ')}.` : 'Not connected. Marquee asks Seerr for these when you\'re a Seerr admin; otherwise enter them here.'}</p>
+      <details class="setx-adv" data-adv="storage-arr"${d.arrs.length ? '' : ' open'}><summary>Advanced</summary><div class="setx-adv-body">${['radarr', 'sonarr'].map(k => `<div class="set stack"><div class="lbl"><b>${k === 'radarr' ? 'Radarr' : 'Sonarr'}</b></div>
         <div class="fields mqs-arr-fields"><input class="input wide" data-arr="${k}_url" value="${esc(s[k + '_url'] || '')}" placeholder="http://localhost:${k === 'radarr' ? 7878 : 8989}" spellcheck="false" aria-label="${k} address">
-        <input class="input wide" type="password" data-arr="${k}_key" placeholder="${s[k + '_key_set'] ? 'API key saved (type to replace)' : 'API key'}" autocomplete="off" aria-label="${k} API key"></div></div>`).join('')}
+        <input class="input wide" type="password" data-arr="${k}_key" placeholder="${s[k + '_key_set'] ? 'API key saved (type to replace)' : 'API key'}" autocomplete="off" aria-label="${k} API key"></div></div>`).join('')}</div></details>
     </section>`;
   }
   const sw = (key, title, sub, on) => `<div class="set"><div class="lbl"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
@@ -438,11 +441,11 @@ function mountSettings(el) {
       load();
     } catch (e) { toast(`Couldn't save: ${e.message}`); }
   }
-  el.addEventListener('click', async e => {
+  const onClick = async e => {
     const t = e.target.closest('button');
     if (!t || !st.data) return;
     if (t.dataset.sw) { const on = t.getAttribute('aria-checked') !== 'true'; t.setAttribute('aria-checked', on); return save({ [t.dataset.sw]: on }); }
-    if (t.dataset.mqsSeg) { const v = isNaN(+t.dataset.v) ? t.dataset.v : +t.dataset.v; $$(`[data-mqs-seg="${t.dataset.mqsSeg}"]`, el).forEach(b => b.setAttribute('aria-pressed', b === t)); return save({ [t.dataset.mqsSeg]: v }); }
+    if (t.dataset.mqsSeg) { const v = isNaN(+t.dataset.v) ? t.dataset.v : +t.dataset.v; $$(`[data-mqs-seg="${t.dataset.mqsSeg}"]`, t.closest('.opt-row') || el).forEach(b => b.setAttribute('aria-pressed', b === t)); return save({ [t.dataset.mqsSeg]: v }); }
     if (t.dataset.keep) { t.disabled = true; try { await api(`/api/storage/keep/${encodeURIComponent(t.dataset.keep)}`, { keep: true }); toast('Kept', { icon: 'check' }); load(); } catch (err) { toast(err.message); t.disabled = false; } return; }
     if (t.dataset.mqsAct === 'refresh') { t.disabled = true; return load(true); }
     if (t.dataset.mqsAct === 'log') { st.showLog = !st.showLog; return draw(); }
@@ -450,7 +453,9 @@ function mountSettings(el) {
       t.disabled = true;
       try { st.plan = await api('/api/storage/plan?run=1'); draw(); } catch (err) { toast(err.message); t.disabled = false; }
     }
-  });
+  };
+  el.addEventListener('click', onClick);
+  if (smartEl) smartEl.addEventListener('click', onClick);
   el.addEventListener('change', e => {
     const t = e.target;
     if (t.dataset.mqsSet === 'storage_limit_gb') save({ storage_limit_gb: Math.max(0, +t.value || 0) });
@@ -462,7 +467,7 @@ function mountSettings(el) {
 /* ================================================================== events from Python (app.notify_ui) */
 function onEvent(name, data) {
   data = data || {};
-  if (name === 'storage-leaving') { toast(data.message || 'Some titles leave tomorrow to save space', { ms: 8000, action: 'Review', onAction: () => { location.hash = '#/settings'; } }); return true; }
+  if (name === 'storage-leaving') { toast(data.message || 'Some titles leave tomorrow to save space', { ms: 8000, action: 'Review', onAction: () => { location.hash = '#/settings/storage'; } }); return true; }
   if (name === 'storage-removed') { const n = (data.items || []).length; toast(`${n} title${n === 1 ? '' : 's'} removed to save space. Watch history is kept.`, { icon: 'check', ms: 6000 }); return true; }
   if (name === 'smart-request') { toast(data.message || 'Next season requested', { icon: 'sparkle', ms: 7000 }); return true; }
   return false;

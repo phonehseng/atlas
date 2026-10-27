@@ -95,9 +95,10 @@ DEFAULTS = {
     "update_channel": "stable",  # stable | beta (also offers pre-releases)
     "update_repo": "phonehseng/marquee",  # GitHub owner/repo the releases come from (not settable from the page)
     "update_skip": "",           # a version the user chose to skip ("Skip this version")
+    "local_api_token": "",       # encrypted: the local API's token for other programs on this PC (docs/local-api.md)
 }
 SECRET = ("token", "seerr_cookie", "ai_key", "gdrive_client_secret", "gdrive_token", "radarr_key", "sonarr_key",
-          "hub_token", "bazarr_key")
+          "hub_token", "bazarr_key", "local_api_token")
 
 
 class _Blob(ctypes.Structure):

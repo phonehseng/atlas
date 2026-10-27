@@ -60,13 +60,14 @@ class Asker:
 
     # ------------------------------------------------------------------ entry points
     def button(self, question=""):
-        """The Ask Atlas button / A key: pause, keep the picture, then take the question (spoken if voice is
-        installed, else a default 'who and what' look)."""
+        """The Ask button / A key: the player shows a text box and sends what was typed (typing is the default;
+        speaking is the push-to-talk key). Empty means a default 'who and what' look at the paused picture.
+        question "__voice__" listens instead (for a future mic button)."""
         ctx = self.capture(need_frame=True, pause=True)
-        if question:
+        if question and question != "__voice__":
             return self.ask(question, ctx=ctx)
         from . import installer
-        if installer.have("voice"):
+        if question == "__voice__" and installer.have("voice"):
             try:
                 with self._lock:
                     self.pending_context = ctx

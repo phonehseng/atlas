@@ -685,6 +685,65 @@ def update_from_history(cat=None, now=None):
     return res
 
 
+# ------------------------------------------------------------------ titles marked watched by hand (marquee.watched)
+def note_seen(ids, at=None):
+    """These plays are already counted (a title marked watched, then downloaded): the history job skips them."""
+    ids = [i for i in ids or [] if i]
+    if not ids:
+        return
+
+    def go(p):
+        seen = p["history"].setdefault("seen", {})
+        for i in ids:
+            if not (seen.get(i) or {}).get("done"):
+                seen[i] = {"at": at or _now(), "done": True}
+    with _lock:
+        _edit(go, bump=False)
+
+
+def watched_signal(info, seen_ids, at=None, source="marked watched"):
+    """A title marked watched (from the title page, the chat or the local API): the same signal as finishing it,
+    once (seen_ids already counted are skipped), plus the remembered title. Returns {genre: [before, after]}."""
+    seen_ids = [i for i in seen_ids or [] if i]
+    out = {}
+
+    def go(p):
+        seen = p["history"].setdefault("seen", {})
+        fresh = not seen_ids or any(not (seen.get(i) or {}).get("done") for i in seen_ids)
+        if fresh:
+            moved = apply_signal(p, info, TARGET_FINISH, RATE_FINISH, source=source, note_title=False)
+            out.update({g: [round(a, 3), round(b, 3)] for g, (a, b) in moved.items() if abs(a - b) > .0005})
+            for i in seen_ids:
+                seen[i] = {"at": at or _now(), "done": True}
+            p["history"]["plays"] = p["history"].get("plays", 0) + 1
+        if info.get("title"):
+            remember_title(p, info["title"], info.get("year"), info.get("kind") or "movie", info.get("tmdb"), True,
+                           source, info.get("rating"), info.get("id"), strength=round(TARGET_FINISH * RATE_FINISH * 10, 2))
+    with _lock:
+        _edit(go)
+    return out
+
+
+def forget_title(title=None, year=None, kind=None, tmdb=None):
+    """Unmarked: drop the remembered (liked) title; what it taught the genres and people stays."""
+    def go(p):
+        n = 0
+        for lst in (p["titles"]["liked"],):
+            keep = []
+            for t in lst:
+                same = (tmdb and str(t.get("tmdb") or "") == str(tmdb) and (not kind or t.get("kind") == kind)) or \
+                    (not tmdb and title and norm(t.get("title")) == norm(title) and
+                     (not year or not t.get("year") or str(t.get("year")) == str(year)))
+                if same:
+                    n += 1
+                else:
+                    keep.append(t)
+            lst[:] = keep
+        return n
+    with _lock:
+        return _edit(go)
+
+
 def _why_notes(p):
     """When behaviour overtakes what was said, explain it once (kept in p["why"], newest first)."""
     out = []

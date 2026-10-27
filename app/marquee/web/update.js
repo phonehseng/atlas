@@ -209,11 +209,13 @@ function drawAbout() {
         : `<button class="btn small ghost" data-upd-check>${ico('restart', 15)} Check for updates</button>`}</div>
     <div class="set"><div class="lbl"><b>Updates</b><span>${s.mode === 'auto' ? 'Downloads in the background, asks before restarting.' : s.mode === 'notify' ? 'Tells you about new versions; you choose when to download.' : 'Never checks. You can still check here.'}</span></div>
       ${seg('update_check', [['auto', 'Auto'], ['notify', 'Notify'], ['off', 'Off']], s.mode)}</div>
+    <details class="setx-adv" data-adv="updates"><summary>Advanced</summary><div class="setx-adv-body">
     <div class="set"><div class="lbl"><b>Channel</b><span>${s.channel === 'beta' ? 'Also offers early test versions.' : 'Finished releases only.'}</span></div>
-      ${seg('update_channel', [['stable', 'Stable'], ['beta', 'Beta']], s.channel)}</div>
+      ${seg('update_channel', [['stable', 'Stable'], ['beta', 'Beta']], s.channel)}</div></div></details>
     <div class="set"><div class="lbl"><b>Release notes</b><span title="${esc(s.installed_in ? `Installed in ${s.installed_in}` : 'Running from source')}">What changed in each version.</span></div>
       <div class="upd-links"><a class="link" href="${esc(s.releases_url)}/tag/v${esc(s.version)}" target="_blank" rel="noopener noreferrer">This version</a>
       <a class="link" href="${esc(s.releases_url)}" target="_blank" rel="noopener noreferrer">All releases ↗</a></div></div>
+    <p class="upd-license">Marquee is free software under the GPL-3.0 licence.</p>
   </section>`;
 }
 document.addEventListener('click', async e => {

@@ -319,9 +319,10 @@ class Catalog:
         self._started = False
         self._open()
         self._load()
-        try:  # Seerr cards for titles that were removed (watched) carry that state
+        self._watched_idx = None
+        try:  # Seerr cards for titles that were removed (watched) or marked watched carry that state
             from .seerr import Seerr
-            Seerr.removed_lookup = self.removed_flag
+            Seerr.removed_lookup = self.title_flag
         except Exception:
             pass
 
@@ -345,6 +346,9 @@ class Catalog:
             CREATE TABLE IF NOT EXISTS mylist (key TEXT PRIMARY KEY, added REAL, data TEXT);
             CREATE TABLE IF NOT EXISTS removed (key TEXT PRIMARY KEY, kind TEXT, tmdb TEXT, season INTEGER,
                 episode INTEGER, removed_at REAL, restored_at REAL, data TEXT);
+            CREATE TABLE IF NOT EXISTS watched (key TEXT PRIMARY KEY, kind TEXT, tmdb TEXT, season INTEGER,
+                episode INTEGER, watched_at REAL, source TEXT, carried_at REAL, data TEXT);
+            CREATE INDEX IF NOT EXISTS watched_tmdb ON watched(kind, tmdb);
         """)
 
     def _load(self):
@@ -557,6 +561,10 @@ class Catalog:
             self.restore_removed()
         except Exception as e:
             print("removed titles check failed:", e)
+        try:
+            self.restore_watched()
+        except Exception as e:
+            print("watched titles check failed:", e)
         if (gone or changed) and not quiet:
             self._tell("library-changed", {"source": "snapshot"})
         return len(new)
@@ -802,8 +810,9 @@ class Catalog:
         self.wake.set()
         return True
 
-    def set_played(self, item_id, played=True):
-        """Mark watched/unwatched; a show or season marks all its episodes."""
+    def set_played(self, item_id, played=True, at=None, seasons=None):
+        """Mark watched/unwatched; a show or season marks all its episodes (seasons: only these season numbers of a
+        show). at: when it was watched (default now)."""
         with self.lock:
             rid = self._resolve(item_id)
             r = self.items.get(rid)
@@ -811,7 +820,11 @@ class Catalog:
                 return False
             targets = [rid]
             if r["type"] == "Series":
-                targets += [e["id"] for e in self.eps.get(rid, [])]
+                eps = self.eps.get(rid, [])
+                if seasons:
+                    targets = []
+                    eps = [e for e in eps if e.get("season_no") in set(seasons)]
+                targets += [e["id"] for e in eps]
             elif r["type"] == "Season":
                 targets += [e["id"] for e in self.eps_by_season.get(rid, [])]
             now = time.time()
@@ -819,7 +832,7 @@ class Catalog:
                 u = self._ud(t)
                 if played and not u["played"]:
                     u["play_count"] = (u["play_count"] or 0) + 1
-                    u["last_played"] = now
+                    u["last_played"] = at or now
                 u["played"], u["position"] = int(played), 0.0
                 u["changed"], u["dirty"] = now, 1
             self._save_ud(targets)
@@ -1372,6 +1385,174 @@ class Catalog:
             print(f"catalog: {len(done)} removed title(s) are back; watch history restored", flush=True)
         return done
 
+    # ------------------------------------------------------------------ watched titles that aren't in the library
+    # "I've seen Oppenheimer": films and shows marked watched without a file here (the title page, the chat, the local
+    # API for Atlas, a Letterboxd import). Library titles keep their state in userdata (synced to Jellyfin); these
+    # live here, and when the title is downloaded later its played state is carried over to Jellyfin the same way
+    # removed titles get theirs back (restore_watched, after every snapshot / folder scan).
+    # Keys: "movie:<tmdb>", "tv:<tmdb>" (the whole show), "tv:<tmdb>:s<n>" (one season), "tv:<tmdb>:s<n>e<m>".
+    @staticmethod
+    def watched_key(kind, tmdb, season=None, episode=None):
+        key = f"{kind}:{int(tmdb)}"
+        if kind == "tv" and season is not None:
+            key += f":s{int(season)}" + (f"e{int(episode)}" if episode is not None else "")
+        return key
+
+    def record_watched(self, kind, tmdb, data=None, source="manual", at=None, season=None, episode=None):
+        """Store (or refresh) a watched record. data: {title, year, poster, backdrop, genres, runtime, anime,
+        overview}. Returns the key."""
+        key = self.watched_key(kind, tmdb, season, episode)
+        with self.lock:
+            row = self.db.execute("SELECT watched_at, source, data FROM watched WHERE key=?", (key,)).fetchone()
+            old = json.loads(row[2] or "{}") if row else {}
+            merged = {**old, **{k: v for k, v in (data or {}).items() if v not in (None, "", [])}}
+            self.db.execute("INSERT OR REPLACE INTO watched VALUES (?,?,?,?,?,?,?,?,?)",
+                            (key, kind, str(int(tmdb)), season if kind == "tv" else None,
+                             episode if kind == "tv" and season is not None else None,
+                             at or (row[0] if row else None) or time.time(), (row[1] if row else None) or source,
+                             None, json.dumps(merged, ensure_ascii=False)))
+            self._watched_idx = None
+        return key
+
+    def watched_records(self, kind=None, tmdb=None):
+        """Watched records, newest first: [{key, kind, tmdb, season, episode, watched_at, source, carried_at, ...data}]."""
+        where, args = ["1=1"], []
+        if kind:
+            where.append("kind=?")
+            args.append(kind)
+        if tmdb is not None:
+            where.append("tmdb=?")
+            args.append(str(int(tmdb)))
+        with self.lock:
+            rows = self.db.execute("SELECT key, kind, tmdb, season, episode, watched_at, source, carried_at, data FROM "
+                                   "watched WHERE " + " AND ".join(where) + " ORDER BY watched_at DESC", args).fetchall()
+        out = []
+        for key, k, t, season, episode, at, src, carried, data in rows:
+            try:
+                d = json.loads(data or "{}")
+            except ValueError:
+                d = {}
+            out.append(dict(d, key=key, kind=k, tmdb=t, season=season, episode=episode, watched_at=at, source=src,
+                            carried_at=carried))
+        return out
+
+    def forget_watched(self, kind, tmdb, season=None):
+        """Drop the watched records of a title (season: only that season's). Returns the keys removed."""
+        recs = self.watched_records(kind, tmdb)
+        if season is not None:
+            recs = [r for r in recs if r.get("season") == int(season)]
+        with self.lock:
+            for r in recs:
+                self.db.execute("DELETE FROM watched WHERE key=?", (r["key"],))
+            self._watched_idx = None
+        return [r["key"] for r in recs]
+
+    def _watched_index(self):
+        """{(kind, tmdb): {"whole", "seasons", "watched_at", "source"}} (kept until the next change)."""
+        idx = self._watched_idx
+        if idx is None:
+            idx = {}
+            for r in self.watched_records():
+                e = idx.setdefault((r["kind"], str(r["tmdb"])), {"whole": False, "seasons": set(), "watched_at": 0,
+                                                                 "source": r.get("source")})
+                if r.get("season") is None:
+                    e["whole"] = True
+                elif r.get("episode") is None:
+                    e["seasons"].add(r["season"])
+                e["watched_at"] = max(e["watched_at"], r.get("watched_at") or 0)
+            self._watched_idx = idx
+        return idx
+
+    def watched_state(self, kind, tmdb):
+        """{"whole", "seasons", "watched_at", "source"} for a title marked watched here, or None."""
+        try:
+            e = self._watched_index().get((kind, str(int(tmdb))))
+        except (TypeError, ValueError):
+            return None
+        return {**e, "seasons": sorted(e["seasons"])} if e else None
+
+    def watched_whole_keys(self):
+        """"movie:<tmdb>" / "tv:<tmdb>" of every title marked watched as a whole (for Home's rules)."""
+        return {f"{k}:{t}" for (k, t), e in self._watched_index().items() if e["whole"]}
+
+    def watched_flag(self, kind, tmdb):
+        """Small state for a requestable card: {watched, state: "watched" | "watched_partly", watched_at,
+        watched_seasons}, or None."""
+        st = self.watched_state(kind, tmdb)
+        if not st:
+            return None
+        return {"watched": True, "state": "watched" if st["whole"] else "watched_partly",
+                "watched_at": iso(st["watched_at"]) if st["watched_at"] else None, "watched_seasons": st["seasons"]}
+
+    def title_flag(self, kind, tmdb):
+        """What a requestable card shows about this title: removed (and watched), or marked watched here."""
+        return self.removed_flag(kind, tmdb) or self.watched_flag(kind, tmdb)
+
+    def restore_watched(self, note_seen=None):
+        """Titles marked watched before they were downloaded: once they're in the library, put the played state on
+        the library items (synced to Jellyfin like any change here). Films are carried once; shows also pick up
+        episodes that arrive later (never re-marking one that was carried before, so an unmark sticks).
+        note_seen(ids, at) tells the taste profile these plays are already counted (default: taste.note_seen)."""
+        recs = [r for r in self.watched_records() if not (r["kind"] == "movie" and r.get("carried_at"))]
+        if not recs:
+            return []
+        if note_seen is None:
+            try:
+                from .taste import note_seen
+            except Exception:
+                note_seen = None
+        done = []
+        for rec in recs:
+            owned = self.by_tmdb(rec["kind"], rec["tmdb"])
+            if not owned:
+                continue
+            at = rec.get("watched_at") or time.time()
+            marked = []
+            with self.lock:
+                if rec["kind"] == "movie":
+                    if owned.get("path") and not os.path.exists(owned["path"]):
+                        continue
+                    targets = [owned]
+                else:
+                    eps = self.eps.get(owned["id"], [])
+                    if rec.get("season") is not None:
+                        eps = [e for e in eps if e.get("season_no") == rec["season"] and
+                               (rec.get("episode") is None or e.get("episode_no") == rec["episode"])]
+                    else:
+                        eps = [e for e in eps if (e.get("season_no") or 0) > 0]
+                    carried = set(rec.get("carried_ids") or [])
+                    targets = [e for e in eps if e["id"] not in carried]
+                if not targets:
+                    continue
+                for t in targets:
+                    u = self._ud(t["id"])
+                    if not u["played"]:
+                        u["played"], u["position"] = 1, 0.0
+                        u["play_count"] = max(u["play_count"] or 0, 1)
+                        u["last_played"] = u["last_played"] or at
+                        u["changed"], u["dirty"] = time.time(), 1
+                        marked.append(t["id"])
+                self._save_ud(marked)
+                data = {k: v for k, v in rec.items() if k not in ("key", "kind", "tmdb", "season", "episode",
+                                                                  "watched_at", "source", "carried_at")}
+                data["carried_ids"] = sorted(set(data.get("carried_ids") or []) | {t["id"] for t in targets})
+                data["library_id"] = owned["id"]
+                self.db.execute("UPDATE watched SET carried_at=?, data=? WHERE key=?",
+                                (time.time(), json.dumps(data, ensure_ascii=False), rec["key"]))
+                self._watched_idx = None
+            if marked:
+                if note_seen:
+                    try:
+                        note_seen(marked, at)
+                    except Exception as e:
+                        print("taste: couldn't note carried plays:", e)
+                self.wake.set()
+            done.append(rec["key"])
+        if done:
+            print(f"catalog: {len(done)} title(s) marked watched earlier are in the library now; played state carried "
+                  f"over", flush=True)
+        return done
+
     # ------------------------------------------------------------------ My List
     # Owned titles are keyed "item:<id>", titles not in the library "movie:<tmdb>" / "tv:<tmdb>". With
     # mylist_sync_favorites on (the default) the owned part of the list IS the user's Jellyfin favourites:
@@ -1653,6 +1834,10 @@ class Catalog:
             self.restore_removed()
         except Exception as e:
             print("removed titles check failed:", e)
+        try:
+            self.restore_watched()
+        except Exception as e:
+            print("watched titles check failed:", e)
         return True
 
     @staticmethod

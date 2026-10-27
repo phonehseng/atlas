@@ -192,11 +192,27 @@ def ratings(kind, tmdb, max_age=3 * DAY):
     return cached(f"ratings:{kind}:{int(tmdb)}", max_age, fetch) or {}
 
 
+FLAG_KEYS = ("removed", "played", "state", "removed_at", "watched_at", "watched", "watched_seasons")
+
+
+def title_flag(kind, tmdb):
+    """Removed / watched state for a requestable card, read now (cached cards carry whatever it was then)."""
+    try:
+        return cat().title_flag(kind, tmdb) or {}
+    except Exception:
+        return {}
+
+
 def tmdb_card(c):
-    """A Seerr card with local image URLs (what tmdbCard() in the page draws)."""
+    """A Seerr card with local image URLs (what tmdbCard() in the page draws) and its current watched state."""
     if not c:
         return None
-    return {**c, "poster": tmdb_img(c.get("poster")), "backdrop": tmdb_img(c.get("backdrop"))}
+    out = {**c, "poster": tmdb_img(c.get("poster")), "backdrop": tmdb_img(c.get("backdrop"))}
+    if c.get("type") in ("movie", "tv") and c.get("id") and c.get("status") not in (4, 5):
+        for k in FLAG_KEYS:
+            out.pop(k, None)
+        out.update(title_flag(c["type"], c["id"]))
+    return out
 
 
 def owned_or_tmdb(kind, c):
@@ -333,6 +349,7 @@ def tmdb_page(kind, tmdb):
     out["crew"] = [{**c, "id": f"tmdb-{c['tmdb']}" if c.get("tmdb") else None} for c in d.get("crew") or []]
     out["mylist"] = f"{kind}:{tmdb}" in set(cat().mylist_keys())
     out["seerr"] = seerr_ready()
+    out["watched"] = cat().watched_flag(kind, tmdb)  # marked watched here (not in the library)
     return ok(item=out)
 
 
@@ -467,6 +484,8 @@ def _ml_tmdb_card(key, data):
         base.update({k: d.get(k) for k in ("title", "year", "poster", "backdrop", "overview", "status", "anime") if d.get(k) is not None})
     base["poster"] = tmdb_img(base.get("poster"))
     base["backdrop"] = tmdb_img(base.get("backdrop"))
+    if base.get("status") not in (4, 5):
+        base.update(title_flag(kind, tmdb))
     return base
 
 

@@ -1091,6 +1091,27 @@ a.r-chip:hover { transform: translateY(-2px); background: var(--btn-glass-hover)
 .card.is-removed .badges .tick { background: linear-gradient(140deg, #1f7a55cc, #2f9a6ecc); box-shadow: 0 3px 10px #0006, inset 0 0 0 1px #ffffff66; }
 .card.is-removed:hover .badges .tick { opacity: 1; }
 .card.is-removed .label span { font-style: italic; }
+/* fifth state: marked watched without being on this PC (requestable glass, with a "Watched" check chip) */
+.chip.watched-chip { gap: 4px; padding: 4px 9px; font-size: 10.5px; letter-spacing: .03em; color: #fff; cursor: help;
+  background: radial-gradient(120% 100% at 15% 0%, #ffffff40, #ffffff00 55%), linear-gradient(140deg, #23408fe6, #2f55b5cc);
+  border-color: #ffffff66; box-shadow: inset 0 1px 0 #ffffff55, 0 3px 10px #0b143366; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.chip.watched-chip svg { width: 12px; height: 12px; stroke-width: 3.2; }
+.card.is-watched .media > img { filter: saturate(.75) brightness(.86); }
+.card.is-watched:hover .media > img { filter: none; }
+.card:hover .badges .chip.watched-chip { opacity: 0; transition: opacity .2s; }
+/* the title page's Mark watched / Watched toggle */
+.dx-actions .btn.dx-watch { gap: 8px; }
+.dx-actions .btn.dx-watch.is-on { color: #fff; background: radial-gradient(120% 100% at 15% 0%, #ffffff40, #ffffff00 55%), linear-gradient(140deg, #1f7a55e6, #2f9a6ecc); border-color: #ffffff66; }
+@media (max-width: 640px) { .dx-actions .btn.dx-watch { width: 46px; padding: 0; } .dx-actions .btn.dx-watch span { display: none; } }
+/* My List · Watched */
+.ml-tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.ml-tabs button svg { width: 15px; height: 15px; }
+.wv-tools { margin-top: 4px; }
+.wv-tools .field-pill { flex: 1; max-width: 420px; }
+.wv-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.wv-src { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv-foot .btn.small.round { flex: none; width: 30px; min-height: 30px; padding: 0; }
+@media (max-width: 640px) { .wv-tools .field-pill { min-width: 0; max-width: none; flex: 1 1 100%; } }
 
 .set.stack > .pill-toggle { flex-wrap: wrap; align-self: flex-start; }
 .pill-toggle button { white-space: nowrap; }
@@ -1216,6 +1237,10 @@ a.r-chip:hover { transform: translateY(-2px); background: var(--btn-glass-hover)
 .dx-media video::cue, .pop-media video::cue, .epi .thumb video::cue {
   color: #fff; background: #0b143366; font-family: inherit; font-weight: 600; line-height: 1.35;
   text-shadow: 0 1px 3px #000c, 0 0 12px #0009; }
-.dx-media video::cue { font-size: 22px; }
+.dx-media video::cue { font-size: 17px; }
 .page:not([data-filter="lib"]) .row[data-libview] { display: none !important; }
 .page[data-filter="lib"] .row[data-mix]:not([data-key="series"]), .page[data-filter="lib"] .rows-more { display: none !important; }
+
+/* the preview's sound button says what it does */
+.dx-vbtn.wide { width: auto; padding: 0 16px 0 12px; gap: 8px; border-radius: 999px; display: inline-flex; align-items: center;
+  font-size: 14px; font-weight: 600; }

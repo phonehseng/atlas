@@ -396,7 +396,9 @@ function actionCard(el, a, animate, at) {
   } else if (a.type === 'watched') {
     btns = [{ label: a.on ? 'Mark watched' : 'Mark unwatched', primary: true, icon: 'check', do: 'mark-watched' }, { label: 'Cancel', do: 'cancel' }];
     card.innerHTML = `<div class="acard-row"><div class="acard-poster">${a.poster ? `<img src="${esc(a.poster)}" alt="">` : ''}</div>
-      <div class="acard-main"><span class="acard-kicker">Confirm</span><b class="acard-line">${esc(a.title)}</b><span class="acard-sub">${a.series ? 'Every episode' : 'The film'} will be marked ${a.on ? 'watched' : 'unwatched'}, here and in Jellyfin.</span></div></div><div class="acard-btns"></div>`;
+      <div class="acard-main"><span class="acard-kicker">Confirm</span><b class="acard-line">${esc(a.title)}</b><span class="acard-sub">${a.tmdb
+        ? (a.on ? `Not in your library: Marquee keeps ${a.season_text ? esc(a.season_text) : 'it'} as watched on this PC, and your taste profile learns from it.` : 'Marquee forgets it was watched.')
+        : `${a.season_text ? esc(a.season_text) : a.series ? 'Every episode' : 'The film'} will be marked ${a.on ? 'watched' : 'unwatched'}, here and in Jellyfin.`}</span></div></div><div class="acard-btns"></div>`;
   } else if (a.type === 'mylist') {
     btns = [{ label: 'Undo', do: 'mylist-undo' }];
     card.innerHTML = `<div class="acard-head">${icon('check', 16)} ${a.on ? 'On My List' : 'Off My List'}: ${esc(a.title)}</div><div class="acard-btns"></div>`;
@@ -471,7 +473,14 @@ async function onActionButton(b) {
     case 'request-sheet': return ui.request && ui.request(btn.key);
     case 'mark-watched':
       b.disabled = true;
-      try { await api(`/api/played/${encodeURIComponent(a.item_id)}`, { played: a.on !== false }); ui.watchedChanged && ui.watchedChanged(a.item_id); markCard(card, a, 'watched'); }
+      try {   // POST / DELETE /api/watched: library titles sync to Jellyfin, others are kept here; taste learns either way
+        const body = a.item_id ? { item_id: a.item_id } : { kind: a.kind, tmdb: a.tmdb };
+        if (a.seasons && a.seasons.length) body.seasons = a.seasons;
+        body.source = 'chat';
+        await api('/api/watched', body, a.on === false ? 'DELETE' : 'POST');
+        ui.watchedChanged && ui.watchedChanged(a.item_id || `${a.kind}:${a.tmdb}`, a.on !== false);
+        markCard(card, a, 'watched');
+      }
       catch (e) { b.disabled = false; toast(e.message); }
       return;
     case 'cancel': return markCard(card, a, 'cancelled');

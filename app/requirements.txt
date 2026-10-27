@@ -13,3 +13,7 @@ pychromecast>=14.0
 zeroconf>=0.150
 # AirPlay casting; the packaged app downloads it on first use (marquee/wheels.py, group "airplay"), not bundled
 pyatv>=0.16
+# Title-page trailers (marquee/trailers.py): yt-dlp resolves YouTube trailers; yt-dlp-ejs is its challenge solver,
+# run by the bundled QuickJS (vendor\quickjs, tools\get_quickjs.ps1). Bump both in releases: YouTube changes break old yt-dlp.
+yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0

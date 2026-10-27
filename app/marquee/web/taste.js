@@ -265,12 +265,13 @@ function draw() {
         <h4>Loved</h4>${p.liked.length ? `<div class="ttitles">${p.liked.slice(0, 24).map(t => titleChip(t, true)).join('')}</div>` : '<p class="tp-none">Titles you finish, rewatch or rate highly.</p>'}
         ${p.disliked.length ? `<h4>Not for you</h4><div class="ttitles">${p.disliked.slice(0, 16).map(t => titleChip(t, false)).join('')}</div>` : ''}
       </section>
-      <section class="tp-card tp-how"><h3>How this changes over time</h3>
+      <details class="tp-card tp-how" data-adv="taste-how"><summary><h3>How this changes over time</h3>
+        <p class="tp-stat">${p.plays ? `Learned from ${p.plays} finished title${p.plays === 1 ? '' : 's'}.` : 'Nothing learned from watching yet.'}${lb.imported ? ` Letterboxd: ${lb.films} films imported ${esc(when(lb.imported))} (${lb.liked} liked, ${lb.disliked} not for you).` : ''}</p>
+        </summary>
         <p>What you tell Marquee starts at a moderate weight. Every title you <b>finish</b> nudges its genres up, giving up in the <b>first 20%</b> nudges them down a little, and <b>rewatches and favourites</b> count double. Genres you stop watching slowly fade. So if you say “romance” but only finish horror, horror climbs past romance over two to four weeks of watching.</p>
         ${p.why.length ? `<h4>Why things moved</h4><ul class="tp-why">${p.why.map(w => `<li><span>${esc(w.text)}</span><small>${esc(when(w.date))}</small></li>`).join('')}</ul>` : ''}
-        <p class="tp-stat">${p.plays ? `Learned from ${p.plays} finished title${p.plays === 1 ? '' : 's'}.` : 'Nothing learned from watching yet.'}${lb.imported ? ` Letterboxd: ${lb.films} films imported ${esc(when(lb.imported))} (${lb.liked} liked, ${lb.disliked} not for you).` : ''}</p>
         <p class="tp-local">${icon('cloud-off', 15)} <span>Your taste profile stays on this PC (taste.json in Marquee's folder). ${ai.llm ? `When ${esc(ai.name)} writes a comment or answers in chat, it gets a short summary of it.` : 'Classic mode: no AI ever sees it.'}</span></p>
-      </section>
+      </details>
     </div>`;
 }
 const lbIcon = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="3.2"/><circle cx="12" cy="12" r="3.2"/><circle cx="18" cy="12" r="3.2"/></svg>';

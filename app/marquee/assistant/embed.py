@@ -36,7 +36,7 @@ def provider():
     s = settings.load()
     if s["ai_provider"] == "off":
         return None
-    if s["ai_provider"] in ("auto", "atlas"):
+    if s["ai_provider"] == "atlas":  # Atlas's Ollama, only when Atlas is chosen
         m = ollama_model()
         if m:
             return {"kind": "ollama", "model": m}

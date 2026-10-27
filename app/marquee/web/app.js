@@ -47,6 +47,7 @@ window.marquee = {
       if (name === 'playback-ended') { fetch('/api/taste/update', { method: 'POST' }).catch(() => {}); closeUpNext(); afterPlayback(data && data.id); }
       else if (name === 'library-changed') onLibraryChanged(data);
       else if (name === 'userdata-changed') onUserdataChanged(data);
+      else if (name === 'watched-changed') onWatchedChanged(data || {});
       else if (name === 'connection') onConnection(data || {});
       else if (name === 'credits') openUpNext(data || {});
       else if (name === 'credits-closed') closeUpNext();
@@ -164,11 +165,14 @@ function tmdbCard(c, n = 0, withBtn = false) {
   const st = STATUS[c.status];
   const removed = c.state === 'removed_watched' || c.state === 'removed' || c.removed;
   const watchedGone = removed && (c.state === 'removed_watched' || c.played);
-  const glass = removed && !(c.status >= 2 && c.status <= 5) ? 'is-requestable' + (watchedGone ? ' is-removed' : ' is-gone') : availClass(c.status);
-  return `<div class="card poster tmdb ${glass}${withBtn ? ' req-card' : ''}" role="button" tabindex="0" data-tmdb="${key}" data-act="tmdb" style="--i:${n}" aria-label="${esc(c.title)}">
+  /* Marked watched here without being on this PC (title page, chat, Atlas, Letterboxd): a check and "Watched". */
+  const seen = !removed && (c.state === 'watched' || c.state === 'watched_partly');
+  const seenText = c.state === 'watched_partly' && (c.watched_seasons || []).length ? `Watched S${c.watched_seasons.join(', ')}` : 'Watched';
+  const glass = (removed && !(c.status >= 2 && c.status <= 5) ? 'is-requestable' + (watchedGone ? ' is-removed' : ' is-gone') : availClass(c.status)) + (seen ? ' is-watched' : '');
+  return `<div class="card poster tmdb ${glass}${withBtn ? ' req-card' : ''}" role="button" tabindex="0" data-tmdb="${key}" data-act="tmdb" style="--i:${n}" aria-label="${esc(c.title)}${seen ? ', watched' : ''}">
     <div class="media${c.poster ? '' : ' noimg ready'}" style="--fb:${grad(c.title)}">${imgTag(c.poster)}
-      <div class="fallback">${esc(c.title)}</div>${!st && !removed ? `<span class="req-hint">${icon('plus', 14)} Request</span>` : ''}
-      <div class="badges">${st && c.status !== 5 ? `<span class="chip glass-chip status" title="${st[2]}">${st[0]}</span>` : ''}${removed && !st ? `<span class="chip dark-glass removed-chip" title="Deleted to save space${c.removed_at ? ' on ' + esc(fmtDate(c.removed_at)) : ''}">${watchedGone ? 'Watched · removed' : 'Removed'}</span>` : ''}${watchedGone ? `<span class="tick" title="Watched">${icon('check')}</span>` : ''}${c.anime && !removed ? '<span class="chip dark-glass" style="margin-left:auto">Anime</span>' : ''}</div>${mlBtn(key, 'ml-btn')}</div>
+      <div class="fallback">${esc(c.title)}</div>${!st && !removed && !seen ? `<span class="req-hint">${icon('plus', 14)} Request</span>` : ''}
+      <div class="badges">${st && c.status !== 5 ? `<span class="chip glass-chip status" title="${st[2]}">${st[0]}</span>` : ''}${removed && !st ? `<span class="chip dark-glass removed-chip" title="Deleted to save space${c.removed_at ? ' on ' + esc(fmtDate(c.removed_at)) : ''}">${watchedGone ? 'Watched · removed' : 'Removed'}</span>` : ''}${watchedGone ? `<span class="tick" title="Watched">${icon('check')}</span>` : ''}${seen ? `<span class="chip watched-chip" title="Marked watched${c.watched_at ? ' on ' + esc(fmtDate(c.watched_at)) : ''} (not on this PC)">${icon('check', 12)} ${esc(seenText)}</span>` : ''}${c.anime && !removed && !seen ? '<span class="chip dark-glass" style="margin-left:auto">Anime</span>' : ''}</div>${mlBtn(key, 'ml-btn')}</div>
     <div class="label"><b>${esc(c.title)}</b><span>${esc(removed ? [c.year, c.removed_at ? 'removed ' + fmtDate(c.removed_at, { month: 'short', day: 'numeric' }) : 'removed'].filter(Boolean).join(' · ') : [c.year, c.type === 'tv' ? 'Series' : 'Film'].filter(Boolean).join(' · '))}</span></div>${c.why ? `<div class="why">${esc(c.why)}</div>` : ''}
     </div>`;
 }
@@ -482,7 +486,17 @@ function addPreviewSubs(v, url) {
   // Where the lines sit: on the title page the bottom half is taken by the logo, details and buttons, so they go
   // in the open sky above them; on cards and thumbnails a little above the bottom edge.
   // (decided when the cues load: the title page appends its video to .dx-media only after this call)
-  const place = () => { const line = v.closest('.dx-media') ? 30 : 80; for (const c of t.track.cues || []) { c.snapToLines = false; c.line = line; c.size = 86; } };
+  // Where the lines sit: on a wide title page, low on the right half of the picture (the logo, details and buttons
+  // fill the left); on a narrow one, near the top; on cards and thumbnails, just above the bottom edge.
+  const place = () => {
+    const hero = v.closest('.dx-media'), wide = hero && hero.clientWidth > 760;
+    for (const c of t.track.cues || []) {
+      c.snapToLines = false;
+      if (hero && wide) { c.line = 78; c.position = 72; c.size = 48; c.align = 'center'; }
+      else if (hero) { c.line = 10; c.size = 90; }
+      else { c.line = 80; c.size = 86; }
+    }
+  };
   t.addEventListener('load', () => { try { place(); t.track.mode = 'showing'; } catch (e) { /* gone */ } });
   v.append(t);
   try { t.track.mode = 'showing'; } catch (e) { /* not ready */ }
@@ -1206,7 +1220,8 @@ function vmTmdb(d) {
     year: d.year, age: d.age, runtime: d.runtime, seasonsCount: (d.seasons || []).filter(s => s.number > 0).length, rating: d.rating,
     media: {}, genres: d.genres || [], overview: d.overview, tagline: d.tagline, logo: null, backdrop: d.backdrop, poster: d.poster,
     status: d.status, mlKey: `${d.kind}:${d.tmdb}`, studios: d.networks && d.networks.length ? d.networks : (d.studios || []),
-    anime: d.anime, showStatus: d.show_status, nextAir: d.next_air };
+    anime: d.anime, showStatus: d.show_status, nextAir: d.next_air,
+    watched: !!(d.watched && d.watched.state === 'watched'), watchedAt: d.watched && d.watched.watched_at };
 }
 
 /* --- quality badges from the media streams */
@@ -1266,9 +1281,9 @@ function copyHTML(v, partial) {
     primary = st === 2 || st === 3 ? `<span class="btn light dx-play is-static">${icon('check')} ${st === 2 ? 'Requested' : 'Downloading'}</span>`
       : `<button class="btn light dx-play" data-act="tmdb-request" data-tmdb="${esc(v.key)}">${icon('plus')} ${st === 4 ? 'Request the rest' : 'Request'}</button>`;
   }
-  const watched = isItem ? `<button class="btn round on-dark${v.played ? ' is-on' : ''}" data-act="watched" data-id="${esc(v.id)}" title="${v.played ? 'Mark unwatched' : 'Mark watched'}" aria-label="${v.played ? 'Mark unwatched' : 'Mark watched'}">${icon('check')}</button>` : '';
+  const watched = watchBtn(isItem ? !!v.played : !!v.watched, isItem ? `data-act="watched" data-id="${esc(v.id)}"` : `data-act="watched-tmdb" data-tmdb="${esc(v.key)}"`);
   const title = v.logo ? `<img class="dx-logo logo-img" data-cls="dx-title" src="${esc(v.logo)}" alt="${esc(v.title)}">` : `<h1 class="dx-title">${esc(v.title)}</h1>`;
-  const sub = v.kind === 'tmdb' ? `<span class="dx-kicker">${v.status === 4 ? 'Partly in your library' : v.status === 2 || v.status === 3 ? 'On its way' : 'Not in your library yet'}${v.anime ? ' · Anime' : ''}</span>` : '';
+  const sub = v.kind === 'tmdb' ? `<span class="dx-kicker">${v.status === 4 ? 'Partly in your library' : v.status === 2 || v.status === 3 ? 'On its way' : 'Not in your library yet'}${v.anime ? ' · Anime' : ''}<span class="dx-kick-seen"${v.watched ? '' : ' hidden'}> · Watched</span></span>` : '';
   return `${sub}${title}
     <div class="dx-meta">${meta}${badges ? `<span class="dx-badges">${badges}</span>` : ''}</div>
     ${v.type === 'Series' ? '<div id="smart-line" class="dx-smart"></div>' : ''}<div id="removed-line"></div>
@@ -1280,6 +1295,20 @@ function copyHTML(v, partial) {
         <span class="more-menu glass" role="menu" hidden><button role="menuitem" data-act="delete-local" data-id="${esc(v.id)}" data-name="${esc(v.title)}" data-type="${esc(v.type)}">${icon('close', 15)} Delete from this PC…</button></span></span>` : ''}
       ${isItem && v.type === 'Movie' && S.shareOn ? `<button class="btn round on-dark" data-act="share" data-id="${esc(v.id)}" data-name="${esc(v.title)}" ${v.available ? '' : 'disabled'} title="${v.available ? 'Share as a Google Drive link' : 'Only files on this PC can be shared'}" aria-label="Share">${icon('share')}</button>` : ''}</div>
     ${progress}`;
+}
+/* The title page's "Mark watched" / "Watched" toggle (any title: owned, requestable or neither). */
+function watchBtn(on, attrs) {
+  return `<button class="btn on-dark dx-watch${on ? ' is-on' : ''}" ${attrs} aria-pressed="${on}" title="${on ? 'Watched: tap to mark unwatched' : 'Mark watched'}">${icon('check')}<span>${on ? 'Watched' : 'Mark watched'}</span></button>`;
+}
+function setWatchBtn(btn, on) {
+  if (!btn) return;
+  if (btn.classList.contains('watch-toggle')) return btn.classList.toggle('on', on);
+  btn.classList.toggle('is-on', on);
+  if (!btn.classList.contains('dx-watch')) return;
+  btn.setAttribute('aria-pressed', on);
+  btn.title = on ? 'Watched: tap to mark unwatched' : 'Mark watched';
+  const t = btn.querySelector('span');
+  if (t) t.textContent = on ? 'Watched' : 'Mark watched';
 }
 function progressBar(p, label) {
   return `<div class="dx-progress"><span><i style="--p:${clamp01(p).toFixed(3)}"></i></span>${esc(label)}</div>`;
@@ -1359,9 +1388,9 @@ async function openTmdb(key, opts = {}) {
   D.extras = { ratings: it.ratings || {}, cast: it.cast || [], crew: it.crew || [], videos: it.videos || [], collection: it.collection,
     recommended: it.recommended || [], tmdb_seasons: it.seasons || [], seasons_status: it.seasons_status || {}, imdb: it.imdb };
   if (!opts.refresh && (!seed || !seed.backdrop) && it.backdrop) $('.dx-art', box).innerHTML = `<img class="ph" src="${esc(tiny(it.backdrop))}" alt=""><img class="bd" src="${esc(it.backdrop)}" alt="">`;
+  if (!opts.refresh) heroPreview(seq);   // first: asking for the trailer starts its download while the page renders
   renderDetails(opts);
   applyExtras();
-  if (!opts.refresh) heroPreview(seq);
 }
 
 /* --- render */
@@ -1744,7 +1773,7 @@ async function heroPreview(seq) {
     try { const r = await api(`/api/preview/${encodeURIComponent(D.id)}`); if (r.available && r.url) src = { kind: 'video', url: r.url, start: r.start, seek: r.seek, subs: r.subs }; } catch (e) { /* artwork only */ }
   } else {
     const v = ((D.extras && D.extras.videos) || []).find(x => x.type === 'Trailer' || x.type === 'Teaser');
-    if (v && !isOffline()) src = { kind: 'yt', key: v.key };
+    if (v) src = await trailerSrc(v.key);
   }
   if (!src) return;
   const wait = 1000 - (performance.now() - D.openedAt);
@@ -1758,8 +1787,9 @@ function setVctl(idle) {
   if (!c) return;
   c.hidden = false;
   const mute = $('[data-act="dx-mute"]', c), rep = $('[data-act="dx-replay"]', c);
-  mute.innerHTML = icon(D.muted ? 'muted' : 'sound', 18);
-  mute.title = D.muted ? 'Unmute' : 'Mute';
+  mute.innerHTML = `${icon(D.muted ? 'muted' : 'sound', 18)}<span>${D.muted ? 'Unmute' : 'Mute'}</span>`;
+  mute.classList.add('wide');
+  mute.title = D.muted ? 'Turn the sound on' : 'Mute';
   mute.setAttribute('aria-label', mute.title);
   mute.hidden = !!idle;
   rep.innerHTML = icon(idle ? 'play' : 'restart', 18);
@@ -1776,7 +1806,11 @@ function startHeroMedia(src) {
     v.setAttribute('muted', '');
     v.addEventListener('playing', () => { if (D.media === m) { hero.classList.add('playing'); setVctl(false); } });
     v.addEventListener('ended', () => { if (D.media === m) endHero(); });
-    v.addEventListener('error', () => { if (D.media === m) stopHero(); }, { once: true });
+    v.addEventListener('error', () => {
+      if (D.media !== m) return;
+      if (src.key && !isOffline()) startHeroMedia({ kind: 'yt', key: src.key });   // our copy of a trailer failed
+      else stopHero();
+    }, { once: true });
     if (src.seek) v.addEventListener('loadedmetadata', () => { try { v.currentTime = src.start || 0; } catch (e) { /* not seekable */ } }, { once: true });
     addPreviewSubs(v, src.subs);
     v.src = src.url;
@@ -1784,7 +1818,7 @@ function startHeroMedia(src) {
     host.append(v);
     v.play().catch(() => {});
     if (src.seek) m.timer = setTimeout(() => { if (D.media === m) endHero(); }, 32000);   // a whole file: stop after ~30 s
-  } else {
+  } else {   // last resort (trailerSrc): YouTube's own player, when Marquee couldn't fetch the trailer itself
     const f = document.createElement('iframe');
     const origin = encodeURIComponent(location.origin);
     f.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(src.key)}?autoplay=1&mute=${D.muted ? 1 : 0}&controls=0&rel=0&playsinline=1&iv_load_policy=3&modestbranding=1&disablekb=1&fs=0&enablejsapi=1&cc_load_policy=1&cc_lang_pref=en&hl=en&vq=hd1080&origin=${origin}`;
@@ -1846,13 +1880,27 @@ function replayHero() {
   if (m) { ytCommand('seekTo', [0, true]); ytCommand('playVideo'); return; }
   if (D.pendingSrc) startHeroMedia(D.pendingSrc);
 }
-function playTrailer(key) {
-  if (isOffline()) return toast('Trailers need an internet connection');
+/* Trailers play in Marquee's own video, like the previews: the server fetches one from YouTube the first time
+   (marquee/trailers.py), streaming it while it downloads, and keeps it, so it starts at once and plays offline next
+   time. The YouTube embed is only the fallback for when that fails. */
+async function trailerSrc(key) {
+  try {
+    const r = await api(`/api/trailer/${encodeURIComponent(key)}`);
+    if (r.available && r.url) return { kind: 'video', url: r.url, subs: r.subs, key };
+    if (r.reason) console.warn('trailer: using the YouTube player:', r.reason);
+  } catch (e) { /* server busy */ }
+  return isOffline() ? null : { kind: 'yt', key };
+}
+async function playTrailer(key) {
   const vids = (D.extras && D.extras.videos) || [];
   key = key || (vids.find(x => x.type === 'Trailer') || vids[0] || {}).key;
   if (!key) return;
   layers.modal.scrollTo({ top: 0, behavior: reduced.matches ? 'auto' : 'smooth' });
-  startHeroMedia({ kind: 'yt', key });
+  const seq = D.seq;
+  const src = await trailerSrc(key);
+  if (D.seq !== seq || layers.modal.hidden) return;
+  if (!src) return toast('Trailers need an internet connection');
+  startHeroMedia(src);
 }
 /* Pause the hero when it scrolls out of sight or the window hides; carry on when it's back. */
 layers.modal.addEventListener('scroll', () => {
@@ -1897,6 +1945,7 @@ function flyIn(fromEl) {
     { duration: 560, easing: 'cubic-bezier(.16,1,.3,1)' });
   const done = () => { modal.style.transformOrigin = ''; layers.modal.classList.remove('zoom'); };
   a.onfinish = done; a.oncancel = done;
+  setTimeout(() => { try { if (a.playState !== 'finished') a.finish(); } catch (e) { /* gone */ } }, 1200);  // never left half-grown
   // the hero settles in after the page: backdrop eases back from a slight zoom, the words follow one by one
   const art = $('.dx-art', modal);
   if (art) art.animate([{ transform: 'scale(1.12)', filter: 'brightness(.6)' }, { transform: 'scale(1)', filter: 'brightness(1)' }],
@@ -2046,9 +2095,15 @@ async function refreshMyListViews() {
   if (S.route === 'home' && $('#rows')) { const d = await loadMyList(true); if ($('#rows')) drawMyListRow($('#rows'), d); }
   if (S.route === 'mylist' && $('.page-mylist')) drawMyListPage($('.page-mylist'), await loadMyList(true));
 }
+const mlTab = () => (location.hash.split('/')[2] === 'watched' ? 'watched' : 'list');
+function mlTabs(tab) {
+  return `<div class="home-filter"><div class="pill-toggle filter-seg glass ml-tabs" role="group" aria-label="My List or Watched">
+    <button data-mltab="list" aria-pressed="${tab === 'list'}">My List</button><button data-mltab="watched" aria-pressed="${tab === 'watched'}">${icon('check', 15)} Watched</button></div></div>`;
+}
 async function renderMyList(page, seq) {
+  if (mlTab() === 'watched') return renderWatched(page, seq);
   page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Watch later</span><h1 style="margin-top:8px">My List</h1><p id="ml-sub">Loading…</p></div></div>
-    <div id="ml-grid"><div class="skeleton-row">${'<i></i>'.repeat(8)}</div></div>`;
+    ${mlTabs('list')}<div id="ml-grid"><div class="skeleton-row">${'<i></i>'.repeat(8)}</div></div>`;
   const d = await loadMyList(true);
   if (stale(seq)) return;
   drawMyListPage(page, d);
@@ -2065,19 +2120,150 @@ function drawMyListPage(page, d) {
 async function toggleWatched(id, btn) {
   const it = S.items.get(id) || {};
   const on = !it.played;
-  btn && btn.classList.toggle(btn.classList.contains('watch-toggle') ? 'on' : 'is-on', on);
+  setWatchBtn(btn, on);
   try {
-    await api(`/api/played/${id}`, { played: on });
+    if (it.type === 'Movie' || it.type === 'Series') await api('/api/watched', { item_id: id }, on ? 'POST' : 'DELETE');
+    else await api(`/api/played/${id}`, { played: on });
+    dispatchEvent(new Event('marquee:taste-changed'));
+    S.watchedData = null;
+    if (S.route === 'mylist' && mlTab() === 'watched' && $('.page-mylist')) loadWatched(true).then(() => drawWatched($('.page-mylist')), () => {});
     reg({ id, played: on, progress: on ? 0 : it.progress });
     S.home = null; S.lib = {};
     toast(on ? `Marked “${titleOf(it)}” as watched` : `Marked “${titleOf(it)}” as unwatched`, { icon: 'check' });
     for (const c of $$(`.card[data-id="${CSS.escape(id)}"] .badges`)) c.innerHTML = on ? `<span class="tick">${icon('check')}</span>` : '';
     if (!layers.modal.hidden && D.kind === 'item') openDetails(D.id, { refresh: true, season: D.season && D.season.number });
   } catch (e) {
-    btn && btn.classList.toggle(btn.classList.contains('watch-toggle') ? 'on' : 'is-on', !on);
+    setWatchBtn(btn, !on);
     toast(e.message);
   }
 }
+
+/* A title that isn't on this PC: kept as watched here (POST /api/watched), and the taste profile learns from it. */
+async function toggleWatchedTmdb(key, btn, force) {
+  const [kind, tmdb] = key.split(':');
+  const c = S.tmdb.get(key) || {};
+  const cur = D.kind === 'tmdb' && D.key === key && D.vm ? D.vm.watched : c.state === 'watched';
+  const on = force ?? !cur;
+  setWatchBtn(btn, on);
+  const title = (D.key === key && D.vm && D.vm.title) || c.title || 'it';
+  try {
+    const r = await api('/api/watched', { kind, tmdb: +tmdb }, on ? 'POST' : 'DELETE');
+    watchedLocal(key, on, r.item);
+    dispatchEvent(new Event('marquee:taste-changed'));
+    toast(on ? `Marked “${title}” as watched` : `Marked “${title}” as unwatched`, { icon: 'check', action: 'Undo', onAction: () => toggleWatchedTmdb(key, $(`.dx-watch[data-tmdb="${CSS.escape(key)}"]`), !on) });
+  } catch (e) {
+    setWatchBtn(btn, !on);
+    toast(e.message);
+  }
+}
+/* Watched state changed for a requestable title: its cards, the open title page and the cached views catch up. */
+function watchedLocal(key, on, entry) {
+  const c = S.tmdb.get(key);
+  if (c) {
+    if (on) Object.assign(c, { watched: true, state: entry && entry.complete === false ? 'watched_partly' : 'watched', watched_at: entry && entry.watched_at, watched_seasons: (entry && entry.seasons) || [] });
+    else { delete c.watched; if (c.state === 'watched' || c.state === 'watched_partly') delete c.state; }
+    for (const el of $$(`.card[data-tmdb="${CSS.escape(key)}"]`)) {
+      if (el.closest('.wv-grid')) continue;
+      const t = document.createElement('div');
+      t.innerHTML = tmdbCard(c, +(el.style.getPropertyValue('--i') || 0));
+      const fresh = t.firstElementChild;
+      for (const keep of $$(':scope > .ml-foot', el)) fresh.append(keep);
+      fresh.classList.add('in');
+      el.replaceWith(fresh);
+    }
+  }
+  if (D.kind === 'tmdb' && D.key === key && D.vm) {
+    D.vm.watched = on;
+    setWatchBtn($(`.dx-watch[data-tmdb="${CSS.escape(key)}"]`), on);
+    const k = $('.dx-kick-seen');
+    if (k) k.hidden = !on;
+  }
+  S.home = null; S.lib = {}; S.watchedData = null;
+  if (S.route === 'mylist' && mlTab() === 'watched' && $('.page-mylist')) loadWatched(true).then(() => drawWatched($('.page-mylist')), () => {});
+}
+
+/* --- Watched: everything you've seen (library plays, titles marked here or by Atlas / Letterboxd, removed ones) */
+const WSRC = { library: 'On this PC', manual: 'Marked here', atlas: 'Atlas', chat: 'Chat', letterboxd: 'Letterboxd', removed: 'Removed' };
+async function loadWatched(force) {
+  if (!force && S.watchedData && Date.now() - S.watchedData.at < 30e3) return S.watchedData;
+  const d = await api('/api/watched');
+  S.watchedData = { items: d.items || [], at: Date.now() };
+  return S.watchedData;
+}
+async function renderWatched(page, seq) {
+  const st = (S.wv = S.wv || { kind: '', q: '' });
+  page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Seen it</span><h1 style="margin-top:8px">Watched</h1><p id="wv-sub">Loading…</p></div></div>
+    ${mlTabs('watched')}
+    <div class="grid-tools wv-tools"><label class="field-pill">${icon('search', 17)}<input type="search" id="wv-q" placeholder="Search what you've watched" aria-label="Search what you've watched" value="${esc(st.q)}"></label>
+      <div class="pill-toggle" role="group" aria-label="Kind">${[['', 'All'], ['movie', 'Films'], ['tv', 'Shows']].map(([v, n]) => `<button data-wvkind="${v}" aria-pressed="${st.kind === v}">${n}</button>`).join('')}</div></div>
+    <div id="wv-grid"><div class="skeleton-row">${'<i></i>'.repeat(8)}</div></div>`;
+  let d;
+  try { d = await loadWatched(true); } catch (e) { if (!stale(seq)) $('#wv-grid', page).innerHTML = errorBox(e); return; }
+  if (stale(seq)) return;
+  drawWatched(page);
+  $('#wv-q', page).addEventListener('input', e => { st.q = e.target.value.trim().toLowerCase(); drawWatched(page); });
+}
+function wvCard(e, n) {
+  let html;
+  if (e.card) html = posterCard(e.card, n);
+  else if (e.removed && !e.sources.some(s => s !== 'removed')) html = tmdbCard({ type: e.kind, id: e.tmdb, title: e.title, year: e.year, poster: e.poster, backdrop: e.backdrop, removed: true, played: true, state: 'removed_watched', removed_at: e.removed_at }, n);
+  else html = tmdbCard({ ...(S.tmdb.get(`${e.kind}:${e.tmdb}`) || {}), type: e.kind, id: e.tmdb, title: e.title, year: e.year ? String(e.year) : '', poster: e.poster, backdrop: e.backdrop, watched: true, state: e.complete ? 'watched' : 'watched_partly', watched_at: e.watched_at, watched_seasons: e.seasons || [] }, n);
+  const t = document.createElement('div');
+  t.innerHTML = html;
+  const el = t.firstElementChild;
+  const eps = e.episodes && !e.complete ? `${e.episodes.watched} of ${e.episodes.total} episodes` : (!e.complete && (e.seasons || []).length ? `Season${e.seasons.length > 1 ? 's' : ''} ${e.seasons.join(', ')}` : '');
+  const when = e.watched_at ? fmtDate(e.watched_at, { month: 'short', day: 'numeric', year: new Date(e.watched_at).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) : '';
+  const src = e.sources.map(x => WSRC[x] || x).join(' + ');
+  el.insertAdjacentHTML('beforeend', `<div class="wv-foot"><span class="wv-src" title="${esc([src, when && 'watched ' + when].filter(Boolean).join(' · '))}">${esc([eps || src, when].filter(Boolean).join(' · '))}</span>
+    <button class="btn small ghost round" data-act="wv-unmark" data-wkey="${esc(e.key)}" title="Mark unwatched" aria-label="Mark ${esc(e.title || '')} unwatched">${icon('close', 14)}</button></div>`);
+  return el.outerHTML;
+}
+function drawWatched(page) {
+  const st = S.wv, grid = $('#wv-grid', page), sub = $('#wv-sub', page);
+  if (!grid || !S.watchedData) return;
+  const all = S.watchedData.items;
+  const films = all.filter(e => e.kind === 'movie').length, shows = all.length - films;
+  sub.textContent = all.length ? `${films} film${films === 1 ? '' : 's'} and ${shows} show${shows === 1 ? '' : 's'} you've seen: from your library, marked here, and ones removed to save space` : '';
+  const list = all.filter(e => (!st.kind || e.kind === st.kind) && (!st.q || (e.title || '').toLowerCase().includes(st.q)));
+  grid.innerHTML = list.length ? `<div class="grid ml-grid wv-grid">${list.map((e, k) => wvCard(e, Math.min(k, 24))).join('')}</div>`
+    : all.length ? `<div class="empty"><span class="big">🔍</span>No matches.</div>`
+    : `<div class="empty"><span class="big">🎬</span>Nothing watched yet. Press <b>Mark watched</b> on any title page, even for films that aren't on this PC, or tell the chat “I've seen Oppenheimer”.</div>`;
+}
+async function unmarkWatched(btn) {
+  const key = btn.dataset.wkey;
+  const e = ((S.watchedData && S.watchedData.items) || []).find(x => x.key === key);
+  if (!e) return;
+  const card = btn.closest('.card');
+  btn.disabled = true;
+  try {
+    await api('/api/watched', { key }, 'DELETE');
+  } catch (err) { btn.disabled = false; return toast(err.message); }
+  S.watchedData.items = S.watchedData.items.filter(x => x.key !== key);
+  if (e.item_id) reg({ id: e.item_id, played: false });
+  else watchedLocal(key, false);
+  dispatchEvent(new Event('marquee:taste-changed'));
+  if (card) { foldAway(card, true); setTimeout(() => { if (S.route === 'mylist' && mlTab() === 'watched') drawWatched($('.page-mylist')); }, 420); }
+  const undo = e.item_id && !e.complete ? null : async () => {   // a show watched in part can't be put back exactly
+    try { await api('/api/watched', e.item_id ? { item_id: e.item_id } : { kind: e.kind, tmdb: e.tmdb, ...(e.complete ? {} : { seasons: e.seasons }) }); }
+    catch (err) { return toast(err.message); }
+    if (!e.item_id) watchedLocal(key, true, e);
+    dispatchEvent(new Event('marquee:taste-changed'));
+    if (S.route === 'mylist' && mlTab() === 'watched') { await loadWatched(true); drawWatched($('.page-mylist')); }
+  };
+  toast(`Marked “${e.title}” as unwatched`, { icon: 'check', ...(undo ? { action: 'Undo', onAction: undo } : {}) });
+}
+function onWatchedChanged(d) {
+  if (d && d.tmdb && !d.item_id) watchedLocal(`${d.kind}:${d.tmdb}`, !!d.watched);
+  else if (d && d.item_id) reg({ id: d.item_id, played: !!d.watched });
+  S.home = null; S.lib = {}; S.watchedData = null;
+  if (S.route === 'mylist' && mlTab() === 'watched' && $('.page-mylist')) loadWatched(true).then(() => drawWatched($('.page-mylist')), () => {});
+}
+document.addEventListener('click', e => {
+  const tab = e.target.closest('[data-mltab]');
+  if (tab) { location.hash = tab.dataset.mltab === 'watched' ? '#/mylist/watched' : '#/mylist'; return; }
+  const k = e.target.closest('[data-wvkind]');
+  if (k && S.wv) { S.wv.kind = k.dataset.wvkind; $$('[data-wvkind]').forEach(b => b.setAttribute('aria-pressed', b === k)); drawWatched($('.page-mylist')); }
+});
 
 /* ================================================================== search */
 const srch = { seq: 0, timer: 0, ai: null };
@@ -2220,7 +2406,7 @@ async function renderRequests(page, seq) {
   catch (e) {
     if (stale(seq)) return;
     $('#rows', page).innerHTML = e.status === 409
-      ? `<div class="notice glass"><span class="big">🎟️</span><h2>Connect Seerr to request titles</h2><p>Marquee uses Seerr (Jellyseerr/Overseerr) to find new films and shows and send them to your downloaders.</p><a class="btn" href="#/settings">${icon('gear')} Open Settings</a></div>`
+      ? `<div class="notice glass"><span class="big">🎟️</span><h2>Connect Seerr to request titles</h2><p>Marquee uses Seerr (Jellyseerr/Overseerr) to find new films and shows and send them to your downloaders.</p><a class="btn" href="#/settings/library">${icon('gear')} Open Settings</a></div>`
       : errorBox(e);
     $('#req-q', page).disabled = true;
     return;
@@ -2413,32 +2599,46 @@ const has = k => S.settings && k in S.settings;
 const listBox = (key, label, hint, ph) => `<div class="set stack"><div class="lbl"><b>${label}</b>${hint ? `<span>${hint}</span>` : ''}</div>
   <textarea class="input wide list-box" data-list="${key}" rows="3" spellcheck="false" placeholder="${esc(ph)}">${esc((S.settings[key] || []).join('\n'))}</textarea></div>`;
 
-/* The player panel: rows appear only for settings this version of the backend knows about. */
-function playbackRows(s) {
+/* Settings layout pieces: compact cards, and an "Advanced" disclosure for rarely changed options.
+   window.MarqueeSettings (settings.js) adds the category list, search and hint tooltips on top. */
+const setCard = (id, ic, title, body, cls = '') => body.trim() ? `<section class="panel glass setx-card${cls ? ' ' + cls : ''}" data-card="${id}"><h2>${icon(ic)} ${title}</h2>${body}</section>` : '';
+const setAdv = (id, body, open) => body.trim() ? `<details class="setx-adv" data-adv="${id}"${open ? ' open' : ''}><summary>Advanced</summary><div class="setx-adv-body">${body}</div></details>` : '';
+const setPane = (cat, body) => `<div class="setx-pane" data-cat="${cat}" role="tabpanel" hidden>${body}</div>`;
+
+/* Settings > Playback: rows appear only for settings this version of the backend knows about. */
+function playbackPane(s) {
   const up = [['auto', 'Auto'], ['nvidia', 'NVIDIA RTX'], ['anime4k', 'Anime4K'], ['hq', 'High quality'], ['off', 'Off']];
-  return `
+  const picture = `
       ${seg('quality', [['original', 'Original'], ['2160', '4K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p']], 'Default quality', 'Original plays the file itself when it can.')}
       ${seg('upscaler', up, 'Upscaler', 'Sharpens lower-resolution video.')}
-      ${has('sdr_to_hdr') ? seg('sdr_to_hdr', [['auto', 'Auto'], ['off', 'Off']], 'SDR to HDR', 'Brightens standard video on an HDR screen.') : sw('rtx_hdr', 'RTX HDR', 'Turns SDR video into HDR on supported NVIDIA cards.')}
-      ${has('hwdec') ? sw('hwdec', 'Hardware decoding', 'Lets the graphics card decode video. Turn off if you see glitches.') : ''}
-      ${has('seek_step') ? seg('seek_step', [[5, '5 s'], [10, '10 s']], 'Arrow-key jump', 'How far ← and → skip.') : ''}
+      ${has('sdr_to_hdr') ? seg('sdr_to_hdr', [['auto', 'Auto'], ['off', 'Off']], 'SDR to HDR', 'Brightens standard video on an HDR screen.') : sw('rtx_hdr', 'RTX HDR', 'Turns SDR video into HDR on supported NVIDIA cards.')}`;
+  const watching = `
       ${sw('autoplay_next', 'Autoplay next episode', '')}
       ${has('credits_mini') ? sw('credits_mini', 'Up next during the credits', 'When the credits roll, the video shrinks to a corner and what to watch next appears.') : ''}
-      ${has('interpolation') ? sw('interpolation', 'Smooth motion', 'Frame interpolation for less judder on panning shots.') : ''}
       ${sw('skip_intros', 'Skip intros automatically', 'The Skip Intro button shows either way.')}`;
-}
-function soundRows(s) {
-  return `
+  const sound = `
       ${sw('stable_volume', 'Stable volume', 'Evens out loud explosions and quiet dialogue.')}
-      ${has('night_mode') ? sw('night_mode', 'Night mode', 'Quiet parts up, loud parts down, so you don\u2019t wake the house.') : ''}
+      ${has('night_mode') ? sw('night_mode', 'Night mode', 'Quiet parts up, loud parts down, so you don’t wake the house.') : ''}
       ${has('voice_focus') || has('dialogue_boost') ? (has('voice_focus')
         ? seg('voice_focus', [['off', 'Off'], ['dialogue', 'Dialogue boost'], ['isolate', 'AI voice isolation']], 'Voices', 'Make speech easier to follow.')
         : sw('dialogue_boost', 'Dialogue boost', 'Lifts speech over music and effects.')) : ''}
       <div class="set"><div class="lbl"><b>Starting volume</b><span>Every video starts at this level.</span></div>
-        <div class="range-wrap"><input type="range" min="0" max="100" step="1" value="${s.base_volume ?? 80}" data-range="base_volume" style="--v:${s.base_volume ?? 80}%" aria-label="Starting volume"><output>${s.base_volume ?? 80}</output></div></div>
+        <div class="range-wrap"><input type="range" min="0" max="100" step="1" value="${s.base_volume ?? 80}" data-range="base_volume" style="--v:${s.base_volume ?? 80}%" aria-label="Starting volume"><output>${s.base_volume ?? 80}</output></div></div>`;
+  const langs = `
+      <div class="set"><div class="lbl"><b>Subtitles</b><span>Preferred subtitle language.</span></div>${langSelect('sub_lang')}</div>
+      <div class="set"><div class="lbl"><b>Anime audio</b><span>Audio language for anime.</span></div>${langSelect('audio_lang_anime')}</div>`;
+  const advanced = `
+      ${has('hwdec') ? sw('hwdec', 'Hardware decoding', 'Lets the graphics card decode video. Turn off if you see glitches.') : ''}
+      ${has('interpolation') ? sw('interpolation', 'Smooth motion', 'Frame interpolation for less judder on panning shots.') : ''}
+      ${has('seek_step') ? seg('seek_step', [[5, '5 s'], [10, '10 s']], 'Arrow-key jump', 'How far ← and → skip.') : ''}
       ${has('passthrough') ? sw('passthrough', 'Passthrough', 'Send Dolby and DTS untouched to a receiver or soundbar.') : ''}
       ${has('audio_device') ? `<div class="set"><div class="lbl"><b>Output device</b><span>Where the sound goes.</span></div>
         <select class="select" data-set="audio_device" id="audio-device"><option value="${esc(s.audio_device || 'auto')}" selected>${s.audio_device && s.audio_device !== 'auto' ? esc(s.audio_device) : 'Windows default'}</option></select></div>` : ''}`;
+  return setCard('picture', 'play', 'Picture', picture)
+    + setCard('sound', 'sound', 'Sound', sound)
+    + setCard('watching', 'restart', 'Watching', watching)
+    + setCard('languages', 'info', 'Subtitles &amp; languages', langs)
+    + setCard('playback-adv', 'gear', 'Fine-tuning', setAdv('playback', advanced), 'setx-advcard');
 }
 async function loadAudioDevices() {
   const sel = $('#audio-device');
@@ -2457,7 +2657,7 @@ async function loadAudioDevices() {
    Talks to /api/mobile* (marquee/remote.py). Replaces the old "Phone remote" panel. */
 const REM = { data: null, idx: 0, seq: 0, pairVersion: null };
 function remotePanel(s) {
-  return `<section class="panel glass mobile-panel" style="--i:6"><h2>${icon('phone')} Marquee Mobile</h2>
+  return `<section class="panel glass setx-card mobile-panel" data-card="mobile"><h2>${icon('phone')} Marquee Mobile</h2>
       <p>Your library on your phone: watch anything from this PC, or use the phone as a remote for the player here.</p>
       <div class="set"><div class="lbl"><b>Marquee Mobile</b><span>Phones connect after scanning a pairing code.</span></div>
         <button class="switch" role="switch" data-switch="mobile" aria-checked="${!!(s.mobile || s.remote)}" aria-label="Marquee Mobile"></button></div>
@@ -2505,15 +2705,16 @@ function drawRemote() {
       </div></div>
     ${fw.checked && !fw.allowed ? `<div class="set mobile-fw"><div class="lbl"><b>Windows Firewall blocks phones on Tailscale</b><span>Allow Marquee through: one rule, private networks only, for Marquee and this port. Windows asks for permission.</span></div>
       <button class="btn small" data-action="mobile-firewall">Allow Marquee</button></div>` : ''}
-    ${ts.running ? `<div class="set"><div class="lbl"><b>HTTPS</b><span>${https.on ? `On: ${esc(https.url || '')}` : 'Needed to install the app properly on an iPhone home screen. Uses Tailscale’s own certificate.'}</span></div>
-      <button class="btn small ghost" data-action="mobile-https" data-on="${https.on ? '0' : '1'}">${https.on ? 'Turn off HTTPS' : 'Turn on HTTPS'}</button></div>` : ''}
+    <div class="set stack"><div class="lbl"><b>Default phone quality</b><span>Each phone can change its own.</span></div>
+      <div class="pill-toggle" role="group" aria-label="Default phone quality">${[['auto', 'Auto'], ['original', 'Original'], ['1080', '1080p'], ['720', '720p'], ['480', '480p']].map(([v, n]) => `<button data-seg="mobile_quality" data-v="${v}" aria-pressed="${qual === v}">${n}</button>`).join('')}</div></div>
+    ${sw('mobile_jellyfin_signin', 'Let friends sign in with Jellyfin', 'Friends use their own Jellyfin account on the phone app, with their own watch history.')}
+    ${setAdv('mobile', `
     <div class="set stack"><div class="lbl"><b>Network</b><span>Tailscale works anywhere; adding the home network lets phones on your Wi-Fi in without it.</span></div>
       <div class="pill-toggle" role="group" aria-label="Network"><button data-seg="mobile_bind" data-v="tailscale" aria-pressed="${bind === 'tailscale'}">Tailscale</button><button data-seg="mobile_bind" data-v="lan+tailscale" aria-pressed="${bind === 'lan+tailscale'}">Home network + Tailscale</button></div></div>
     <div class="set"><div class="lbl"><b>Phones streaming at once</b><span>Phones converting video at the same time (direct play doesn't count).</span></div>
       <div class="pill-toggle" role="group" aria-label="Phones streaming at once">${[1, 2, 3, 4].map(n => `<button data-seg="mobile_max_streams" data-num data-v="${n}" aria-pressed="${+maxS === n}">${n}</button>`).join('')}</div></div>
-    <div class="set stack"><div class="lbl"><b>Default phone quality</b><span>Each phone can change its own.</span></div>
-      <div class="pill-toggle" role="group" aria-label="Default phone quality">${[['auto', 'Auto'], ['original', 'Original'], ['1080', '1080p'], ['720', '720p'], ['480', '480p']].map(([v, n]) => `<button data-seg="mobile_quality" data-v="${v}" aria-pressed="${qual === v}">${n}</button>`).join('')}</div></div>
-    ${sw('mobile_jellyfin_signin', 'Let friends sign in with Jellyfin', 'Friends use their own Jellyfin account on the phone app, with their own watch history.')}
+    ${ts.running ? `<div class="set"><div class="lbl"><b>HTTPS</b><span>${https.on ? `On: ${esc(https.url || '')}` : 'Needed to install the app properly on an iPhone home screen. Uses Tailscale’s own certificate.'}</span></div>
+      <button class="btn small ghost" data-action="mobile-https" data-on="${https.on ? '0' : '1'}">${https.on ? 'Turn off HTTPS' : 'Turn on HTTPS'}</button></div>` : ''}`)}
     <div class="set stack"><div class="lbl"><b>Paired phones</b>${devs.length ? '' : '<span>None yet.</span>'}</div>
       ${devs.length ? `<ul class="mobile-list">${devs.map(v => `<li><div class="grow"><b>${esc(v.name || 'Phone')}</b><span>${esc([v.browser, v.kind === 'jellyfin' ? (v.user || 'Jellyfin user') : 'You', v.last_seen ? 'last seen ' + when(v.last_seen) : null].filter(Boolean).join(' · '))}</span></div>
         <button class="stk-mini" data-action="mobile-rename" data-id="${esc(v.id)}" data-name="${esc(v.name || '')}">Rename</button><button class="stk-mini" data-action="mobile-revoke" data-id="${esc(v.id)}" data-name="${esc(v.name || 'this phone')}">Remove</button></li>`).join('')}</ul>` : ''}</div>
@@ -2565,75 +2766,65 @@ function renderSettings(page) {
   const s = S.settings;
   const ai = ({ openai: 'custom', off: 'classic' })[s.ai_provider] || s.ai_provider || 'auto';
   s.ai_provider = ai;   // old values shown under their new names
-  page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Settings</span><h1 style="margin-top:8px">Make it yours</h1><p>Changes save as you go.</p></div></div>
-  <div class="settings">
-    <section class="panel glass" style="--i:0"><h2>${icon('sun')} Appearance</h2>
+  const general = setCard('appearance', 'sun', 'Appearance', `
       <div class="set"><div class="lbl"><b>Theme</b><span>Clear daylight, or lights down for movie night.</span></div>
         <div class="theme-cards">
           <button class="theme-card" data-seg="theme" data-v="light" aria-pressed="${s.theme === 'light'}"><div class="sw l"><i></i><i></i><i></i><i></i></div>Light</button>
           <button class="theme-card" data-seg="theme" data-v="dark" aria-pressed="${s.theme !== 'light'}"><div class="sw d"><i></i><i></i><i></i><i></i></div>Dark</button></div></div>
       ${sw('previews', 'Hover previews', 'Rest on a poster to play a silent clip.')}
-      ${has('details_autoplay') ? sw('details_autoplay', 'Previews on title pages', 'A title’s page plays a few silent seconds of it behind the artwork.') : ''}
-      <div class="set stack"><div class="lbl"><b>Keyboard</b></div><div class="shortcuts"><kbd>/</kbd><span>Search</span><kbd>Esc</kbd><span>Close whatever is open</span><kbd>← →</kbd><span>Move along a row</span><kbd>Enter</kbd><span>Open the focused title</span></div></div>
-    </section>
-    <section class="panel glass" style="--i:1"><h2>${icon('play')} Playback</h2>${playbackRows(s)}
-    </section>
-    <section class="panel glass" style="--i:2"><h2>${icon('heart')} Sound</h2>${soundRows(s)}
-    </section>
-    <section class="panel glass" style="--i:2"><h2>${icon('info')} Languages</h2>
-      <div class="set"><div class="lbl"><b>Subtitles</b><span>Preferred subtitle language.</span></div>${langSelect('sub_lang')}</div>
-      <div class="set"><div class="lbl"><b>Anime audio</b><span>Audio language for anime.</span></div>${langSelect('audio_lang_anime')}</div>
-    </section>
-    <section class="panel glass" style="--i:3"><h2>${icon('sparkle')} Assistant</h2>
-      <p>Greetings, picks and search answers. ${S.state.atlas ? 'Atlas was found on this PC.' : ''} ${S.ai.mode === 'classic' ? 'Currently in <b>Classic</b> mode: prepared lines and rules, no AI.' : S.ai.on ? `Currently using <b>${esc(S.ai.name)}</b>.` : ''}</p>
-      <div class="set stack"><div class="lbl"><b>Provider</b><span>Auto uses your own key if set, else Atlas if it's on this PC, else the built-in AI if installed, else Classic.</span></div>
-        <div class="pill-toggle" role="group" aria-label="AI provider">${[['auto', 'Auto'], ['builtin', 'Built-in'], ['atlas', 'Atlas'], ['custom', 'Custom key'], ['classic', 'Off (Classic, no AI)']].map(([v, n]) => `<button data-seg="ai_provider" data-v="${v}" aria-pressed="${ai === v}">${n}</button>`).join('')}</div></div>
-      <div id="builtin-box"></div>
+      ${has('details_autoplay') ? sw('details_autoplay', 'Previews on title pages', 'A title’s page plays a few silent seconds of it behind the artwork.') : ''}`)
+    + setCard('keyboard', 'dots', 'Keyboard', `<div class="set stack setx-keys"><div class="lbl"><b>Shortcuts</b></div><div class="shortcuts"><kbd>/</kbd><span>Search (on this page: search settings)</span><kbd>Esc</kbd><span>Close whatever is open</span><kbd>← →</kbd><span>Move along a row</span><kbd>Enter</kbd><span>Open the focused title</span></div></div>`);
+  const folders = `
+      ${has('autosort_after') ? seg('autosort_after', [[0, 'Right away'], [30, '30 min'], [120, '2 h'], [360, '6 h']], 'Sort new downloads', 'How long to wait before tidying finished downloads into the library.') : ''}
+      ${has('watch_folders') ? listBox('watch_folders', 'Watch folders', 'Folders Marquee keeps an eye on for new downloads. One per line.', 'D:\\Downloads') : ''}
+      ${has('library_folders') ? listBox('library_folders', 'Library folders', 'Folders of films and shows Marquee plays even when Jellyfin is away. One per line.', 'D:\\Media\\Movies') : ''}`;
+  const library = setCard('servers', 'film', 'Servers', `
+      <div class="set setx-account"><div class="account"><span class="avatar">${esc((S.user || '?')[0].toUpperCase())}</span><div class="lbl"><b>${esc(S.user || 'Signed in')}</b><span>Jellyfin · ${esc(s.server || 'this PC')}</span></div></div>
+        <button class="btn small danger" data-action="logout">Sign out</button></div>
+      <div class="set stack"><div class="lbl"><b>Seerr address</b><span>Seerr finds new titles and sends them to your downloaders.</span></div><input class="input wide" data-text="seerr" value="${esc(s.seerr || '')}" placeholder="http://localhost:5055" spellcheck="false" aria-label="Seerr address"></div>
+      <div class="set stack"><div class="lbl"><b>${s.seerr_signed_in ? 'Signed in to Seerr' : 'Connect Seerr'}</b><span>Seerr signs in with your Jellyfin password.</span></div>
+        <form class="fields" id="seerr-form" style="grid-template-columns:1fr auto"><input class="input wide" type="password" name="password" placeholder="Jellyfin password" autocomplete="current-password" aria-label="Jellyfin password"><button class="btn small">${s.seerr_signed_in ? 'Reconnect' : 'Connect'}</button></form></div>
+      ${has('qbt_url') ? setAdv('servers', `<div class="set stack"><div class="lbl"><b>qBittorrent address</b><span>Used to show download progress in “Arriving soon”.</span></div><input class="input wide" data-text="qbt_url" value="${esc(s.qbt_url || '')}" placeholder="http://localhost:8080" spellcheck="false" aria-label="qBittorrent address"></div>`) : ''}`)
+    + setCard('smart', 'sparkle', 'Smart seasons', '<div id="smart-settings" class="setx-contents"></div>')
+    + setCard('folders', 'film', 'Library folders', folders)
+    + setCard('mylist', 'plus', 'My List', has('mylist_sync_favorites') ? sw('mylist_sync_favorites', 'Sync with Jellyfin favourites', 'Your list follows your favourites on every Jellyfin app, both ways. Titles you haven’t got yet join once they arrive.') : '');
+  const ais = [['auto', 'Auto'], ['builtin', 'Built-in'], ['custom', 'Custom key'], ['atlas', 'Atlas', 'Uses the Atlas assistant on this PC (only when picked)'], ['classic', 'Off (Classic, no AI)']];
+  const tasteAi = setCard('ai', 'sparkle', 'AI provider', `
+      <div class="set stack"><div class="lbl"><b>Provider</b><span data-sx="keep">Auto uses your own key if set, else the built-in AI, else Classic (no AI).</span></div>
+        <div class="pill-toggle" role="group" aria-label="AI provider">${ais.map(([v, n, tip]) => `<button data-seg="ai_provider" data-v="${v}" aria-pressed="${ai === v}"${tip ? ` title="${esc(tip)}"` : ''}>${n}</button>`).join('')}</div>
+        <span class="setx-sub">${S.ai.mode === 'classic' ? 'Now: Classic, prepared lines and rules, no AI.' : S.ai.on ? `Now using ${esc(S.ai.name)}.` : ''}<span data-ai-atlas ${ai === 'atlas' ? '' : 'hidden'}> Atlas: uses the Atlas assistant on this PC (only when picked).</span></span></div>
       <div class="fields" id="ai-fields" ${ai === 'custom' ? '' : 'hidden'}>
         <label>Endpoint URL<input class="input wide" data-text="ai_url" value="${esc(s.ai_url || '')}" placeholder="https://api.openai.com/v1" spellcheck="false"></label>
         <label>API key<input class="input wide" type="password" data-text="ai_key" placeholder="${s.ai_key_set ? 'Key saved (type to replace)' : 'Paste your API key'}" autocomplete="off"></label>
         <label>Model<input class="input wide" data-text="ai_model" value="${esc(s.ai_model || '')}" placeholder="gpt-4o-mini" spellcheck="false"></label>
-      </div>
-    </section>
-    <section class="panel glass" style="--i:4"><h2>${icon('plus')} Requests (Seerr)</h2>
-      <p>Seerr finds new titles and sends them to your downloaders.</p>
-      <div class="set stack"><div class="lbl"><b>Seerr address</b></div><input class="input wide" data-text="seerr" value="${esc(s.seerr || '')}" placeholder="http://localhost:5055" spellcheck="false"></div>
-      <div class="set stack"><div class="lbl"><b>${s.seerr_signed_in ? 'Signed in to Seerr' : 'Connect'}</b><span>Seerr signs in with your Jellyfin password.</span></div>
-        <form class="fields" id="seerr-form" style="grid-template-columns:1fr auto"><input class="input wide" type="password" name="password" placeholder="Jellyfin password" autocomplete="current-password" aria-label="Jellyfin password"><button class="btn small">${s.seerr_signed_in ? 'Reconnect' : 'Connect'}</button></form></div>
-    </section>
-    <section class="panel glass" style="--i:5"><h2>${icon('logout')} Account</h2>
-      <div class="set"><div class="account"><span class="avatar">${esc((S.user || '?')[0].toUpperCase())}</span><div><b>${esc(S.user || 'Signed in')}</b><div style="color:var(--muted);font-size:13px">${esc(s.server || 'Jellyfin')}</div></div></div>
-        <button class="btn small danger" data-action="logout">Sign out</button></div>
-      <p style="margin-top:10px;font-size:12.5px">Marquee is free software under the GPL-3.0 licence.</p>
-    </section>
-    <section class="panel glass taste-panel" id="taste-panel" style="--i:6"></section>
-    <div id="storage-settings" class="mqs-settings"></div>
-    ${remotePanel(s)}
-    <div id="cast-settings-slot"></div>
-    <section class="panel glass" style="--i:6"><h2>${icon('plus')} My List</h2>
-      <p>Titles you save for later, in your library or not.</p>
-      ${has('mylist_sync_favorites') ? sw('mylist_sync_favorites', 'Sync with Jellyfin favourites', 'Your list follows your favourites on every Jellyfin app, both ways. Titles you haven’t got yet join once they arrive.') : ''}
-    </section>
-    <section class="panel glass" style="--i:7"><h2>${icon('search')} Media index</h2>
-      <p>Search inside films for a scene, and blur or skip scenes you'd rather not see. Runs on this PC.</p>
-      <div id="index-box"><div class="skel dx-skel-line"></div></div></section>
-    <section class="panel glass" style="--i:7"><h2>${icon('share')} Sharing</h2>
-      <p>Share a film from this PC as a Google Drive link: it uploads to your own Drive.</p>
-      <div id="share-box"><div class="skel dx-skel-line"></div></div></section>
-    ${has('watch_folders') || has('library_folders') || has('autosort_after') || has('qbt_url') ? `<section class="panel glass" style="--i:7"><h2>${icon('film')} Library &amp; downloads</h2>
-      <p>Where films come from and where they end up.</p>
-      ${has('autosort_after') ? seg('autosort_after', [[0, 'Right away'], [30, '30 min'], [120, '2 h'], [360, '6 h']], 'Sort new downloads', 'How long to wait before tidying finished downloads into the library.') : ''}
-      ${has('watch_folders') ? listBox('watch_folders', 'Watch folders', 'Folders Marquee keeps an eye on for new downloads. One per line.', 'D:\\Downloads') : ''}
-      ${has('library_folders') ? listBox('library_folders', 'Library folders', 'Folders of films and shows Marquee plays even when Jellyfin is away. One per line.', 'D:\\Media\\Movies') : ''}
-      ${has('qbt_url') ? `<div class="set stack"><div class="lbl"><b>qBittorrent address</b><span>Used to show download progress in “Arriving soon”.</span></div><input class="input wide" data-text="qbt_url" value="${esc(s.qbt_url || '')}" placeholder="http://localhost:8080" spellcheck="false"></div>` : ''}
-    </section>` : ''}
-    <div id="about-settings"></div>
+      </div>`)
+    + setCard('builtin', 'sparkle', 'Built-in AI', '<div id="builtin-box"></div>')
+    + setCard('chat', 'sparkle', 'Chat', `<div class="set"><div class="lbl"><b>Ask Marquee</b><span>Chat about what to watch. What you tell it lands in Taste &amp; memory.</span></div><a class="btn small ghost" href="#/chat">Open chat</a></div>`)
+    + '<section class="panel glass setx-card setx-wide taste-panel" id="taste-panel" data-card="taste"></section>';
+  page.innerHTML = `<div class="page-head setx-head"><div class="grow"><span class="eyebrow">Settings</span><h1 style="margin-top:8px">Make it yours</h1><p>Changes save as you go.</p></div></div>
+  <div class="setx">
+    <div class="setx-main">
+      ${setPane('general', general)}
+      ${setPane('playback', playbackPane(s))}
+      ${setPane('library', library)}
+      ${setPane('storage', '<div id="storage-settings" class="mqs-settings"></div>')}
+      ${setPane('ai', tasteAi)}
+      ${setPane('assistant', '<div class="setx-slot setx-contents" data-slot="voice"></div>')}
+      ${setPane('index', setCard('index', 'search', 'Media index', `<p>Search inside films for a scene, and blur or skip scenes you'd rather not see. Runs on this PC.</p>
+        <div id="index-box"><div class="skel dx-skel-line"></div></div>`))}
+      ${setPane('phone', remotePanel(s) + '<div id="cast-settings-slot" class="setx-contents"></div>')}
+      ${setPane('sharing', setCard('sharing', 'share', 'Google Drive', `<p>Share a film from this PC as a Google Drive link: it uploads to your own Drive.</p>
+        <div id="share-box"><div class="skel dx-skel-line"></div></div>`))}
+      ${setPane('stack', '<div class="setx-slot setx-contents" data-slot="stack"></div>')}
+      ${setPane('about', '<div id="about-settings" class="setx-contents"></div>')}
+    </div>
   </div>`;
+  window.MarqueeSettings && MarqueeSettings.mount(page);
   window.MarqueeUpdate && MarqueeUpdate.mountAbout($('#about-settings'));
   loadAudioDevices();
   loadRemote();
   window.MarqueeTaste && window.MarqueeTaste.renderSettings($('#taste-panel'));
-  window.MarqueeStorage && MarqueeStorage.mountSettings($('#storage-settings'));
+  window.MarqueeStorage && MarqueeStorage.mountSettings($('#storage-settings'), { smartEl: $('#smart-settings') });
   window.MarqueeCast && MarqueeCast.mountSettings($('#cast-settings-slot'), S.settings);
   loadIndexPanel();
   loadSharePanel();
@@ -2655,14 +2846,14 @@ async function loadBuiltin() {
   const gb = b => b ? (b / 1e9).toFixed(1) + ' GB' : '';
   const anyInstalled = Object.values(sizes).some(x => x.installed) || st.installed;
   const p = dl.total ? dl.done / dl.total : 0;
-  box.innerHTML = `<div class="builtin-card"><div class="lbl"><b>Built-in AI</b><span>Runs on this PC, nothing leaves it. ${st.gpu ? `Uses your ${esc(st.gpu)}.` : st.cpu_only ? 'Runs on the processor (slower).' : ''}${st.running ? ' Running now.' : ''}</span></div>
-    ${busy ? `<div><span class="muted-note">${esc(dl.state === 'downloading' ? `Downloading ${dl.file || ''}` : dl.state === 'verifying' ? 'Checking the download…' : 'Unpacking…')}${dl.total ? ` · ${gb(dl.done)} of ${gb(dl.total)}` : ''}</span><div class="index-bar"><i style="--p:${p.toFixed(3)}"></i></div></div>` : ''}
-    ${dl.state === 'error' ? `<p class="muted-note">Download failed: ${esc(dl.error || 'unknown error')}</p>` : ''}
+  box.innerHTML = `<div class="builtin-card"><div class="set builtin-head"><div class="lbl"><b>On-device model</b><span>Runs on this PC, nothing leaves it. ${st.gpu ? `Uses your ${esc(st.gpu)}.` : st.cpu_only ? 'Runs on the processor (slower).' : ''}${st.running ? ' Running now.' : ''}</span></div>
     <div class="row-btns">${['standard', 'small'].map(k => sz(k).installed ? `<span class="chip green">${icon('check', 12)} ${esc(sz(k).label || k)} installed</span>`
       : `<button class="btn small${k === 'small' ? ' ghost' : ''}" data-builtin-install="${k}" ${busy ? 'disabled' : ''}>Install ${k === 'standard' ? 'Standard' : 'Small'} (${gb(sz(k).download) || (k === 'standard' ? '~3.0 GB' : '~1.6 GB')})</button>`).join('')}
-      ${anyInstalled ? `<button class="btn small ghost danger-text" data-builtin-remove>Remove</button>` : ''}</div>
-    ${anyInstalled ? `${seg('ai_builtin_size', [['standard', 'Standard'], ['small', 'Small']], 'Model size', 'Small is quicker on modest PCs.')}
-      ${sw('ai_builtin_gpu', 'Use graphics card', 'Much faster. Turn off if games or videos stutter while it thinks.')}` : ''}</div>`;
+      ${anyInstalled ? `<button class="btn small ghost danger-text" data-builtin-remove>Remove</button>` : ''}</div></div>
+    ${busy ? `<div><span class="muted-note">${esc(dl.state === 'downloading' ? `Downloading ${dl.file || ''}` : dl.state === 'verifying' ? 'Checking the download…' : 'Unpacking…')}${dl.total ? ` · ${gb(dl.done)} of ${gb(dl.total)}` : ''}</span><div class="index-bar"><i style="--p:${p.toFixed(3)}"></i></div></div>` : ''}
+    ${dl.state === 'error' ? `<p class="muted-note">Download failed: ${esc(dl.error || 'unknown error')}</p>` : ''}
+    ${anyInstalled ? setAdv('builtin', `${seg('ai_builtin_size', [['standard', 'Standard'], ['small', 'Small']], 'Model size', 'Small is quicker on modest PCs.')}
+      ${sw('ai_builtin_gpu', 'Use graphics card', 'Much faster. Turn off if games or videos stutter while it thinks.')}`) : ''}</div>`;
   if (busy) builtinPoll = setTimeout(loadBuiltin, 1500);
 }
 document.addEventListener('click', async e => {
@@ -3151,7 +3342,7 @@ function shareHead(title, file) {
     <button class="icon-btn small" data-action="share-close" aria-label="Close">${icon('close', 16)}</button></div>`;
 }
 function drawShareError(name, msg, reason) {
-  const btn = reason === 'needs_client' ? `<a class="btn small" href="#/settings" data-action="share-close">${icon('gear', 16)} Open Settings › Sharing</a>`
+  const btn = reason === 'needs_client' ? `<a class="btn small" href="#/settings/sharing" data-action="share-close">${icon('gear', 16)} Open Settings › Sharing</a>`
     : reason === 'needs_connect' || reason === 'reauth' ? `<button class="btn small" data-act="share-connect">Connect Google Drive</button>` : '';
   openShareSheet(shareHead(name || 'Share') + `<div class="share-body"><p class="share-msg">${esc(msg)}</p>${btn}</div>`);
 }
@@ -3230,11 +3421,11 @@ async function loadSharePanel() {
   const caps = [[0, 'Off'], [5, '5'], [10, '10'], [25, '25'], [50, '50']];
   box.innerHTML = `<div class="set"><div class="lbl"><b>Google Drive</b><span>${line}</span></div>
       ${st.signed_in ? '<button class="btn small ghost" data-act="share-disconnect">Disconnect</button>' : `<button class="btn small" data-act="share-connect" ${st.configured ? '' : 'disabled'}>Connect Google Drive</button>`}</div>
-    <div class="set stack"><div class="lbl"><b>Your Google client</b><span>Marquee uploads with your own Google “Desktop app” client. <a class="link" href="https://github.com/phonehseng/marquee/blob/main/docs/google-drive.md" target="_blank" rel="noopener">How to get these</a></span></div>
+    ${setAdv('share', `    <div class="set stack"><div class="lbl"><b>Your Google client</b><span>Marquee uploads with your own Google “Desktop app” client. <a class="link" href="https://github.com/phonehseng/marquee/blob/main/docs/google-drive.md" target="_blank" rel="noopener">How to get these</a></span></div>
       <div class="fields"><label>Client ID<input class="input wide" data-share-cfg="client_id" value="${esc(st.client_id || '')}" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com"></label>
       <label>Client secret<input class="input wide" type="password" data-share-cfg="client_secret" autocomplete="off" placeholder="${st.client_secret_set ? 'Saved (type to replace)' : 'Paste the client secret'}"></label></div></div>
     <div class="set"><div class="lbl"><b>Upload speed cap</b><span>Mbit/s, so sharing doesn't hog your connection.</span></div>
-      <div class="pill-toggle">${caps.map(([v, n]) => `<button data-share-cap="${v}" aria-pressed="${(st.speed_cap || 0) === v}">${n}</button>`).join('')}</div></div>
+      <div class="pill-toggle">${caps.map(([v, n]) => `<button data-share-cap="${v}" aria-pressed="${(st.speed_cap || 0) === v}">${n}</button>`).join('')}</div></div>`, !st.configured)}
     ${list.length ? `<div class="set stack"><div class="lbl"><b>Shared files</b></div><div class="share-list">${list.map(sh => `<div class="share-row">
       <div><b>${esc(sh.title || sh.name)}</b><span>${esc([sh.status, sh.size ? fmtBytes(sh.size) : '', sh.expires ? 'until ' + new Date(sh.expires * 1000).toLocaleDateString() : (sh.status === 'ready' ? 'no expiry' : '')].filter(Boolean).join(' · '))}</span></div>
       ${sh.status === 'ready' ? `<button class="btn small ghost" data-act="share-copy" data-sid="${esc(sh.id)}">Copy</button><button class="btn small ghost" data-act="share-stop" data-sid="${esc(sh.id)}">Stop</button>` : ''}
@@ -3344,7 +3535,7 @@ document.addEventListener('click', e => {
     const key = seg.dataset.seg, v = seg.dataset.v;
     $$(`[data-seg="${key}"]`).forEach(b => b.setAttribute('aria-pressed', b === seg));
     if (key === 'theme') applyTheme(v);
-    if (key === 'ai_provider') { $('#ai-fields').hidden = v !== 'custom'; }
+    if (key === 'ai_provider') { $('#ai-fields').hidden = v !== 'custom'; const at = $('[data-ai-atlas]'); if (at) at.hidden = v !== 'atlas'; }
     const saved = saveSetting({ [key]: 'num' in seg.dataset ? Number(v) : 'bool' in seg.dataset ? v === 'true' : v });
     if (key === 'mobile_bind') saved.then(() => setTimeout(() => loadRemote(true), 3500));  // the server moves to the new addresses
     return saved;
@@ -3393,6 +3584,8 @@ document.addEventListener('click', e => {
     case 'resume': return play(id);
     case 'restart': return play(id, 0);
     case 'watched': e.stopPropagation(); return toggleWatched(id, el);
+    case 'watched-tmdb': e.stopPropagation(); return toggleWatchedTmdb(el.dataset.tmdb, el);
+    case 'wv-unmark': e.stopPropagation(); return unmarkWatched(el);
     case 'season': return loadSeason(el.dataset.season);
     case 'tmdb': closeLayer(layers.person); return openTmdb((el.closest('[data-tmdb]') || el).dataset.tmdb, { from: el.closest('.card') });
     case 'open-jf': closeLayer(layers.sheet); return openDetails(id);
@@ -3514,7 +3707,11 @@ window.MarqueeUI = {
   playItem: async id => { if (!S.items.get(id)) { try { reg((await api(`/api/item/${encodeURIComponent(id)}`)).item); } catch (e) { /* plays anyway */ } } return playItem(id); },
   deleteLocal: (id, name, type) => deleteLocal(id, name, type),
   mylistChanged: () => loadMyList(true).then(() => { S.home = null; }),
-  watchedChanged: id => { reg({ id, played: true }); S.home = null; S.lib = {}; },
+  watchedChanged: (id, on = true) => {   // an item id, or "movie:<tmdb>" / "tv:<tmdb>" for a title that isn't here
+    if (/^(movie|tv):\d+$/.test(id)) watchedLocal(id, on);
+    else { reg({ id, played: on }); S.home = null; S.lib = {}; S.watchedData = null; }
+    dispatchEvent(new Event('marquee:taste-changed'));
+  },
   requested: key => { const c = S.tmdb.get(key); if (c) c.status = 2; S.home = null; },
   confetti: (x, y) => confetti(x, y, 34),
 };

@@ -217,6 +217,11 @@ class Ctx:
                     self.watched.add(f"movie:{rec['tmdb']}")
         except Exception:
             pass
+        try:  # titles marked watched without being here (the title page, the chat, Atlas, Letterboxd)
+            self.marked = {k for k in cat.watched_whole_keys() if k not in self.owned}
+            self.watched |= self.marked
+        except Exception:
+            self.marked = set()
         for cid in self.idx["missing"]:
             self.need("col", cid)
 
@@ -237,9 +242,10 @@ class Ctx:
             c["why"] = why
         return c
 
-    def req_card(self, c, why=None, allow_requested=False):
+    def req_card(self, c, why=None, allow_requested=False, browse=False):
         """A Seerr card as the page shows it, or the library card when it's owned, or None (watched and removed,
-        already requested, offline)."""
+        already requested, offline). browse: a library page's grid, where titles marked watched stay (with their
+        check) instead of being left out like recommendations."""
         if not c or c.get("type") not in ("movie", "tv") or not c.get("id"):
             return None
         k = f"{c['type']}:{c['id']}"
@@ -252,19 +258,19 @@ class Ctx:
             return None
         if set(c.get("genre_ids") or []) & NOT_FOR_HOME:
             return None
-        if k in self.watched:
+        if k in self.watched and not (browse and k in self.marked):
             return None
         from .details import tmdb_card
         out = tmdb_card({kk: v for kk, v in c.items() if kk not in ("because", "role")})
         flag = None
         try:
-            flag = self.cat.removed_flag(c["type"], c["id"])
+            flag = self.cat.title_flag(c["type"], c["id"])
         except Exception:
             pass
-        for kk in ("removed", "played", "state", "removed_at", "watched_at"):
+        for kk in ("removed", "played", "state", "removed_at", "watched_at", "watched", "watched_seasons"):
             out.pop(kk, None)
         if flag:
-            if flag.get("played"):
+            if flag.get("played") or (flag.get("state") == "watched" and not browse):
                 return None
             out.update(flag)
         if why:
@@ -429,6 +435,8 @@ def _candidates(ctx, rows_in, taste):
                          if rec.get("played")]
     except Exception:
         pass
+    # ...and so do films marked watched without being here
+    started_cols += [ctx.idx["member"].get(k) for k in sorted(ctx.marked) if k.startswith("movie:")]
     nexts, seen_cols = [], set()
     for cid in started_cols:
         if not cid or cid in seen_cols:
@@ -735,7 +743,7 @@ def discover_page(app, kind, page=1, sort="popular", genre=None):
     for c in data.get("items") or []:
         if f"{c['type']}:{c['id']}" in ctx.owned:
             continue
-        card = ctx.req_card(c, allow_requested=True)
+        card = ctx.req_card(c, allow_requested=True, browse=True)
         if card and is_req(card):
             items.append(card)
     return {"items": items, "more": int(page) < min(int(data.get("pages") or 1), 50), "online": True}

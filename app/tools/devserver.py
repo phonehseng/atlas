@@ -1,4 +1,5 @@
-"""Development: serve the UI and API in a normal browser at http://127.0.0.1:8600 (no window, no player).
+"""Development: serve the UI and API in a normal browser at http://127.0.0.1:8600 (or the port given as the first
+argument, or MARQUEE_DEV_PORT; no window, no player).
 Uses MARQUEE_DEV_* environment variables (see tools/dev.ps1) so no password is needed.
 MARQUEE_DEV_NO_ARRIVALS=1 leaves the downloads alone (no auto-sort into the real library)."""
 import os
@@ -41,5 +42,6 @@ if not os.environ.get("MARQUEE_DEV_NO_ARRIVALS"):
 else:
     app.arrivals = None
 server.APP = app
-print("http://127.0.0.1:8600")
-server.serve(8600)
+port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("MARQUEE_DEV_PORT") or 8600)
+print(f"http://127.0.0.1:{port}")
+server.serve(port)

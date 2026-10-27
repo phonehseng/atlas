@@ -597,6 +597,102 @@ def find(q="", genres=(), moods=(), era=None, kind="any", limit=18):
     return {"answer": answer, "items": cards, "requestable": req}
 
 
+LIKE_RE = re.compile(r"(?:^|\b)(?:something|anything|more|stuff|shows?|films?|movies?|series|ones?)?\s*"
+                     r"(?:like|similar to|in the vein of|along the lines of)\s+(?P<t>.+?)\s*[?.!]*$", re.I)
+ONLY_REQ_RE = re.compile(r"\b(not (?:in|on) my (?:library|shelves|pc)|(?:i )?don'?t (?:own|have)|to request|"
+                         r"(?:only )?requestable|not downloaded|new to me)\b", re.I)
+ONLY_OWN_RE = re.compile(r"\b(in my library|on my (?:shelves|pc)|(?:that )?i (?:own|have)|already (?:have|own))\b", re.I)
+
+
+def _seen(cat, c):
+    """Has the viewer watched this card's title (played here, marked watched, or watched and removed)?"""
+    if c.get("played"):
+        return True
+    kind = "tv" if c.get("type") in ("Series", "tv") else "movie"
+    tmdb = c.get("tmdb") or (c.get("id") if c.get("type") in ("movie", "tv") else None)
+    if not tmdb and c.get("source") == "library" and cat is not None:
+        tmdb = ((cat.get(c.get("id")) or {}).get("provider") or {}).get("Tmdb")
+    try:
+        return bool(tmdb and cat.title_flag(kind, tmdb))
+    except Exception:
+        return False
+
+
+def _like_reply(seed_text, only=None):
+    """"Something like X" without a model: Seerr's recommendations for X (titles to request) plus library titles
+    that share its genres, best taste fit first - never X itself or anything already watched."""
+    from . import details, watched
+    cat = _cat()
+    try:
+        seed = watched.find(seed_text)
+    except watched.Ambiguous as e:
+        seed = e.candidates[0]
+    except Exception:
+        return None
+    kind, tmdb, name = seed.get("kind"), seed.get("tmdb"), seed.get("title") or seed_text
+    p = taste.profile()
+    lib, req = [], []
+    seed_genres = set()
+    try:  # Home's series rule: only ever the next part of a film series, never a later one
+        from . import homemix
+        ctx = homemix.Ctx(_app(), cat) if cat is not None else None
+    except Exception:
+        ctx = None
+
+    def in_order(card):
+        if ctx is None:
+            return True
+        try:
+            return bool(ctx.rule(card, swap=False))
+        except Exception:
+            return True
+    if seed.get("item_id") and cat is not None:
+        r = cat.get(seed["item_id"])
+        seed_genres = set(taste.canon_genres((r or {}).get("genres")))
+    if tmdb and only != "own":
+        try:
+            pool = [c for c in details.recommended(kind, tmdb) if str(c.get("id")) != str(tmdb)]
+        except Exception:
+            pool = []
+        app = _app()
+        if not seed_genres and app and app.seerr.ready:
+            try:
+                d = details.tmdb_detail(kind, tmdb) or {}
+                seed_genres = set(taste.canon_genres(d.get("genres")))
+            except Exception:
+                pass
+        for c in taste.rank([{**c, "genres": c.get("genres") or list(seed_genres)} for c in pool]):
+            if not _seen(cat, c) and in_order(c):
+                req.append(seerr_card(c, why=f"Like {name}") | {"fit": c.get("fit") if not taste.is_empty(p) else None})
+    if only != "req" and cat is not None and seed_genres:
+        with cat.lock:
+            rows = cat._of("Movie" if kind == "movie" else "Series")
+        for r in rows:
+            g = set(taste.canon_genres(r.get("genres")))
+            if r["id"] == seed.get("item_id") or len(g & seed_genres) < max(1, min(2, len(seed_genres))):
+                continue
+            c = library_card(r, why=f"Like {name}")
+            if _seen(cat, c) or not in_order(cat.card(r)):
+                continue
+            c["fit"] = taste.score({**cat.card(r), "people": (r.get("extra") or {}).get("people") or []}, p)["score"] \
+                if not taste.is_empty(p) else None
+            lib.append(c)
+        lib.sort(key=lambda c: -(c.get("fit") or 0))
+    lib, req = lib[:4], req[:8]
+    if not lib and not req:
+        return {"answer": f"I couldn't find anything new like {name} right now.", "items": [], "requestable": []}
+    parts = ([f"{len(req)} to request"] if req else []) + ([f"{len(lib)} on your shelves"] if lib else [])
+    return {"answer": f"Like {name}: " + " and ".join(parts) + (", best fit for your taste first." if not taste.is_empty(p) else "."),
+            "items": lib, "requestable": req}
+
+
+def _last_query(hist):
+    for h in reversed(hist or []):
+        if h.get("role") == "user" and h.get("text"):
+            return h["text"]
+    return ""
+
+
 def _classic_reply(message, hist):
     now = time.time()
     note = None
@@ -607,7 +703,20 @@ def _classic_reply(message, hist):
         answer = f"Saved to memory: {note['text']}."
         res = {"items": [], "requestable": []}
     else:
-        res = find(message)
+        only = "req" if ONLY_REQ_RE.search(message) else "own" if ONLY_OWN_RE.search(message) else None
+        query = message
+        m = LIKE_RE.search(message)
+        if not m and only:  # "how about not in my library": the same question again, narrowed
+            prev = _last_query(hist)
+            m = LIKE_RE.search(prev)
+            query = prev or message
+        res = _like_reply(m.group("t"), only) if m else None
+        if res is None:
+            res = find(query)
+            if only == "req":
+                res["items"] = []
+            elif only == "own":
+                res["requestable"] = []
         answer = res["answer"]
     yield {"kind": "delta", "text": answer}
     cards = res["items"][:8] + res["requestable"][:4]

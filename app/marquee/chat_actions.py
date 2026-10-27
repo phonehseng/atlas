@@ -300,7 +300,18 @@ def parse(text):
         return {"intent": "mylist", "on": False, **_t(m.group(1), t, m.start(1), m.end(1))}
     m = re.search(r"^mark\s+(.+?)\s+(?:as\s+)?(watched|seen|done|unwatched|unseen|not watched|not seen|new)$", low)
     if m:
-        return {"intent": "watched", "on": m.group(2) in ("watched", "seen", "done"), **_t(m.group(1), t, m.start(1), m.end(1))}
+        return {"intent": "watched", "on": m.group(2) in ("watched", "seen", "done"), **_watched_bits(t[m.start(1):m.end(1)])}
+    m = re.search(r"^(?:i'?ve|i have|i|we'?ve|we have|we)\s+(?:already\s+|just\s+|finally\s+|also\s+)?(?:seen|watched|saw|"
+                  r"finished(?:\s+watching)?)\s+(.+)$", low)
+    if m and not VAGUE.match(m.group(1)) and not re.search(
+            r"\b(?:recommend|suggest|similar|something|anything|what should|what to|what else|like it|like that|"
+            r"any good|everything|all of (?:them|it))\b|^(?:it|that|this|them|those|these)\b", m.group(1)):
+        bits = _watched_bits(re.sub(r"\s+(?:already|before|last (?:night|week|weekend|month|year)|yesterday|today|tonight|"
+                                    r"recently|a while ago|(?:years|ages|months) ago|twice|again|too|as well)$", "",
+                                    re.sub(r"\s+(?:and|but)\s+(?:i\b|it\b|loved|liked|hated|enjoyed|really|thought|was|"
+                                           r"didn'?t|did ?n'?t)\b.*$", "", t[m.start(1):], flags=re.I), flags=re.I))
+        if bits["title"]:
+            return {"intent": "watched", "on": True, **bits}
     m = re.search(r"^(?:delete|erase|get rid of|remove)\s+(.+?)(?:\s+(?:from|off)\s+(?:my |this |the )?(?:pc|computer|"
                   r"library|disk|drive|hard drive|server|storage))?$", low)
     if m and not VAGUE.match(m.group(1)):
@@ -350,6 +361,16 @@ def parse(text):
             return {"intent": "open", "title": title, "year": year, "kind": kind,
                     "soft": verb in ("show", "find", "look", "search", "load", "display")}
     return None
+
+
+def _watched_bits(raw):
+    """"The Bear season 1" -> {title, year, kind: "tv", seasons: [1]} (seasons None for the whole title)."""
+    spec, _, rest = parse_seasons(raw)
+    title, year, kind = _title_bits(_strip_joiners(rest))
+    out = {"title": title, "year": year, "kind": kind, "seasons": spec if isinstance(spec, list) else None}
+    if out["seasons"]:
+        out["kind"] = "tv"
+    return out
 
 
 def _t(raw_low, orig, a, b):
@@ -515,8 +536,8 @@ def resolve_for(intent, pick=None):
     if not title:
         return "none", "Which title?"
     lib = _lib_matches(title, year, kind)
-    local_only = intent["intent"] in ("play", "watched", "delete")
-    if local_only or (intent["intent"] in ("open", "mylist") and lib):
+    local_only = intent["intent"] in ("play", "delete")
+    if local_only or (intent["intent"] in ("open", "mylist", "watched") and lib):
         if len(lib) == 1:
             return "library", lib[0]
         if len(lib) > 1:
@@ -997,17 +1018,67 @@ def _mylist(intent, rep, how, what):
 
 
 def _watched(intent, rep, how, r):
+    """A confirmation card: library titles are marked here and in Jellyfin; titles that aren't here are kept as
+    watched on this PC (POST /api/watched), and the taste profile learns from either."""
     on = intent.get("on", True)
     cat = _cat()
-    played = cat._played(r)
-    name = r.get("name")
-    if played == on:
-        yield rep.say(f"{name} is already marked {'watched' if on else 'unwatched'}.")
+    seasons = intent.get("seasons") if isinstance(intent.get("seasons"), list) else None
+    if how == "tmdb":
+        owned = cat.by_tmdb(r["type"], r["id"])
+        if owned:
+            how, r = "library", owned
+            rep.subject = _subject(how, r)
+    if how == "library" and seasons and r["type"] == "Series":
+        eps = [e for e in cat.eps.get(r["id"], []) if e.get("season_no") in set(seasons)]
+        tmdb = (r.get("provider") or {}).get("Tmdb")
+        if not eps and str(tmdb or "").isdigit():  # those seasons aren't here: remember them as watched instead
+            how, r = "tmdb", {"type": "tv", "id": int(tmdb), "title": r.get("name"), "year": r.get("year"),
+                              "poster": cat.card(r).get("poster")}
+    sn = _fmt_seasons(seasons) if seasons else ""
+    if how == "library":
+        if r["type"] != "Series":
+            seasons = None
+        name = r.get("name")
+        if seasons:
+            eps = [e for e in cat.eps.get(r["id"], []) if e.get("season_no") in set(seasons)]
+            played = bool(eps) and all((cat.ud.get(e["id"]) or {}).get("played") for e in eps)
+            what = f"{sn} of {name}"
+        else:
+            played = cat._played(r)
+            what = "every episode of " + name if r["type"] == "Series" else name
+        if played == on:
+            yield rep.say(f"{what[0].upper() + what[1:]} is already marked {'watched' if on else 'unwatched'}.")
+            return
+        yield rep.say(f"Mark {what} as {'watched' if on else 'unwatched'}? Tap to confirm.")
+        yield rep.card({"type": "watched", "item_id": r["id"], "title": name, "on": on,
+                        "poster": cat.card(r).get("poster"), "series": r["type"] == "Series", "seasons": seasons,
+                        "season_text": sn or None})
         return
-    what = "every episode of " + name if r["type"] == "Series" else name
-    yield rep.say(f"Mark {what} as {'watched' if on else 'unwatched'}? Tap to confirm.")
-    yield rep.card({"type": "watched", "item_id": r["id"], "title": name, "on": on, "poster": cat.card(r).get("poster"),
-                    "series": r["type"] == "Series"})
+    kind, tmdb = r["type"], int(r["id"])
+    if kind != "tv":
+        seasons, sn = None, ""
+    name = r.get("title") or r.get("name") or "it"
+    label = name + (f" ({r['year']})" if r.get("year") else "")
+    st = cat.watched_state(kind, tmdb) or {}
+    gone = cat.removed_flag(kind, tmdb) or {}
+    played = bool(st.get("whole") or gone.get("played") or (seasons and set(seasons) <= set(st.get("seasons") or [])))
+    what = f"{sn} of {label}" if seasons else label
+    if on and played:
+        yield rep.say(f"{what[0].upper() + what[1:]} is already marked watched.")
+        yield rep.titles([_card_of("tmdb", r)])
+        return
+    if not on and not (st or gone.get("played")):
+        yield rep.say(f"{label} isn't marked watched.")
+        return
+    if on:
+        yield rep.say(f"Mark {what} as watched? It isn't in your library, so Marquee keeps it as watched on this PC "
+                      f"and your taste profile learns from it. Tap to confirm.")
+    else:
+        yield rep.say(f"Mark {what} as unwatched? Tap to confirm.")
+    yield rep.card({"type": "watched", "tmdb": tmdb, "kind": kind, "title": label, "on": on,
+                    "poster": _poster(r.get("poster")), "series": kind == "tv", "seasons": seasons,
+                    "season_text": sn or None, "owned": False})
+    yield rep.titles([_card_of("tmdb", r)])
 
 
 def _delete(rep, how, r):

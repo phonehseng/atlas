@@ -1,0 +1,31 @@
+{
+    "installer":  {
+                      "version":  "1.4.1",
+                      "notes":  "Media Stack Setup 1.4.1: installs Marquee at its latest version and connects it to Bazarr.",
+                      "files":  {
+                                    "linux-arm64":  {
+                                                        "name":  "MediaStackSetup-linux-arm64",
+                                                        "url":  "https://github.com/phonehseng/marquee/releases/download/v1.4.5/MediaStackSetup-linux-arm64",
+                                                        "sha256":  "930f30505b5c6acc5d474ae1be68af5c8c32bd4e14f4d1fe6db4dd7a5b833daf",
+                                                        "size":  10748064
+                                                    },
+                                    "linux-x64":  {
+                                                      "name":  "MediaStackSetup-linux-x64",
+                                                      "url":  "https://github.com/phonehseng/marquee/releases/download/v1.4.5/MediaStackSetup-linux-x64",
+                                                      "sha256":  "bdd4025d17702e8d6360376afce36873823267f4b64c923a05bdf482ea930412",
+                                                      "size":  11587744
+                                                  },
+                                    "windows-x64":  {
+                                                        "name":  "MediaStackSetup.exe",
+                                                        "url":  "https://github.com/phonehseng/marquee/releases/download/v1.4.5/MediaStackSetup.exe",
+                                                        "sha256":  "742c26b8266afc3045f655ed855c9e73106239565162c1c82ce5184c5c556115",
+                                                        "size":  11999232
+                                                    }
+                                }
+                  },
+    "stack-assets":  {
+                         "version":  "1.4.1",
+                         "min_installer":  "1.4.1",
+                         "notes":  "Media Stack Setup 1.4.1: installs Marquee at its latest version and connects it to Bazarr."
+                     }
+}

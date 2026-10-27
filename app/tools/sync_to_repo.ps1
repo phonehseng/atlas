@@ -4,7 +4,7 @@ param([string]$Repo = 'D:\Videos\MediaStackSetup')
 $src = Split-Path $PSScriptRoot -Parent
 $dst = Join-Path $Repo 'app'
 robocopy $src $dst /MIR /NFL /NDL /NJH /NP `
-    /XD .venv .devhome build dist __pycache__ .git (Join-Path $src 'vendor\mpv') `
+    /XD .venv .devhome build dist __pycache__ .git (Join-Path $src 'vendor\mpv') (Join-Path $src 'vendor\quickjs') `
     /XF *.pyc *.spec *.spec.bak dev.ps1 INTEGRATION.md mpv-dev.7z | Select-Object -Last 4
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
 $global:LASTEXITCODE = 0

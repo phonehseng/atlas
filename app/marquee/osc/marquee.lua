@@ -1013,7 +1013,21 @@ local function draw()
   end
 
   -- the bookmark prompt: type a note, pick a tag
-  if state.prompt then
+  if state.prompt and state.prompt.kind == "ask" then
+    local pr = state.prompt
+    local pw = math.min(640 * S, W * 0.8)
+    local ph = 128 * S
+    local px, py = W / 2 - pw / 2, H / 2 - ph / 2
+    glass(ass, px, py, pw, ph, 22 * S, 1, {tint = 0.76, keep = 0.8})
+    icon(ass, px + 28 * S, py + 30 * S, 16 * S, G.sparkle, 1)
+    text(ass, px + 50 * S, py + 30 * S, 4, 18 * S, "Ask about this moment", WHITE, 1, FONT)
+    box(ass, px + 20 * S, py + 52 * S, pw - 40 * S, 40 * S, 12 * S, "FFFFFF", 0.1, 1, WHITE, 0.35)
+    local shown = pr.text ~= "" and pr.text or "Who's that? · Go to the part where... · Is there a jumpscare soon?"
+    local caret = (math.floor(t * 2) % 2 == 0) and "|" or " "
+    text(ass, px + 34 * S, py + 72 * S, 4, 17 * S, esc(ellipsize(shown, math.floor((pw - 80 * S) / (17 * S * 0.5)))) .. (pr.text ~= "" and caret or ""),
+      WHITE, pr.text ~= "" and 1 or 0.5, FONT)
+    text(ass, px + pw - 20 * S, py + 110 * S, 6, 14 * S, "Enter ask (empty: what's on screen) · Esc cancel · F8 to speak", WHITE, 0.55, FONT)
+  elseif state.prompt then
     local pr = state.prompt
     local pw = math.min(560 * S, W * 0.7)
     local ph = 156 * S
@@ -1052,7 +1066,7 @@ local function draw()
     if at.state == "thinking" and age > 45 then state.atlas = nil  -- no answer came
     elseif at.state == "thinking" then
       local a = math.min(1, age / 0.25)
-      local label = "Atlas is thinking"
+      local label = "Thinking"
       local pw, ph = (ulen(label) * 17 * 0.5 + 92) * S, 42 * S
       local px = W / 2 - pw / 2
       glass(ass, px, top, pw, ph, ph / 2, a, {tint = 0.62, noshader = true})
@@ -1453,6 +1467,13 @@ local function prompt_close(save)
   mp.remove_key_binding("marquee-prompt-text")
   for _, k in ipairs({"BS", "ENTER", "KP_ENTER", "ESC", "TAB"}) do mp.remove_key_binding("marquee-prompt-" .. k) end
   bind_keys()
+  if pr.kind == "ask" then
+    if save then
+      state.atlas = {state = "thinking", t = now()}
+      mp.commandv("script-message", "marquee-ask-atlas", pr.text)
+    end
+    return
+  end
   if save then
     local note = pr.text:gsub("#%S+", ""):gsub("^%s+", ""):gsub("%s+$", "")
     local custom = pr.text:match("#(%S+)")
@@ -1462,10 +1483,10 @@ local function prompt_close(save)
   if pr.resume then mp.set_property_bool("pause", false) end
 end
 
-local function bookmark_prompt()
+local function bookmark_prompt(kind)
   local pos = prop("time-pos", nil)
   if not pos then return end
-  state.prompt = {ms = math.floor(pos * 1000 + 0.5), text = "", tag = "", resume = not prop("pause", false)}
+  state.prompt = {ms = math.floor(pos * 1000 + 0.5), text = "", tag = "", resume = not prop("pause", false), kind = kind}
   mp.set_property_bool("pause", true)
   unbind_keys()  -- typing must not trigger the player's keys
   mp.add_forced_key_binding("ANY_UNICODE", "marquee-prompt-text", function(e)
@@ -1482,6 +1503,7 @@ local function bookmark_prompt()
   mp.add_forced_key_binding("ESC", "marquee-prompt-ESC", function() prompt_close(false) end)
   mp.add_forced_key_binding("TAB", "marquee-prompt-TAB", function()
     local pr = state.prompt
+    if pr.kind == "ask" then return end
     local order = {"", TAGS[1], TAGS[2], TAGS[3]}
     local idx = 1
     for i, tg in ipairs(order) do if tg == pr.tag then idx = i end end
@@ -1510,9 +1532,9 @@ end
 
 function ask_atlas()
   if state.atlas and state.atlas.state == "answer" then state.atlas = nil; return end  -- A again: dismiss
-  mp.set_property_bool("pause", true)
-  state.atlas = {state = "thinking", t = now()}
-  mp.commandv("script-message", "marquee-ask-atlas")
+  if state.prompt then return end
+  -- type the question (the picture is kept from this moment); speaking stays on the push-to-talk key
+  bookmark_prompt("ask")
 end
 
 local keys = {

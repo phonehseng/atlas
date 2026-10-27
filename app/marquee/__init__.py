@@ -2,7 +2,7 @@
 import os
 import subprocess
 
-__version__ = "1.4.5"
+__version__ = "1.4.6"
 
 if os.name == "nt":
     # Marquee is a windowed app: every helper it starts (ffmpeg, ffprobe, tailscale, powershell, llama-server...)

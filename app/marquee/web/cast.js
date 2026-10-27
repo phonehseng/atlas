@@ -88,7 +88,7 @@ function apply(st) {
   if (st && !st.active && st.message && st.id && C.shownEnd !== st.id && (prev && prev.active)) {
     C.shownEnd = st.id;
     const where = st.device ? st.device.name : 'the TV';
-    if (st.state === 'error') toast(st.message, { icon: 'cast', ms: 9000, ...(/[Ff]irewall/.test(st.message) ? { action: 'Settings', onAction: () => { location.hash = '#/settings'; setTimeout(() => $('#cast-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 500); } } : {}) });
+    if (st.state === 'error') toast(st.message, { icon: 'cast', ms: 9000, ...(/[Ff]irewall/.test(st.message) ? { action: 'Settings', onAction: () => { location.hash = '#/settings/phone'; setTimeout(() => $('#cast-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 500); } } : {}) });
     else if (st.state === 'ended') toast(`Finished on ${where}`, { icon: 'check' });
     else toast(st.message === 'Stopped casting' ? `Stopped casting to ${where}` : st.message, { icon: 'cast' });
   }
@@ -483,7 +483,7 @@ document.addEventListener('click', e => {
     if (a === 'close') return closePicker();
     if (a === 'rescan') { if (C.picker) { C.picker.data = null; C.picker.opened = performance.now(); drawPicker(); } return loadDevices(true); }
     if (a === 'stop') { closePicker(); return cmd('stop'); }
-    if (a === 'settings') { closePicker(); location.hash = '#/settings'; return; }
+    if (a === 'settings') { closePicker(); location.hash = '#/settings/phone'; return; }
     if (a === 'airplay-dl') return airplayDownload();
     if (a === 'back') { if (C.picker) C.picker.busy = null; return drawPicker(); }
     return;

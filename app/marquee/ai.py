@@ -106,7 +106,8 @@ def _provider(allow_during_playback=True):
     if p in ("auto", "custom") and s["ai_url"] and s["ai_key"]:
         return {"url": s["ai_url"].rstrip("/"), "key": s["ai_key"], "model": s["ai_model"] or "gpt-4o-mini",
                 "name": "AI", "kind": "custom", "vision": True}
-    if (p == "atlas" or (p == "auto" and _atlas_up())) and _atlas_key():
+    # Atlas (a separate local assistant) only when chosen in Settings; Auto never picks it
+    if p == "atlas" and _atlas_key():
         return {"url": ATLAS_URL, "key": _atlas_key(), "model": s["ai_model"] or _atlas_model(), "name": "Atlas",
                 "kind": "atlas", "vision": False}  # Atlas' OpenAI endpoint drops images (the assistant uses Ollama)
     if p in ("auto", "builtin"):

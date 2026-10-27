@@ -19,6 +19,9 @@ Resolution, an NVIDIA RTX GPU with *RTX Video Enhancement* available in the NVID
 Settings live in `%APPDATA%\Marquee`; your Jellyfin token, Seerr session and keys are encrypted with Windows
 DPAPI (only your Windows account can read them). Updates replace the program folder and never touch them.
 
+Other programs on this PC (such as the Atlas assistant) can mark titles watched through a small token-protected
+local API; see [docs/local-api.md](docs/local-api.md).
+
 ## Keyboard (player)
 
 | Key | |

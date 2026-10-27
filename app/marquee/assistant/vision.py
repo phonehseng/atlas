@@ -50,7 +50,7 @@ def provider():
     if mode == "classic":
         return None  # Classic: no model of any kind, nothing is contacted
     want = config.load().get("vision_model") or ""
-    if mode in ("auto", "atlas"):
+    if mode == "atlas":  # Ollama is Atlas's engine: used only when Atlas is chosen in Settings
         local = ollama_vision_models()
         if want and want in local:
             return {"kind": "ollama", "model": want, "url": OLLAMA, "name": "Atlas" if ai.atlas_detected() else "Ollama"}

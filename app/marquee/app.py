@@ -169,6 +169,11 @@ def main():
     webview.start(app.started, private_mode=False, storage_path=str(server.settings.DIR / "webview"),
                   debug="--debug" in sys.argv)
     # The window is gone: shut mpv down, but never let a stuck video driver keep the process alive.
+    try:  # os._exit skips atexit: take the local API's discovery file down here
+        from . import localapi
+        localapi.unpublish()
+    except Exception:
+        pass
     t = threading.Thread(target=app.player.terminate, daemon=True)
     t.start()
     t.join(3)

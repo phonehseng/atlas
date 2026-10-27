@@ -282,7 +282,7 @@ def home():
     featured, seen = [], set()
     for r in out["rows"] + library:
         for c in r["items"]:
-            if c.get("backdrop") and c.get("type") in ("Movie", "Series") and c["id"] not in seen:
+            if c.get("backdrop") and c.get("type") in ("Movie", "Series") and c["id"] not in seen and not c.get("played"):
                 seen.add(c["id"])
                 featured.append(c)
     hero = random.sample(featured, min(5, len(featured))) if featured and page <= 1 else []
@@ -772,6 +772,14 @@ def _storage_bp():
 _register("storage", _storage_bp)
 
 
+def _trailers_bp():
+    from .trailers import bp
+    return bp
+
+
+_register("trailers", _trailers_bp)  # trailers of titles not in the library, played by Marquee (marquee.trailers)
+
+
 def _stack_bp():
     from .stack_api import bp
     return bp
@@ -796,10 +804,23 @@ def _cast_bp():
 _register("casting", _cast_bp)  # Chromecast / AirPlay (marquee.cast): picker, casting bar, Settings
 
 
+def _watched_bp():
+    from .watched import bp
+    return bp
+
+
+_register("watched", _watched_bp)  # watched for any title, owned or not (also the local API for Atlas: marquee.localapi)
+
+
 def serve(port):
     from waitress import serve as wserve
     try:
         catalog()  # load the local library and start syncing before the first page asks
     except Exception as e:
         print("catalog unavailable:", e)
+    try:  # where other programs on this PC find the local API (local-api.json; removed on exit)
+        from . import localapi
+        localapi.publish(port)
+    except Exception as e:
+        print("local API unavailable:", type(e).__name__, e)
     wserve(app, host="127.0.0.1", port=port, threads=12, _quiet=True)

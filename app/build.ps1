@@ -4,23 +4,25 @@
 # The media index and the assistant's voice/GPU parts are left out: the app fetches them as pinned wheels on first
 # use (marquee\wheels.py). Those import only stdlib modules the app already bundles, except numpy.testing's
 # unittest (and plistlib, for AirPlay), added below; POSIX-only, tkinter and venv imports in them are never reached on Windows.
+# Trailers: yt-dlp (yt-dlp-ejs comes along through yt-dlp's own PyInstaller hook) and QuickJS (vendor\quickjs) are bundled.
 # Casting: pychromecast + zeroconf are bundled; pyatv (AirPlay) and its large dependencies are left out the same way
 # and fetched as pinned wheels the first time an AirPlay TV is picked (wheels.py group "airplay").
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $py = '.venv\Scripts\python.exe'
 if (-not (Test-Path 'vendor\mpv\libmpv-2.dll')) { & "$PSScriptRoot\tools\get_mpv.ps1" }
+if (-not (Test-Path 'vendor\quickjs\qjs.exe')) { & "$PSScriptRoot\tools\get_quickjs.ps1" }
 if (-not (Test-Path 'assets\marquee.ico')) { & $py tools\make_icon.py }
 Get-ChildItem marquee -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
 & $py -m PyInstaller --noconfirm --clean --onedir --windowed --name Marquee --icon assets\marquee.ico `
     --add-data "marquee\web;marquee\web" --add-data "marquee\osc;marquee\osc" --add-data "assets\marquee.png;assets" `
     --add-data "vendor\anime4k;vendor\anime4k" --add-data "vendor\rnnoise;vendor\rnnoise" --add-data "marquee\apply_update.ps1;marquee" `
-    --add-binary "vendor\mpv\libmpv-2.dll;mpv" --collect-submodules webview --hidden-import clr `
+    --add-binary "vendor\mpv\libmpv-2.dll;mpv" --add-binary "vendor\quickjs\qjs.exe;quickjs" --add-data "vendor\quickjs\LICENSE;quickjs" --collect-submodules webview --hidden-import clr `
     --hidden-import unittest --hidden-import plistlib --collect-submodules pychromecast --collect-submodules zeroconf `
     --exclude-module faster_whisper --exclude-module ctranslate2 --exclude-module onnxruntime `
     --exclude-module numpy --exclude-module tokenizers --exclude-module sounddevice --exclude-module webrtcvad `
     --exclude-module av --exclude-module nvidia --exclude-module huggingface_hub --exclude-module openwakeword `
-    --exclude-module pyatv --exclude-module cryptography --exclude-module pydantic --exclude-module pydantic_core `
+    --exclude-module pyatv --exclude-module cryptography --exclude-module Cryptodome --exclude-module pydantic --exclude-module pydantic_core `
     --exclude-module aiohttp --exclude-module miniaudio --exclude-module srptools --exclude-module tinytag `
     --workpath build --distpath dist run_marquee.py
 if ($LASTEXITCODE) { throw 'PyInstaller failed' }

@@ -257,6 +257,7 @@ def ingest(films, source_label, search=None, detail=None, summarise=None):
                            "disliked": disliked}
         return liked, disliked
     liked, disliked = taste._edit(go)
+    _record_watched(infos)
     _set(message="Reading your reviews…")
     notes = review_notes(films, summarise)
     for text in notes:
@@ -269,6 +270,35 @@ def ingest(films, source_label, search=None, detail=None, summarise=None):
     _set(state="done", message=f"Imported {len(films)} films: {liked} liked, {disliked} not for you, "
                                f"{len(notes)} notes from reviews", report=report)
     return report
+
+
+def _record_watched(infos):
+    """Diary films that aren't in the library join the Watched list (source "letterboxd"); the profile already
+    learned from them above, so they're noted as counted."""
+    cat = _cat()
+    if cat is None or not hasattr(cat, "record_watched"):
+        return
+    from .catalog import tmdb_img
+    seen = []
+    for f, tmdb, d in infos:
+        if not tmdb or cat.by_tmdb("movie", tmdb):
+            continue
+        at = None
+        try:
+            from .watched import _when
+            at = _when(f.get("date")) if f.get("date") else None
+        except Exception:
+            at = None
+        try:
+            key = cat.record_watched("movie", tmdb, {
+                "title": d.get("title") or f["title"], "year": f.get("year") or d.get("year"),
+                "poster": tmdb_img(d.get("poster")), "backdrop": tmdb_img(d.get("backdrop")),
+                "genres": d.get("genres") or [], "runtime": d.get("runtime") or 0}, "letterboxd", at)
+            seen.append("watched:" + key)
+        except Exception as e:
+            print("letterboxd: couldn't keep", f.get("title"), "as watched:", e)
+    if seen:
+        taste.note_seen(seen)
 
 
 # ------------------------------------------------------------------ reviews -> memory notes
