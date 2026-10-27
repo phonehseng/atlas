@@ -1,6 +1,6 @@
 """The language-model half: only for questions, summaries and requests the rules didn't understand.
 
-Uses the same provider as the rest of Marquee (Atlas on this PC with a small fast model, or any OpenAI-compatible
+Uses the same provider as the rest of Atlas (the LocalAI assistant with a small fast model, or any OpenAI-compatible
 URL and key). The model answers with one JSON object: a tool call or a short answer. Prompts are kept tiny."""
 import json
 import re
@@ -56,10 +56,11 @@ def provider():
         p = ai._provider()
     except Exception:
         return None
-    if p and p.get("name") == "Atlas" and p.get("url") == ai.ATLAS_URL and not _atlas_up():
+    if p and p.get("kind") == "atlas" and p.get("url") == ai.ATLAS_URL and not _atlas_up():
         m = _ollama_fast()
-        if m:  # Atlas is off but its models are there: talk to Ollama directly
-            return {"url": "http://127.0.0.1:11434/v1", "key": "ollama", "model": m, "name": "Atlas"}
+        if m:  # the LocalAI assistant is off but its models are there: talk to Ollama directly
+            return {"url": "http://127.0.0.1:11434/v1", "key": "ollama", "model": m, "name": ai.LOCALAI_NAME,
+                    "kind": "atlas"}
         return None  # neither is running: behave as if no AI is set up (rules and classic search still work)
     return p
 

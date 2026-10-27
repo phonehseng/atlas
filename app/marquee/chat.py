@@ -1,4 +1,4 @@
-"""Ask Marquee: the chat page. The model talks and names titles; the server finds those titles (library first, then
+"""Ask Atlas: the chat page. The model talks and names titles; the server finds those titles (library first, then
 Seerr, matching the year) and sends them back as cards to show under the reply. "Remember that…" becomes a taste
 memory note the page can undo.
 
@@ -348,7 +348,7 @@ def context(message):
     return block
 
 
-SYSTEM = """You are Marquee, the friendly film and TV guide inside a home media app. You chat about movies and shows and recommend what to watch next.
+SYSTEM = """You are Atlas, the friendly film and TV guide inside a home media app. You chat about movies and shows and recommend what to watch next.
 
 Rules:
 - Mix: titles from LIBRARY (they can watch now) and, when they fit, one or two from COULD REQUEST or any other real, well-known film or show they could request. Never invent titles.

@@ -1,4 +1,4 @@
-/* Marquee taste profile UI: shared helpers (window.MarqueeKit), the "Is this for you?" fit card (window.MarqueeFit)
+/* Atlas taste profile UI: shared helpers (window.MarqueeKit), the "Is this for you?" fit card (window.MarqueeFit)
    and Settings > Taste & memory (window.MarqueeTaste). Standalone: talks to /api/taste/* (marquee/taste_api.py) and
    uses app.css' tokens and classes so both themes match. */
 (() => {
@@ -113,7 +113,7 @@ async function renderFit(el, item) {
   if (fitSeq.get(el) !== seq || !document.contains(el)) return;
   if (d.empty) {
     el.innerHTML = `<div class="fit glass is-empty"><span class="fit-orb">${icon('sparkle', 22)}</span><div class="fit-copy"><span class="eyebrow orange">Is this for you?</span>
-      <p class="fit-comment">Tell Marquee what you like and it'll say whether titles suit you.</p></div>
+      <p class="fit-comment">Tell Atlas what you like and it'll say whether titles suit you.</p></div>
       <button class="btn small ghost" data-fit-setup>Set up my taste</button></div>`;
     $('[data-fit-setup]', el).onclick = () => window.MarqueeLaunchpad && window.MarqueeLaunchpad.show({ rerun: true });
     return;
@@ -172,7 +172,7 @@ function wireStars(el, key, item) {
       try {
         await api(`/api/taste/rate/${key}`, { stars: n });
       } catch (e) { return; }
-      toast(n ? `Rated ${n}★: Marquee will lean ${n >= 4 ? 'towards' : n <= 2 ? 'away from' : 'a little on'} titles like this` : 'Rating cleared', { icon: 'sparkle' });
+      toast(n ? `Rated ${n}★: Atlas will lean ${n >= 4 ? 'towards' : n <= 2 ? 'away from' : 'a little on'} titles like this` : 'Rating cleared', { icon: 'sparkle' });
       dispatchEvent(new CustomEvent('marquee:taste-changed'));
       setTimeout(() => renderFit(el, item), 900);
     };
@@ -190,7 +190,7 @@ async function renderSettings(el) {
   if (!el) return;
   T.el = el;
   el.classList.add('taste-panel');
-  if (!el.innerHTML.trim()) el.innerHTML = `<h2>${icon('sparkle')} Taste &amp; memory</h2><p>Loading what Marquee knows…</p>`;
+  if (!el.innerHTML.trim()) el.innerHTML = `<h2>${icon('sparkle')} Taste &amp; memory</h2><p>Loading what Atlas knows…</p>`;
   try { T.data = await api('/api/taste'); }
   catch (e) { el.innerHTML = `<h2>${icon('sparkle')} Taste &amp; memory</h2><p>${esc(e.message)}</p>`; return; }
   draw();
@@ -239,7 +239,7 @@ function draw() {
   const empty = !p.genres.length && !p.notes.length && !p.liked.length;
   const lb = p.letterboxd || {};
   el.innerHTML = `<div class="tp-head"><div><h2>${icon('sparkle')} Taste &amp; memory</h2>
-      <p>Everything Marquee has learned about what you like to watch. It's used to pick titles and to say whether something suits you.</p></div>
+      <p>Everything Atlas has learned about what you like to watch. It's used to pick titles and to say whether something suits you.</p></div>
       <div class="tp-learn"><div class="lbl"><b>Learn from what I watch</b><span>${p.learning ? 'On: finished and abandoned titles update your taste.' : 'Paused: only what you tell it counts.'}</span></div>
         <button class="switch" role="switch" aria-checked="${p.learning}" data-tact="learning" aria-label="Learn from what I watch"></button></div></div>
     <div class="tp-actions">
@@ -249,7 +249,7 @@ function draw() {
       <button class="btn small ghost danger-ghost" data-tact="reset">Reset taste profile</button>
     </div>
     <div class="tp-drawer" id="tp-drawer" hidden></div>
-    ${empty ? `<div class="tp-empty"><span class="fit-orb">${icon('sparkle', 22)}</span><div><b>Nothing learned yet</b><p>Answer a few questions, chat with Marquee, import Letterboxd, or just watch things: your taste builds up here.</p></div></div>` : ''}
+    ${empty ? `<div class="tp-empty"><span class="fit-orb">${icon('sparkle', 22)}</span><div><b>Nothing learned yet</b><p>Answer a few questions, chat with Atlas, import Letterboxd, or just watch things: your taste builds up here.</p></div></div>` : ''}
     <div class="tp-grid">
       <section class="tp-card"><h3>Genres</h3>
         ${p.genres.length ? `<div class="tg-legend"><span>Not for you</span><span>Love it</span></div><div class="tg">${p.genres.slice(0, 14).map(bar).join('')}</div>` : '<p class="tp-none">No genre leanings yet.</p>'}
@@ -268,9 +268,9 @@ function draw() {
       <details class="tp-card tp-how" data-adv="taste-how"><summary><h3>How this changes over time</h3>
         <p class="tp-stat">${p.plays ? `Learned from ${p.plays} finished title${p.plays === 1 ? '' : 's'}.` : 'Nothing learned from watching yet.'}${lb.imported ? ` Letterboxd: ${lb.films} films imported ${esc(when(lb.imported))} (${lb.liked} liked, ${lb.disliked} not for you).` : ''}</p>
         </summary>
-        <p>What you tell Marquee starts at a moderate weight. Every title you <b>finish</b> nudges its genres up, giving up in the <b>first 20%</b> nudges them down a little, and <b>rewatches and favourites</b> count double. Genres you stop watching slowly fade. So if you say “romance” but only finish horror, horror climbs past romance over two to four weeks of watching.</p>
+        <p>What you tell Atlas starts at a moderate weight. Every title you <b>finish</b> nudges its genres up, giving up in the <b>first 20%</b> nudges them down a little, and <b>rewatches and favourites</b> count double. Genres you stop watching slowly fade. So if you say “romance” but only finish horror, horror climbs past romance over two to four weeks of watching.</p>
         ${p.why.length ? `<h4>Why things moved</h4><ul class="tp-why">${p.why.map(w => `<li><span>${esc(w.text)}</span><small>${esc(when(w.date))}</small></li>`).join('')}</ul>` : ''}
-        <p class="tp-local">${icon('cloud-off', 15)} <span>Your taste profile stays on this PC (taste.json in Marquee's folder). ${ai.llm ? `When ${esc(ai.name)} writes a comment or answers in chat, it gets a short summary of it.` : 'Classic mode: no AI ever sees it.'}</span></p>
+        <p class="tp-local">${icon('cloud-off', 15)} <span>Your taste profile stays on this PC (taste.json in Atlas's folder). ${ai.llm ? `When ${esc(ai.name)} writes a comment or answers in chat, it gets a short summary of it.` : 'Classic mode: no AI ever sees it.'}</span></p>
       </details>
     </div>`;
 }

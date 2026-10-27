@@ -1,5 +1,5 @@
 # Test helper: removes the throwaway test install completely (tasks, processes, shortcuts, D:\StackTest,
-# which also holds the test Marquee's settings). Never touches the real "Media Stack"/"Media Server" installs.
+# which also holds the test Atlas's settings). Never touches the real "Media Stack"/"Media Server" installs.
 param([string] $Root = 'D:\StackTest', [string] $Folder = '\Media Stack Test\', [string] $Name = 'Media Stack Test')
 $ErrorActionPreference = 'Continue'
 if ($Root -notmatch 'StackTest' -or $Folder -notmatch 'Test' -or $Name -notmatch 'Test') { throw 'refusing: this only removes test installs' }
@@ -12,7 +12,7 @@ Get-ScheduledTask -TaskPath $Folder -ErrorAction SilentlyContinue | ForEach-Obje
 }
 Unregister-ScheduledTask -TaskName 'MediaStackSetup-Test' -Confirm:$false -ErrorAction SilentlyContinue
 # Anything still running from the test folder (qBittorrent runs from Program Files with a test profile; the
-# test Marquee and the installer's test copies run from inside it).
+# test Atlas and the installer's test copies run from inside it).
 Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "$Root\*" -or $_.CommandLine -like "*$Root*" } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; "stopped $($_.Name) ($($_.ProcessId))"
 }

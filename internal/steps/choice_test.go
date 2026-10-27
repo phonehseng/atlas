@@ -62,15 +62,15 @@ func TestPresets(t *testing.T) {
 		t.Errorf("recommended isn't closed under needs: %v", added)
 	}
 	if !strings.Contains(","+strings.Join(rec, ",")+",", ",marquee,") {
-		t.Errorf("recommended on Windows includes Marquee: %v", rec)
+		t.Errorf("recommended on Windows includes Atlas: %v", rec)
 	}
 	lin, _ := CloseParts(Preset("everything", "linux"), "linux")
 	for _, p := range lin {
 		if p == "marquee" {
-			t.Error("Marquee offered on Linux")
+			t.Error("Atlas offered on Linux")
 		}
 	}
-	// Ticking Marquee pulls in Jellyfin and Seerr (and what Seerr needs).
+	// Ticking Atlas pulls in Jellyfin and Seerr (and what Seerr needs).
 	got, added := CloseParts([]string{"marquee"}, "windows")
 	if !strings.Contains(strings.Join(got, ","), "seerr") || len(added) == 0 {
 		t.Errorf("marquee closure: %v %v", got, added)
@@ -132,13 +132,17 @@ func TestTailscaleCommands(t *testing.T) {
 	st.OS, st.Name = "windows", "Media Stack Test"
 	st.Deployed["marquee"], st.Deployed["jellyfin"] = "x", "x"
 	fw := FirewallScript(st)
-	want := `New-NetFirewallRule -DisplayName 'Marquee Mobile (Tailscale) (Media Stack Test)' -Direction Inbound -Protocol TCP -LocalPort 8737 -Program 'D:\StackTest\apps\Marquee\Marquee.exe' -Action Allow -Profile Private`
+	want := `New-NetFirewallRule -DisplayName 'Atlas Mobile (Tailscale) (Media Stack Test)' -Direction Inbound -Protocol TCP -LocalPort 8737 -Program 'D:\StackTest\apps\Atlas\Atlas.exe' -Action Allow -Profile Private`
 	if !strings.Contains(fw, want) {
 		t.Errorf("firewall script:\n%s\nwant line:\n%s", fw, want)
 	}
+	// the rule from before the rename goes
+	if old := `Get-NetFirewallRule -DisplayName 'Marquee Mobile (Tailscale) (Media Stack Test)' -ErrorAction SilentlyContinue | Remove-NetFirewallRule`; !strings.Contains(fw, old) {
+		t.Errorf("firewall script doesn't remove the old rule:\n%s", fw)
+	}
 	st.Name = "Media Stack"
-	if MarqueeRuleName(st) != "Marquee Mobile (Tailscale)" {
-		t.Error(MarqueeRuleName(st))
+	if MarqueeRuleName(st) != "Atlas Mobile (Tailscale)" || LegacyRuleName(st) != "Marquee Mobile (Tailscale)" {
+		t.Error(MarqueeRuleName(st), LegacyRuleName(st))
 	}
 }
 
@@ -228,5 +232,39 @@ func TestVersionNewer(t *testing.T) {
 		if got := core.VersionNewer(c.a, c.b); got != c.want {
 			t.Errorf("VersionNewer(%s, %s) = %v", c.a, c.b, got)
 		}
+	}
+}
+
+// An install from before the rename moves from apps\Marquee to apps\Atlas; its exe stays usable until the new
+// build arrives.
+func TestMigrateMarquee(t *testing.T) {
+	root := t.TempDir()
+	st := core.New(root)
+	st.OS, st.Name = "windows", "Media Stack Unit Test"
+	c := &Ctx{Context: context.Background(), St: st, J: core.NewJob("t", os.Stderr)}
+	if moved, err := migrateMarquee(c); err != nil || moved {
+		t.Fatalf("nothing to move: %v %v", moved, err)
+	}
+	old := filepath.Join(root, "apps", "Marquee")
+	os.MkdirAll(filepath.Join(old, "_internal"), 0o755)
+	os.WriteFile(filepath.Join(old, "Marquee.exe"), []byte("x"), 0o644)
+	moved, err := migrateMarquee(c)
+	if err != nil || !moved {
+		t.Fatalf("move: %v %v", moved, err)
+	}
+	if fileExists(old) || MarqueeExe(st) != filepath.Join(root, "apps", "Atlas", "Marquee.exe") {
+		t.Errorf("after the move: old there %v, exe %s", fileExists(old), MarqueeExe(st))
+	}
+	os.WriteFile(filepath.Join(MarqueeDir(st), "Atlas.exe"), []byte("x"), 0o644)
+	if MarqueeExe(st) != filepath.Join(root, "apps", "Atlas", "Atlas.exe") {
+		t.Errorf("Atlas.exe first: %s", MarqueeExe(st))
+	}
+	// a leftover old folder next to an installed Atlas is removed
+	os.MkdirAll(old, 0o755)
+	if moved, err := migrateMarquee(c); err != nil || !moved || fileExists(old) || !fileExists(MarqueeDir(st)) {
+		t.Errorf("leftover: %v %v", moved, err)
+	}
+	if marqueeShortcutName(st) != "Atlas (Media Stack Unit Test)" || legacyShortcutName(st) != "Marquee (Media Stack Unit Test)" {
+		t.Error(marqueeShortcutName(st), legacyShortcutName(st))
 	}
 }

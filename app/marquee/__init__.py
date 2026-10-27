@@ -1,11 +1,11 @@
-"""Marquee: a local, Netflix-style player for your Jellyfin library."""
+"""Atlas: a local, Netflix-style player for your Jellyfin library."""
 import os
 import subprocess
 
-__version__ = "1.5.1"
+__version__ = "1.6.0"
 
 if os.name == "nt":
-    # Marquee is a windowed app: every helper it starts (ffmpeg, ffprobe, tailscale, powershell, llama-server...)
+    # Atlas is a windowed app: every helper it starts (ffmpeg, ffprobe, tailscale, powershell, llama-server...)
     # would otherwise flash a console window on the desktop. Default them all to no window, unless a caller asks for
     # a console of its own (CREATE_NEW_CONSOLE) or none at all (DETACHED_PROCESS).
     _CREATE_NO_WINDOW, _OWN_CONSOLE = 0x08000000, 0x00000010 | 0x00000008

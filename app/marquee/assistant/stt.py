@@ -44,7 +44,7 @@ class STT:
     def _load(self, cfg):
         try:
             installer.add_dll_dirs()
-            # Everything Hugging Face keeps (model cache, Xet chunk cache) under Marquee's folder; no progress bars
+            # Everything Hugging Face keeps (model cache, Xet chunk cache) under Atlas's folder; no progress bars
             # (a windowed app has no console) and no warning when Windows can't make symlinks (files get copied).
             os.environ.setdefault("HF_HOME", str(MODELS_DIR / "huggingface"))
             os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
@@ -90,7 +90,7 @@ class STT:
         segs, _info = self.model.transcribe(audio, language=cfg["language"] or None, beam_size=1, best_of=1,
                                             temperature=0.0, condition_on_previous_text=False, vad_filter=False,
                                             without_timestamps=True,
-                                            initial_prompt=prompt or "Hey Marquee, pause. Skip forward 30 seconds.")
+                                            initial_prompt=prompt or "Hey Atlas, pause. Skip forward 30 seconds.")
         text = " ".join(s.text.strip() for s in segs).strip()
         return text, int((time.perf_counter() - t0) * 1000)
 
@@ -111,7 +111,7 @@ def _cuda_libs():
         return False
 
 
-def selftest(sentence="Hey Marquee, skip forward thirty seconds."):
+def selftest(sentence="Hey Atlas, skip forward thirty seconds."):
     """Check speech recognition end to end without a microphone: Windows speech synthesis renders the sentence
     into memory (nothing is played), then it's transcribed. -> {said, heard, ms, device, load_ms}"""
     import clr  # pythonnet

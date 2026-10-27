@@ -1,4 +1,4 @@
-"""Trailers for titles that aren't in the library, played by Marquee itself instead of a YouTube embed.
+"""Trailers for titles that aren't in the library, played by Atlas itself instead of a YouTube embed.
 
 The title page knows a trailer by its YouTube key (TMDB videos, in the details extras). yt-dlp resolves the key to
 its streams; the best video up to 1080p (H.264 first, else VP9/AV1) is fetched in ranged chunks and remuxed with the
@@ -9,7 +9,7 @@ offline next time. English captions (manual first, else auto-generated) go along
 
 yt-dlp needs a JavaScript runtime to solve YouTube's stream challenges, without which YouTube throttles the download
 to a crawl: the bundled QuickJS (vendor\\quickjs\\qjs.exe, MIT) is used, or deno / node when installed. yt-dlp is
-bundled with each Marquee release; YouTube changes break older versions now and then, so releases bump it. When
+bundled with each Atlas release; YouTube changes break older versions now and then, so releases bump it. When
 resolving fails the page falls back to the YouTube embed and the reason is logged.
 
 Routes: GET /api/trailer/<key> -> {available, url, subs}; GET /api/trailer/<key>/file (Range once complete);

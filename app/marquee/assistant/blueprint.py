@@ -1,4 +1,4 @@
-"""HTTP API of the assistant (registered on Marquee's local server, 127.0.0.1 only).
+"""HTTP API of the assistant (registered on Atlas's local server, 127.0.0.1 only).
 
 POST /api/assistant            {text, item_id?}  -> {ok, reply, actions, source, intent, ms}
                                                      (item_id: the title on the details page; a scene request

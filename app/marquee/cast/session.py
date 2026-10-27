@@ -1,9 +1,9 @@
-"""One cast: a title playing on a TV, with this PC streaming it and Marquee as the remote.
+"""One cast: a title playing on a TV, with this PC streaming it and Atlas as the remote.
 
 Only one cast runs at a time. start() returns at once; the work (probing the file, choosing how to stream it,
 reaching the TV, loading) happens on the cast's own thread, and the window follows it through "cast-state" events.
 
-How the video goes out: Marquee Mobile's streaming engine (marquee.mobile.stream) decides between the file itself
+How the video goes out: Atlas Mobile's streaming engine (marquee.mobile.stream) decides between the file itself
 (MP4 the TV plays as it is), a remux (the video copied into fragmented-MP4 HLS, audio made AAC when needed) or a GPU
 transcode (H.264, HDR tone-mapped, picture subtitles burned in), from what the TV can play (marquee.cast.devices)
 and the casting settings. Text subtitles go to the TV as WebVTT and switch without reloading on Google Cast; a new
@@ -415,7 +415,7 @@ class CastSession:
 
     def pause(self):
         if "pause" not in self.receiver.can:
-            raise CastError("This TV doesn't take pause from Marquee: use its own remote")
+            raise CastError("This TV doesn't take pause from Atlas: use its own remote")
         self.receiver.pause()
         self._set("paused")
         self._save()

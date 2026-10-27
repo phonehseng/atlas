@@ -10,7 +10,7 @@ import requests
 
 from . import __version__ as VERSION, settings
 
-CLIENT = "Marquee"
+CLIENT = "Atlas"
 DEVICE_ID = "marquee-" + uuid.uuid5(uuid.NAMESPACE_DNS, os.environ.get("COMPUTERNAME", "pc")).hex[:12]
 FIELDS = "Overview,Genres,PrimaryImageAspectRatio,ImageTags,BackdropImageTags,ParentBackdropImageTags,ChildCount," \
          "RecursiveItemCount,ProductionYear,OfficialRating,CommunityRating,RunTimeTicks,UserData,SeriesPrimaryImageTag," \

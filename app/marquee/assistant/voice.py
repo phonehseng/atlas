@@ -4,7 +4,7 @@
   own webrtcvad and noise floor. When someone speaks, the utterance is cut from the device that heard it best
   (most voiced energy above its own noise floor) and handed to faster-whisper.
 * Activation: push-to-talk (hold the hotkey while speaking; a short tap listens for one sentence) or a wake word
-  ("Hey Marquee": short voiced segments are transcribed and matched, or openWakeWord when chosen). Off by default:
+  ("Hey Atlas": short voiced segments are transcribed and matched, or openWakeWord when chosen). Off by default:
   then no microphone is opened at all, except for one sentence when asked from the app.
 * While it listens for a command the video is turned down and "Listening..." shows; audio only ever lives in
   memory (a ring buffer of a few seconds per device) and is dropped right after transcription."""
@@ -192,7 +192,7 @@ class Listener:
         stt.engine().load()  # warm the speech model in the background
         if mode == "wake_word" and cfg["wake_engine"] == "openwakeword":
             self._load_oww(cfg)
-        self.ctl.toast("Push-to-talk ready" if mode == "push_to_talk" else "Listening for \"Hey Marquee\"")
+        self.ctl.toast("Push-to-talk ready" if mode == "push_to_talk" else "Listening for \"Hey Atlas\"")
         self._notify()
         return self.status()
 
@@ -312,7 +312,7 @@ class Listener:
         while True:
             kind, audio = self._q.get()
             try:
-                prompt = "Hey Marquee, pause. Skip forward 30 seconds. Turn on subtitles."
+                prompt = "Hey Atlas, pause. Skip forward 30 seconds. Turn on subtitles."
                 item = self.ctl.item()
                 if item:
                     prompt += f" {item.get('SeriesName') or item.get('Name')}."

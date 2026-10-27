@@ -1,4 +1,4 @@
-"""Draws Marquee's icon (assets/marquee.ico + .png): a Clear Home navy tile with a play mark and the orange
+"""Draws Atlas's icon (assets/marquee.ico + .png): a Clear Home navy tile with a play mark and the orange
 marquee bulbs of a cinema sign."""
 from pathlib import Path
 

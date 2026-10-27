@@ -226,7 +226,7 @@ GROUPS = {
     # scene search / sensitive ranges (index/deps.py)
     "index": ["numpy", "onnxruntime-directml", "tokenizers"],
     # speech to text and microphones (assistant). Not onnxruntime: faster-whisper only imports it for its Silero
-    # VAD (vad_filter=True), which Marquee doesn't use (webrtcvad does that job); when the index is installed its
+    # VAD (vad_filter=True), which Atlas doesn't use (webrtcvad does that job); when the index is installed its
     # onnxruntime-directml provides the same module, so the two never overwrite each other's onnxruntime folder.
     "voice": ["numpy", "sounddevice", "cffi", "pycparser", "webrtcvad-wheels",
               "faster-whisper", "ctranslate2", "av", "tokenizers", "pyyaml", "tqdm", "colorama",

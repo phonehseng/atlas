@@ -32,7 +32,11 @@ def tools():
 
 def root():
     """The folder all clips are saved under (one subfolder per title)."""
-    return os.environ.get("MARQUEE_DEV_CLIPS") or str(Path.home() / "Videos" / "Marquee Clips")
+    if os.environ.get("MARQUEE_DEV_CLIPS"):
+        return os.environ["MARQUEE_DEV_CLIPS"]
+    videos = Path.home() / "Videos"
+    old, new = videos / "Marquee Clips", videos / "Atlas Clips"
+    return str(old if old.is_dir() and not new.exists() else new)  # keep using the folder from before the rename
 
 
 def out_dir(title):

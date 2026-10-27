@@ -1,4 +1,4 @@
-/* Marquee Mobile: pairing, browsing (home, search, details, libraries), downloads and settings. The player lives in
+/* Atlas Mobile: pairing, browsing (home, search, details, libraries), downloads and settings. The player lives in
    player.js and the PC remote in remote.js; they share the helpers on window.M. Hash routes (#/home, #/item/<id>...)
    so the phone's back button works; anything else in the hash is a pairing code. */
 (() => {

@@ -1,4 +1,4 @@
-"""Development helper for the storage tests: a headless Marquee app (no window, no player, catalog not syncing)
+"""Development helper for the storage tests: a headless Atlas app (no window, no player, catalog not syncing)
 wired to this PC's Jellyfin/Seerr the same way tools/dev.ps1 does. Keys are read from the local config files at
 runtime and never printed. Deletions stay off (MARQUEE_STORAGE_NO_DELETE) unless a test points at a mock."""
 import json

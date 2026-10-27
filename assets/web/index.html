@@ -415,17 +415,17 @@ function compCard(c) {
   return h + `</div></div>`;
 }
 
-// "Your stack app": Marquee or the Media Hub only (Windows); a note on Linux.
+// "Your stack app": Atlas or the Media Hub only (Windows); a note on Linux.
 function appChoice() {
   if (state.os !== "windows") {
-    return `<div class="appchoice"><b>Your stack app: the Media Hub</b><div class="help">Marquee (the desktop player and stack app)
+    return `<div class="appchoice"><b>Your stack app: the Media Hub</b><div class="help">Atlas (the desktop player and stack app)
       is Windows-only for now. On Linux the Media Hub is your dashboard in the browser, and Jellyfin is the player.</div></div>`;
   }
   const m = compById("marquee"), avail = compUsable(m);
   const mOn = chooser.sel.has("marquee"), hOn = !mOn && chooser.sel.has("hub");
   const note = id => chooser.notes[id] ? `<div class="help" style="color:var(--ok)">${esc(chooser.notes[id])}</div>` : "";
   return `<div class="appchoice"><b>Your stack app</b>
-    <label><input type="radio" data-app="marquee" ${mOn ? "checked" : ""} ${avail ? "" : "disabled"}><span><b>Use Marquee as your stack app (recommended)</b>
+    <label><input type="radio" data-app="marquee" ${mOn ? "checked" : ""} ${avail ? "" : "disabled"}><span><b>Use Atlas as your stack app (recommended)</b>
       <span class="badge">Windows only</span><div class="help">${esc(m.what)} The Media Hub keeps working in the background
       (health checks, alerts, backups). ~${fmtMB(m.disk_mb)} disk · ~${fmtMB(m.ram_mb)} RAM while open.
       ${avail ? "" : "<b>Not available in this version of Media Stack Setup yet.</b>"}</div>${note("marquee")}</span></label>

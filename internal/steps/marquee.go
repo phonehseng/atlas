@@ -13,55 +13,75 @@ import (
 	"mediastack/internal/platform"
 )
 
-// Marquee's release download, set when a Marquee version is published (one zip, about 72 MB, holding a
-// Marquee folder with Marquee.exe). Empty URL: this build has no Marquee download.
+// Atlas's release download (the app was called Marquee before; the Go names keep that), set when an Atlas
+// version is published: one zip, about 75 MB, with Atlas.exe and its files. Fill in all three of version,
+// SHA-256 and size; while the version or the SHA-256 is empty this build has no Atlas download.
 //
-//	MarqueeURL    = "https://github.com/<owner>/<repo>/releases/download/v<version>/Marquee-windows-x64.zip"
-//	MarqueeSHA256 = lowercase hex of the zip
-//	MarqueeSize   = the zip's size in bytes
+//	MarqueeVersion = the release version, e.g. "1.6.0" (the URL is made from it)
+//	MarqueeSHA256  = lowercase hex of Atlas-windows-x64.zip
+//	MarqueeSize    = the zip's size in bytes
 const (
-	MarqueeVersion = "1.4.4"
-	MarqueeURL     = "https://github.com/phonehseng/marquee/releases/download/v1.4.4/Marquee-windows-x64.zip"
-	MarqueeSHA256  = "2cbb44dc0a8882f6bd82d90ee97c55e7902358169e81977960f3b72086e9700d"
-	MarqueeSize    = 75430396
+	MarqueeVersion = "1.6.0"
+	MarqueeURL     = "https://github.com/phonehseng/atlas/releases/download/v" + MarqueeVersion + "/Atlas-windows-x64.zip"
+	MarqueeSHA256  = "e88e06607b5ca8c8ce07dd4cf4190c4e2575b3f5b1c4ce08621c375077e35fec"
+	MarqueeSize    = 99281419
 )
 
 // Overrides for testing a local build:
 //
-//	MEDIASTACK_MARQUEE_ZIP   a local Marquee-windows-x64.zip (or an http(s) address) instead of MarqueeURL
-//	MEDIASTACK_MARQUEE_HOME  where Marquee's settings are written instead of %APPDATA%\Marquee
+//	MEDIASTACK_MARQUEE_ZIP   a local Atlas-windows-x64.zip (or an http(s) address) instead of MarqueeURL
+//	MEDIASTACK_MARQUEE_HOME  where Atlas's settings are written instead of %APPDATA%\Marquee
 const (
 	envMarqueeZip  = "MEDIASTACK_MARQUEE_ZIP"
 	envMarqueeHome = "MEDIASTACK_MARQUEE_HOME"
 )
 
 func init() {
-	step(&Step{ID: "marquee", Title: "Marquee (your stack app)", Group: "Your app", OS: "windows", Optional: true,
-		Button: "Install Marquee", Needs: []string{"jellyfin", "seerr"}, Run: runMarquee})
+	step(&Step{ID: "marquee", Title: "Atlas (your stack app)", Group: "Your app", OS: "windows", Optional: true,
+		Button: "Install Atlas", Needs: []string{"jellyfin", "seerr"}, Run: runMarquee})
 }
 
-// MarqueeAvailable reports whether this build can download Marquee.
-func MarqueeAvailable() bool { return MarqueeURL != "" || os.Getenv(envMarqueeZip) != "" }
+// MarqueeAvailable reports whether this build can download Atlas.
+func MarqueeAvailable() bool {
+	return MarqueeVersion != "" && MarqueeSHA256 != "" || os.Getenv(envMarqueeZip) != ""
+}
 
-// MarqueeDir is where Marquee is installed.
-func MarqueeDir(st *core.Stack) string { return filepath.Join(st.Root, "apps", "Marquee") }
+// MarqueeDir is where Atlas is installed.
+func MarqueeDir(st *core.Stack) string { return filepath.Join(st.Root, "apps", "Atlas") }
 
-// MarqueeExe is the program the shortcuts and the firewall rule point at.
-func MarqueeExe(st *core.Stack) string { return filepath.Join(MarqueeDir(st), "Marquee.exe") }
+// legacyMarqueeDir is where installers from before the rename put the app (moved to MarqueeDir on update).
+func legacyMarqueeDir(st *core.Stack) string { return filepath.Join(st.Root, "apps", "Marquee") }
 
-// defaultMarqueeHome is where Marquee keeps its settings unless told otherwise.
+// marqueeExes are the app's exe names, newest first: Marquee.exe is a build from before the rename (the first
+// Atlas release carries both).
+var marqueeExes = []string{"Atlas.exe", "Marquee.exe"}
+
+// MarqueeExe is the program the shortcuts and the firewall rule point at: Atlas.exe, or Marquee.exe when the
+// installed build is older than the rename.
+func MarqueeExe(st *core.Stack) string { return appExe(MarqueeDir(st)) }
+
+func appExe(dir string) string {
+	for _, n := range marqueeExes {
+		if p := filepath.Join(dir, n); fileExists(p) {
+			return p
+		}
+	}
+	return filepath.Join(dir, marqueeExes[0])
+}
+
+// defaultMarqueeHome is where Atlas keeps its settings unless told otherwise (the folder kept its old name).
 func defaultMarqueeHome() string {
 	return filepath.Join(os.Getenv("APPDATA"), "Marquee")
 }
 
-// MarqueeHome is the settings folder this install's Marquee uses. A test install (ports moved) never
-// shares the real one: its Marquee gets <root>\config\marquee.
+// MarqueeHome is the settings folder this install's Atlas uses. A test install (ports moved) never
+// shares the real one: its Atlas gets <root>\config\marquee.
 func MarqueeHome(st *core.Stack) string {
 	if h := os.Getenv(envMarqueeHome); h != "" {
 		return h
 	}
 	if h := os.Getenv("MARQUEE_HOME"); h != "" {
-		return h // Marquee itself reads this too
+		return h // Atlas itself reads this too
 	}
 	if st.PortOffset != 0 {
 		return filepath.Join(st.ConfigDir("marquee"))
@@ -72,10 +92,10 @@ func MarqueeHome(st *core.Stack) string {
 func runMarquee(c *Ctx) error {
 	st := c.St
 	if st.Docker() {
-		return core.UserAction("Marquee is a Windows app for now; on Linux the Media Hub is your dashboard")
+		return core.UserAction("Atlas is a Windows app for now; on Linux the Media Hub is your dashboard")
 	}
 	if !MarqueeAvailable() {
-		return core.UserAction("this version of Media Stack Setup has no Marquee download yet. Choose \"Media Hub only\" " +
+		return core.UserAction("this version of Media Stack Setup has no Atlas download yet. Choose \"Media Hub only\" " +
 			"on the Choose your stack page, or get a newer Media Stack Setup")
 	}
 	zip, version, err := fetchMarquee(c)
@@ -83,30 +103,37 @@ func runMarquee(c *Ctx) error {
 		return err
 	}
 	defer os.Remove(zip)
+	migrated, err := migrateMarquee(c)
+	if err != nil {
+		return err
+	}
 	if err := installMarquee(c, zip); err != nil {
 		return err
 	}
 	if err := st.SetDeployed("marquee", version); err != nil {
 		return err
 	}
-	c.J.OK("Marquee %s is installed in %s", version, MarqueeDir(st))
+	c.J.OK("Atlas %s is installed in %s", version, MarqueeDir(st))
 	marqueeShortcuts(c)
+	if migrated {
+		migrateMarqueeFirewall(c)
+	}
 
 	home := MarqueeHome(st)
 	if home != defaultMarqueeHome() {
-		c.J.Info("Marquee's settings for this install live in %s", home)
+		c.J.Info("Atlas's settings for this install live in %s", home)
 	}
 	if err := WriteMarqueeSettings(c, home); err != nil {
 		return err
 	}
 	if st.IsDeployed("hub") {
 		if err := setHubSettings(st, map[string]any{"ui": "marquee"}); err != nil {
-			c.J.Warn("Couldn't tell the Media Hub that Marquee is the stack app: %v", err)
+			c.J.Warn("Couldn't tell the Media Hub that Atlas is the stack app: %v", err)
 		} else {
-			c.J.OK("The Media Hub keeps running in the background; Marquee's \"Your stack\" page is its dashboard now")
+			c.J.OK("The Media Hub keeps running in the background; Atlas's \"Your stack\" page is its dashboard now")
 		}
 	}
-	c.J.Action("Open Marquee from the Start menu or the desktop and sign in with your Jellyfin login (%s). Marquee never got your password from this setup.", st.AdminUser)
+	c.J.Action("Open Atlas from the Start menu or the desktop and sign in with your Jellyfin login (%s). Atlas never got your password from this setup.", st.AdminUser)
 	return nil
 }
 
@@ -116,19 +143,19 @@ func fetchMarquee(c *Ctx) (string, string, error) {
 	src, override := MarqueeURL, false
 	if o := os.Getenv(envMarqueeZip); o != "" {
 		src, override = o, true
-		c.J.Info("Using the Marquee build from %s (%s)", o, envMarqueeZip)
+		c.J.Info("Using the Atlas build from %s (%s)", o, envMarqueeZip)
 	}
-	dest := filepath.Join(st.Root, "downloads-cache", "Marquee-windows-x64.zip")
+	dest := filepath.Join(st.Root, "downloads-cache", "Atlas-windows-x64.zip")
 	var sum string
 	var err error
 	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		c.J.Info("Downloading Marquee...")
+		c.J.Info("Downloading Atlas...")
 		sum, err = core.Download(c, c.J, src, dest)
 	} else {
 		sum, err = core.CopyFile(src, dest)
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("getting Marquee: %w", err)
+		return "", "", fmt.Errorf("getting Atlas: %w", err)
 	}
 	fi, err := os.Stat(dest)
 	if err != nil {
@@ -137,18 +164,18 @@ func fetchMarquee(c *Ctx) (string, string, error) {
 	version := MarqueeVersion
 	switch {
 	case override && MarqueeSHA256 == "":
-		c.J.Info("Marquee zip: %d bytes, SHA-256 %s (not checked: no release hash in this build)", fi.Size(), sum)
+		c.J.Info("Atlas zip: %d bytes, SHA-256 %s (not checked: no release hash in this build)", fi.Size(), sum)
 		version = "local-" + sum[:12]
 	default:
 		if MarqueeSize > 0 && fi.Size() != MarqueeSize {
 			os.Remove(dest)
-			return "", "", fmt.Errorf("the Marquee download is %d bytes, expected %d", fi.Size(), MarqueeSize)
+			return "", "", fmt.Errorf("the Atlas download is %d bytes, expected %d", fi.Size(), MarqueeSize)
 		}
 		if !strings.EqualFold(sum, MarqueeSHA256) {
 			os.Remove(dest)
-			return "", "", fmt.Errorf("the Marquee download failed its checksum check (got %s)", sum)
+			return "", "", fmt.Errorf("the Atlas download failed its checksum check (got %s)", sum)
 		}
-		c.J.OK("Marquee download verified (SHA-256 %s)", sum)
+		c.J.OK("Atlas download verified (SHA-256 %s)", sum)
 		if version == "" {
 			version = "release-" + sum[:12]
 		}
@@ -156,12 +183,12 @@ func fetchMarquee(c *Ctx) (string, string, error) {
 	return dest, version, nil
 }
 
-// installMarquee unpacks the zip into <root>\apps\Marquee, replacing an older copy.
+// installMarquee unpacks the zip into <root>\apps\Atlas, replacing an older copy.
 func installMarquee(c *Ctx, zip string) error {
 	dir := MarqueeDir(c.St)
 	top, err := core.ZipTopFolder(zip)
 	if err != nil {
-		return fmt.Errorf("the Marquee download isn't a valid zip: %w", err)
+		return fmt.Errorf("the Atlas download isn't a valid zip: %w", err)
 	}
 	strip := 0
 	if top != "" {
@@ -169,20 +196,20 @@ func installMarquee(c *Ctx, zip string) error {
 	}
 	fresh := dir + ".new"
 	os.RemoveAll(fresh)
-	c.J.Info("Unpacking Marquee...")
+	c.J.Info("Unpacking Atlas...")
 	if err := core.Unzip(zip, fresh, strip); err != nil {
 		return err
 	}
-	if !fileExists(filepath.Join(fresh, "Marquee.exe")) {
+	if !fileExists(appExe(fresh)) {
 		os.RemoveAll(fresh)
-		return fmt.Errorf("the Marquee download doesn't contain Marquee.exe")
+		return fmt.Errorf("the Atlas download doesn't contain Atlas.exe")
 	}
 	old := dir + ".old"
 	os.RemoveAll(old)
 	if fileExists(dir) {
 		if err := os.Rename(dir, old); err != nil {
 			os.RemoveAll(fresh)
-			return core.UserAction("Marquee is open - close it (and its tray icon), then run this step again")
+			return core.UserAction("Atlas is open - close it (and its tray icon), then run this step again")
 		}
 	}
 	if err := os.Rename(fresh, dir); err != nil {
@@ -193,20 +220,25 @@ func installMarquee(c *Ctx, zip string) error {
 	return nil
 }
 
-// marqueeShortcutName is "Marquee", or "Marquee (<install name>)" for a second install.
-func marqueeShortcutName(st *core.Stack) string {
+// marqueeShortcutName is "Atlas", or "Atlas (<install name>)" for a second install.
+func marqueeShortcutName(st *core.Stack) string { return shortcutName(st, "Atlas") }
+
+// legacyShortcutName is the shortcuts' name from before the rename.
+func legacyShortcutName(st *core.Stack) string { return shortcutName(st, "Marquee") }
+
+func shortcutName(st *core.Stack, app string) string {
 	if st.Name != "Media Stack" {
-		return "Marquee (" + st.Name + ")"
+		return app + " (" + st.Name + ")"
 	}
-	return "Marquee"
+	return app
 }
 
-// marqueeShortcut is how the shortcuts start Marquee: directly, or (when this install keeps Marquee's
+// marqueeShortcut is how the shortcuts start Atlas: directly, or (when this install keeps Atlas's
 // settings somewhere else) through cmd.exe with MARQUEE_HOME set.
 func marqueeShortcut(st *core.Stack) platform.Shortcut {
 	exe := MarqueeExe(st)
 	s := platform.Shortcut{Target: exe, WorkDir: MarqueeDir(st), Icon: exe + ",0",
-		Description: "Marquee: your films and shows, requests and media stack"}
+		Description: "Atlas: your films and shows, requests and media stack"}
 	if home := MarqueeHome(st); home != defaultMarqueeHome() {
 		s.Target = filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
 		s.Args = fmt.Sprintf(`/c set "MARQUEE_HOME=%s" && start "" "%s"`, home, exe)
@@ -216,9 +248,14 @@ func marqueeShortcut(st *core.Stack) platform.Shortcut {
 }
 
 // MarqueeShortcutFiles are the Start menu and desktop shortcuts this install makes.
-func MarqueeShortcutFiles(st *core.Stack) []string {
+func MarqueeShortcutFiles(st *core.Stack) []string { return shortcutFiles(marqueeShortcutName(st)) }
+
+// LegacyShortcutFiles are the shortcuts installers from before the rename made ("Marquee").
+func LegacyShortcutFiles(st *core.Stack) []string { return shortcutFiles(legacyShortcutName(st)) }
+
+func shortcutFiles(base string) []string {
 	var out []string
-	name := marqueeShortcutName(st) + ".lnk"
+	name := base + ".lnk"
 	if d := platform.ProgramsDir(); d != "" {
 		out = append(out, filepath.Join(d, name))
 	}
@@ -239,14 +276,71 @@ func marqueeShortcuts(c *Ctx) {
 	}
 }
 
+// ---------------------------------------------------------------------------------------------- the rename
+
+// migrateMarquee moves an install from before the rename (Marquee) to Atlas's names: <root>\apps\Marquee
+// becomes <root>\apps\Atlas and the "Marquee" Start menu and desktop shortcuts are removed (the caller makes
+// the Atlas ones once the new build is in place). Settings stay in %APPDATA%\Marquee. Returns whether there
+// was anything to move.
+func migrateMarquee(c *Ctx) (bool, error) {
+	st := c.St
+	old, dir := legacyMarqueeDir(st), MarqueeDir(st)
+	moved := false
+	if fileExists(old) {
+		if fileExists(dir) {
+			// both: an earlier run already installed Atlas; the old folder is only a leftover
+			if err := os.RemoveAll(old); err != nil {
+				return false, core.UserAction("Marquee is open from " + old + " - close it (and its tray icon), then run this step again")
+			}
+			c.J.OK("Removed the old copy in %s (Atlas is in %s)", old, dir)
+		} else {
+			if err := os.Rename(old, dir); err != nil {
+				return false, core.UserAction("Marquee is open - close it (and its tray icon), then run this step again")
+			}
+			c.J.OK("Moved %s to %s (Marquee is called Atlas now; its settings stay where they are)", old, dir)
+		}
+		moved = true
+	}
+	for _, f := range LegacyShortcutFiles(st) {
+		if !fileExists(f) {
+			continue
+		}
+		if err := os.Remove(f); err != nil {
+			c.J.Warn("Couldn't remove the old shortcut %s: %v", f, err)
+			continue
+		}
+		c.J.OK("Removed the old shortcut %s", f)
+		moved = true
+	}
+	return moved, nil
+}
+
+// migrateMarqueeFirewall replaces the firewall rule installers before the rename made ("Marquee Mobile
+// (Tailscale)", for apps\Marquee\Marquee.exe) with Atlas's, if it's there. One Windows permission prompt.
+func migrateMarqueeFirewall(c *Ctx) {
+	st := c.St
+	if st.Docker() || !platform.FirewallRuleExists(LegacyRuleName(st)) {
+		return
+	}
+	c.J.Info("Moving the Windows Firewall rule for phones to Atlas...")
+	script := "$ErrorActionPreference = 'Stop'\n" +
+		fmt.Sprintf("Get-NetFirewallRule -DisplayName %s -ErrorAction SilentlyContinue | Remove-NetFirewallRule\n", psQuote(LegacyRuleName(st))) +
+		marqueeRuleScript(st)
+	if err := platform.RunElevated(c, c.J, script); err != nil {
+		c.J.Warn("The firewall rule wasn't moved (%v). Run \"Remote access\" again, or use Allow Atlas in Atlas > Settings > Atlas Mobile.", err)
+		return
+	}
+	c.J.OK("Windows Firewall rule %q: Atlas Mobile (port %d) on private networks", MarqueeRuleName(st), MarqueeMobilePort)
+}
+
 // ---------------------------------------------------------------------------------------------- settings
 
-// marqueeSecret are the settings Marquee keeps DPAPI-encrypted (settings.py SECRET).
+// marqueeSecret are the settings Atlas keeps DPAPI-encrypted (settings.py SECRET).
 var marqueeSecret = map[string]bool{"token": true, "seerr_cookie": true, "ai_key": true, "gdrive_client_secret": true,
 	"gdrive_token": true, "radarr_key": true, "sonarr_key": true, "hub_token": true, "bazarr_key": true}
 
-// MarqueeSettings is what the installer fills in so Marquee works on first launch. Secrets are plain here
-// and encrypted when written. No password is ever part of it: the user signs in to Jellyfin in Marquee.
+// MarqueeSettings is what the installer fills in so Atlas works on first launch. Secrets are plain here
+// and encrypted when written. No password is ever part of it: the user signs in to Jellyfin in Atlas.
 func MarqueeSettings(st *core.Stack) map[string]string {
 	local := func(id string) string { return fmt.Sprintf("http://127.0.0.1:%d", st.Port(id)) }
 	s := map[string]string{
@@ -277,7 +371,7 @@ func MarqueeSettings(st *core.Stack) map[string]string {
 	return s
 }
 
-// WriteMarqueeSettings merges MarqueeSettings into <home>\settings.json in Marquee's own format (JSON,
+// WriteMarqueeSettings merges MarqueeSettings into <home>\settings.json in Atlas's own format (JSON,
 // secrets as base64 DPAPI blobs). Settings the user already has stay; a sign-in to another server is kept
 // and nothing is changed.
 func WriteMarqueeSettings(c *Ctx, home string) error {
@@ -291,14 +385,14 @@ func WriteMarqueeSettings(c *Ctx, home string) error {
 	want := MarqueeSettings(c.St)
 	if tok, _ := cur["token"].(string); tok != "" {
 		if srv, _ := cur["server"].(string); srv != "" && !strings.EqualFold(strings.TrimRight(srv, "/"), want["server"]) {
-			c.J.Warn("Marquee is already signed in to another Jellyfin (%s), so its settings were left as they are. "+
-				"To use this server: Marquee > Settings > Sign out, then sign in with %s.", srv, want["server"])
+			c.J.Warn("Atlas is already signed in to another Jellyfin (%s), so its settings were left as they are. "+
+				"To use this server: Atlas > Settings > Sign out, then sign in with %s.", srv, want["server"])
 			return nil
 		}
 		delete(want, "user_name")
 	}
 	if b, _ := cur["mobile_bind"].(string); b != "" {
-		delete(want, "mobile_bind") // the user's own choice in Marquee's Settings
+		delete(want, "mobile_bind") // the user's own choice in Atlas's Settings
 	}
 	for k, v := range want {
 		if marqueeSecret[k] {
@@ -325,11 +419,11 @@ func WriteMarqueeSettings(c *Ctx, home string) error {
 	for _, k := range core.SortedKeys(want) {
 		filled = append(filled, k)
 	}
-	c.J.OK("Marquee is set up for this stack (%s)", strings.Join(filled, ", "))
+	c.J.OK("Atlas is set up for this stack (%s)", strings.Join(filled, ", "))
 	return nil
 }
 
-// ReadMarqueeSecret decrypts one secret from a Marquee settings file (tests).
+// ReadMarqueeSecret decrypts one secret from an Atlas settings file (tests).
 func ReadMarqueeSecret(file, key string) (string, error) {
 	b, err := os.ReadFile(file)
 	if err != nil {

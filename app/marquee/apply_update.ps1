@@ -1,5 +1,5 @@
-# Marquee's updater (started by marquee/updater.py, from a copy in the updates folder so it never holds the install
-# folder open). It swaps the install folder for the new build once Marquee has closed, starts the new build and
+# Atlas's updater (started by marquee/updater.py, from a copy in the updates folder so it never holds the install
+# folder open). It swaps the install folder for the new build once Atlas has closed, starts the new build and
 # waits for its heartbeat; if that never comes, it puts the old folder back and starts that instead.
 #   powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File apply_update.ps1 -Job <updates>\job.json
 # job.json: pid, install, staged, old, exe, from, to, heartbeat, result, log, wait_exit, wait_start (seconds)
@@ -28,7 +28,11 @@ function Retry([scriptblock]$action, [int]$seconds) {
     }
 }
 function Launch([string[]]$arguments) {
-    $exe = Join-Path $install $j.exe
+    # whichever exe the folder has: Atlas.exe, else the job's, else Marquee.exe (a build from before the rename,
+    # e.g. after a roll back)
+    $exe = @('Atlas.exe', $j.exe, 'Marquee.exe') | Where-Object { $_ } | ForEach-Object { Join-Path $install $_ } |
+        Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $exe) { $exe = Join-Path $install $j.exe }
     Log "starting $exe $($arguments -join ' ')"
     return Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $install -PassThru
 }
@@ -43,28 +47,28 @@ function Stop-From([string]$dir) {
     } | ForEach-Object { try { $_.Kill(); $_.WaitForExit(10000) | Out-Null } catch {} }
 }
 
-Log "update $($j.from) -> $($j.to): waiting for Marquee (pid $($j.pid)) to close"
-# tell Marquee this script really runs (it only closes once it sees this)
+Log "update $($j.from) -> $($j.to): waiting for Atlas (pid $($j.pid)) to close"
+# tell Atlas this script really runs (it only closes once it sees this)
 try { Set-Content -LiteralPath $j.ack -Value $PID -Encoding ASCII } catch {}
 
-# 1. Marquee closes through its normal path; wait for it.
+# 1. Atlas closes through its normal path; wait for it.
 $p = Get-Process -Id $j.pid -ErrorAction SilentlyContinue
 if ($p -and -not $p.WaitForExit([int]$j.wait_exit * 1000)) {
-    Log 'Marquee did not close in time; nothing was changed'
-    Result 'cancelled' "Marquee didn't close, so the update wasn't applied."
+    Log 'Atlas did not close in time; nothing was changed'
+    Result 'cancelled' "Atlas didn't close, so the update wasn't applied."
     exit 1
 }
 
 # 2. Swap the folders: <install> -> <install>.old, <install>.new -> <install>. Both renames stay on one drive.
 if (Test-Path -LiteralPath $old) { Retry { Remove-Item -LiteralPath $old -Recurse -Force } 20 | Out-Null }
 if (-not (Retry { [IO.Directory]::Move($install, $old) } 30)) {
-    Result 'failed' "The Marquee folder was still in use, so the update wasn't applied."
+    Result 'failed' "The Atlas folder was still in use, so the update wasn't applied."
     Launch @('--update-failed', $j.to) | Out-Null
     exit 1
 }
 if (-not (Retry { [IO.Directory]::Move($staged, $install) } 15)) {
     Retry { [IO.Directory]::Move($old, $install) } 30 | Out-Null
-    Result 'failed' "The new version couldn't be moved into place, so Marquee stayed as it was."
+    Result 'failed' "The new version couldn't be moved into place, so Atlas stayed as it was."
     Launch @('--update-failed', $j.to) | Out-Null
     exit 1
 }
@@ -88,7 +92,7 @@ try {
 } catch { Log "the new version couldn't be started: $($_.Exception.Message)" }
 
 if ($ok) {
-    Log "Marquee $($j.to) started"
+    Log "Atlas $($j.to) started"
     Result 'updated' ''
     Retry { if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force } } 60 | Out-Null
     exit 0
@@ -102,7 +106,7 @@ if (-not (Retry { [IO.Directory]::Move($install, $failed) } 30)) {
     exit 2
 }
 Retry { [IO.Directory]::Move($old, $install) } 30 | Out-Null
-Result 'failed' "Marquee $($j.to) didn't start, so Marquee went back to $($j.from)."
+Result 'failed' "Atlas $($j.to) didn't start, so Atlas went back to $($j.from)."
 Launch @('--update-failed', $j.to) | Out-Null
 Retry { if (Test-Path -LiteralPath $failed) { Remove-Item -LiteralPath $failed -Recurse -Force } } 30 | Out-Null
 Log 'rolled back'

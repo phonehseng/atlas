@@ -1,7 +1,8 @@
-"""Updates: Marquee checks its GitHub releases for a newer build, downloads it, checks it and swaps it in.
+"""Updates: Atlas checks its GitHub releases for a newer build, downloads it, checks it and swaps it in.
 
-Where it looks: https://github.com/<update_repo>/releases/latest/download/marquee-update.json (the release manifest,
-docs/updates.md), or MARQUEE_UPDATE_URL (development: a local test server). Checked 30 s after start and every 12 h,
+Where it looks: https://github.com/<update_repo>/releases/latest/download/atlas-update.json (the release manifest,
+docs/updates.md; marquee-update.json, its name before the rename, when a release has no atlas-update.json), or
+MARQUEE_UPDATE_URL (development: a local test server). Checked 30 s after start and every 12 h,
 never while a video plays, with a 10 s timeout and the ETag of the last answer. A private or missing repo (401/403/404)
 is noted quietly ("can't reach updates"), never nagged about.
 
@@ -9,17 +10,17 @@ Settings: update_check auto (download in the background, then offer "Restart to 
 update_channel stable | beta (beta also takes pre-releases); update_skip (a skipped version); update_repo.
 
 Download: %APPDATA%\\Marquee\\updates\\ (resumable with HTTP Range), SHA-256 and size from the manifest, then
-unpacked next to the install folder (<install>.new, same drive, so the swap is two renames) and checked: Marquee.exe
-is there and its VERSION file says the manifest's version.
+unpacked next to the install folder (<install>.new, same drive, so the swap is two renames) and checked: Atlas.exe
+(or Marquee.exe, a build from before the rename) is there and its VERSION file says the manifest's version.
 
 Apply: a running exe can't replace itself, so apply_update.ps1 (shipped in the build, copied to the updates folder
-first so it never holds the install folder open) does it: Marquee writes updates\\job.json, starts the script
-detached and closes through its normal path (player shutdown etc.). The script waits for Marquee to exit, renames
-<install> to <install>.old, renames <install>.new to <install>, starts Marquee.exe --updated <old version> and waits
+first so it never holds the install folder open) does it: Atlas writes updates\\job.json, starts the script
+detached and closes through its normal path (player shutdown etc.). The script waits for Atlas to exit, renames
+<install> to <install>.old, renames <install>.new to <install>, starts Atlas.exe --updated <old version> and waits
 up to 60 s for this module's heartbeat (updates\\heartbeat.json with the new version). No heartbeat (or the new exe
 exits): it rolls back to <install>.old and starts that with --update-failed <version>. On success it deletes .old.
 
-The install folder must be writable by the user (the installer puts Marquee in the stack's apps folder); that's
+The install folder must be writable by the user (the installer puts Atlas in the stack's apps folder); that's
 checked before anything is downloaded. If it isn't (e.g. Program Files), the user is told to run the installer.
 Settings and WebView2 data live in %APPDATA%\\Marquee, so nothing of the user's is in the swapped folder.
 
@@ -48,13 +49,17 @@ from flask import Blueprint, jsonify, request
 from . import __version__, settings
 
 DIR = settings.DIR / "updates"
-MANIFEST_NAME = "marquee-update.json"
+MANIFEST_NAME = "atlas-update.json"
+LEGACY_MANIFEST_NAME = "marquee-update.json"  # releases from before the rename (and old installs) use this name
+REPO = "phonehseng/atlas"
+OLD_REPOS = ("phonehseng/marquee",)  # GitHub redirects the old name; read it as the new one
+EXES = ("Atlas.exe", "Marquee.exe")  # the app's exe, newest name first (Marquee.exe: builds from before the rename)
 ASSET = "windows-x64"
 FIRST_DELAY = float(os.environ.get("MARQUEE_UPDATE_FIRST_DELAY") or 30)
 INTERVAL = 12 * 3600
 TIMEOUT = 10
 APPLY_SCRIPT = Path(__file__).resolve().parent / "apply_update.ps1"
-UA = {"User-Agent": f"Marquee/{__version__} (Windows)"}
+UA = {"User-Agent": f"Atlas/{__version__} (Windows)"}
 
 APP = None
 _lock = threading.Lock()
@@ -147,14 +152,25 @@ def _sha256(path):
 
 
 def install_dir():
-    """The folder Marquee.exe runs from (None when running from source)."""
+    """The folder Atlas.exe runs from (None when running from source)."""
     if os.environ.get("MARQUEE_UPDATE_INSTALL_DIR"):  # development: pretend to be installed here
         return Path(os.environ["MARQUEE_UPDATE_INSTALL_DIR"])
     return Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else None
 
 
+def update_repo(s=None):
+    """The GitHub owner/repo the releases come from (setting update_repo; the old repo name means the new one)."""
+    repo = ((s or settings.load()).get("update_repo") or REPO).strip().strip("/")
+    return REPO if repo.lower() in OLD_REPOS else repo
+
+
+def exe_in(folder):
+    """The app's exe in a folder (Atlas.exe, else Marquee.exe), or None."""
+    return next((folder / n for n in EXES if (folder / n).exists()), None) if folder else None
+
+
 def releases_page():
-    return f"https://github.com/{settings.load().get('update_repo') or 'phonehseng/marquee'}/releases"
+    return f"https://github.com/{update_repo()}/releases"
 
 
 _can = {"at": 0, "val": (False, "")}
@@ -170,9 +186,9 @@ def can_apply():
 def _can_apply():
     inst = install_dir()
     if inst is None:
-        return False, "Marquee is running from source here, so it can't update itself. Pull and rebuild instead."
-    if not (inst / "Marquee.exe").exists():
-        return False, f"Marquee.exe wasn't found in {inst}, so this copy can't update itself."
+        return False, "Atlas is running from source here, so it can't update itself. Pull and rebuild instead."
+    if not exe_in(inst):
+        return False, f"Atlas.exe wasn't found in {inst}, so this copy can't update itself."
     probe = inst / f".write-test-{uuid.uuid4().hex[:8]}"
     sib = inst.parent / f"{inst.name}.write-test-{uuid.uuid4().hex[:8]}"
     try:
@@ -194,7 +210,7 @@ def _can_apply():
             except OSError:
                 pass
         short = f"…\\{inst.parent.name}\\{inst.name}" if len(str(inst)) > 40 else str(inst)
-        return False, (f"Your account can't change Marquee's folder ({short}), so Marquee can't update itself. "
+        return False, (f"Your account can't change Atlas's folder ({short}), so Atlas can't update itself. "
                        "Run Media Stack Setup, or download the new version, to update.")
     return True, ""
 
@@ -212,12 +228,11 @@ def _os_ok(min_os):
 
 
 # ------------------------------------------------------------------ the manifest
-def manifest_url(s=None):
+def manifest_url(s=None, name=MANIFEST_NAME):
     s = s or settings.load()
     if os.environ.get("MARQUEE_UPDATE_URL"):
         return os.environ["MARQUEE_UPDATE_URL"]
-    repo = (s.get("update_repo") or "phonehseng/marquee").strip().strip("/")
-    return f"https://github.com/{repo}/releases/latest/download/{MANIFEST_NAME}"
+    return f"https://github.com/{update_repo(s)}/releases/latest/download/{name}"
 
 
 def _beta_manifest_url(repo):
@@ -231,7 +246,8 @@ def _beta_manifest_url(repo):
     for rel in r.json():
         if rel.get("draft"):
             continue
-        asset = next((a for a in rel.get("assets") or [] if a.get("name") == MANIFEST_NAME), None)
+        assets = {a.get("name"): a for a in rel.get("assets") or []}
+        asset = assets.get(MANIFEST_NAME) or assets.get(LEGACY_MANIFEST_NAME)
         if asset and parse_version(rel.get("tag_name")) and (best is None or newer(rel["tag_name"], best[0])):
             best = (rel["tag_name"], asset["browser_download_url"])
     return best[1] if best else None
@@ -249,9 +265,17 @@ def entry_file(entry, key=ASSET):
     return {"url": f["url"], "sha256": f["sha256"].lower(), "size": f["size"], "name": f.get("name")}
 
 
+def app_entry(m):
+    """The app's entry in a manifest: "atlas", else "marquee" (its key before the rename; releases carry both)."""
+    if not isinstance(m, dict):
+        return None
+    e = m.get("atlas")
+    return e if isinstance(e, dict) else m.get("marquee")
+
+
 def valid_manifest(m):
-    """The manifest has a Marquee entry with a version and a checked Windows download."""
-    e = isinstance(m, dict) and m.get("marquee")
+    """The manifest has an Atlas entry with a version and a checked Windows download."""
+    e = app_entry(m)
     return bool(isinstance(e, dict) and parse_version(e.get("version")) and entry_file(e))
 
 
@@ -271,11 +295,19 @@ def check(manual=False):
     url = manifest_url(s)
     try:
         if s.get("update_channel") == "beta" and not os.environ.get("MARQUEE_UPDATE_URL"):
-            url = _beta_manifest_url((s.get("update_repo") or "phonehseng/marquee").strip("/")) or url
+            url = _beta_manifest_url(update_repo(s)) or url
         headers = {**UA, "Accept": "application/json"}
         if cache.get("etag") and cache.get("url") == url and cache.get("manifest"):
             headers["If-None-Match"] = cache["etag"]
         r = requests.get(url, headers=headers, timeout=TIMEOUT)
+        if r.status_code == 404 and url == manifest_url(s) and not os.environ.get("MARQUEE_UPDATE_URL"):
+            # a latest release from before the rename only has marquee-update.json
+            url = manifest_url(s, LEGACY_MANIFEST_NAME)
+            if cache.get("etag") and cache.get("url") == url and cache.get("manifest"):
+                headers["If-None-Match"] = cache["etag"]
+            else:
+                headers.pop("If-None-Match", None)
+            r = requests.get(url, headers=headers, timeout=TIMEOUT)
         if r.status_code == 304:
             m = cache["manifest"]
         elif r.status_code in (401, 403, 404):
@@ -301,7 +333,7 @@ def check(manual=False):
 
 
 def _evaluate(m, s, manual=False):
-    e = m["marquee"]
+    e = app_entry(m)
     ver = str(e["version"]).lstrip("v")
     beta = s.get("update_channel") == "beta"
     avail = None
@@ -330,7 +362,7 @@ def _evaluate(m, s, manual=False):
 
 # ------------------------------------------------------------------ download, verify, unpack
 def _paths(ver):
-    return DIR / f"Marquee-{ver}-{ASSET}.zip", DIR / f"Marquee-{ver}-{ASSET}.zip.part"
+    return DIR / f"Atlas-{ver}-{ASSET}.zip", DIR / f"Atlas-{ver}-{ASSET}.zip.part"
 
 
 def staging_dir():
@@ -369,7 +401,7 @@ def _fail(msg):
 
 
 def _download(m, background):
-    e = m["marquee"]
+    e = app_entry(m)
     ver = str(e["version"]).lstrip("v")
     a = entry_file(e)
     final, part = _paths(ver)
@@ -465,11 +497,12 @@ def _unpack(zpath, ver):
             if root != target and root not in target.parents:
                 raise ValueError("the update archive has a bad path in it")
         z.extractall(tmp)
-    # The zip holds Marquee\... (build.ps1); accept the files at the top level too.
-    top = tmp / "Marquee" if (tmp / "Marquee" / "Marquee.exe").exists() else tmp
-    if not (top / "Marquee.exe").exists():
+    # The zip holds the files at its top level (build.ps1); accept them in one folder too (Atlas\ or, from before
+    # the rename, Marquee\).
+    top = next((tmp / d for d in ("Atlas", "Marquee") if exe_in(tmp / d)), tmp)
+    if not exe_in(top):
         shutil.rmtree(tmp, ignore_errors=True)
-        raise ValueError("Marquee.exe isn't in the update")
+        raise ValueError("Atlas.exe isn't in the update")
     got = (top / "VERSION").read_text(encoding="utf-8").strip() if (top / "VERSION").exists() else ""
     if got != ver:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -480,9 +513,9 @@ def _unpack(zpath, ver):
 
 # ------------------------------------------------------------------ apply (restart to update)
 def apply():
-    """Hand over to apply_update.ps1 and close Marquee. Raises with a sentence when it can't."""
+    """Hand over to apply_update.ps1 and close Atlas. Raises with a sentence when it can't."""
     if _playing():
-        raise RuntimeError("Stop the video first: Marquee restarts to update.")
+        raise RuntimeError("Stop the video first: Atlas restarts to update.")
     dl = ST["download"]
     pend = _read_json(DIR / "pending.json", {}) or {}
     stage = staging_dir()
@@ -495,7 +528,7 @@ def apply():
     script = DIR / "apply_update.ps1"
     shutil.copyfile(APPLY_SCRIPT, script)
     job = {"pid": os.getpid(), "install": str(inst), "staged": str(stage), "old": str(inst.with_name(inst.name + ".old")),
-           "exe": "Marquee.exe", "from": __version__, "to": dl["version"], "heartbeat": str(DIR / "heartbeat.json"),
+           "exe": exe_in(stage).name, "from": __version__, "to": dl["version"], "heartbeat": str(DIR / "heartbeat.json"),
            "result": str(DIR / "result.json"), "log": str(DIR / "update.log"), "wait_exit": 60, "wait_start": 60,
            "ack": str(DIR / "job.ack")}
     _write_json(DIR / "job.json", job)
@@ -512,7 +545,7 @@ def apply():
         proc = subprocess.Popen(args, cwd=str(DIR), creationflags=flags | 0x01000000, close_fds=True)  # + BREAKAWAY
     except OSError:
         proc = subprocess.Popen(args, cwd=str(DIR), creationflags=flags, close_fds=True)
-    # Only close once the script is really running (a PC whose policy blocks scripts must not lose Marquee).
+    # Only close once the script is really running (a PC whose policy blocks scripts must not lose Atlas).
     for _ in range(100):
         if (DIR / "job.ack").exists():
             break
@@ -569,7 +602,7 @@ def _after_update():
                               "notes_url": pend.get("notes_url")}
     elif failed_ver is not None or res.get("status") == "failed":
         ST["update_failed"] = {"version": failed_ver or res.get("to"),
-                               "message": res.get("message") or "The new version didn't start, so Marquee went back "
+                               "message": res.get("message") or "The new version didn't start, so Atlas went back "
                                                                   "to this one."}
     if res:  # shown once, kept for a look later
         try:
@@ -587,8 +620,8 @@ def _after_update():
         if stage.exists() and pend.get("version") and not newer(pend["version"], __version__):
             shutil.rmtree(stage, ignore_errors=True)  # already applied (or rolled back from)
     # downloads of versions that are no longer ahead
-    for f in DIR.glob("Marquee-*.zip*"):
-        m = re.match(r"Marquee-(.+?)-" + ASSET, f.name)
+    for f in [*DIR.glob("Atlas-*.zip*"), *DIR.glob("Marquee-*.zip*")]:  # Marquee-*: downloads from before the rename
+        m = re.match(r"(?:Atlas|Marquee)-(.+?)-" + ASSET, f.name)
         if m and (not newer(m.group(1), __version__) or
                   (ST["update_failed"] or {}).get("version") == m.group(1)):
             f.unlink(missing_ok=True)

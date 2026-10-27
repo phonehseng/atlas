@@ -1,5 +1,5 @@
 # Copies this working folder into the combined repo's app\ folder (everything except local-only files), so the
-# repo always has the current Marquee source.  powershell -ExecutionPolicy Bypass -File tools\sync_to_repo.ps1
+# repo always has the current Atlas source.  powershell -ExecutionPolicy Bypass -File tools\sync_to_repo.ps1
 param([string]$Repo = 'D:\Videos\MediaStackSetup')
 $src = Split-Path $PSScriptRoot -Parent
 $dst = Join-Path $Repo 'app'

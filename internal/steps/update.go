@@ -25,7 +25,7 @@ func updateFields(c *Ctx) []Field {
 		Help:  "Only apps with a newer release are touched; each restarts once. Seerr, Bazarr and others built on this computer update by running their own step again."}}
 	if c.St != nil && c.St.IsDeployed("marquee") {
 		f = append(f, Field{Name: "marquee", Type: "checkbox", Default: "true",
-			Label: "Update Marquee to the newest release (close Marquee first)"})
+			Label: "Update Atlas to the newest release (close Atlas first)"})
 	}
 	return f
 }
@@ -135,24 +135,33 @@ func runUpdate(c *Ctx) error {
 		}
 	}
 
-	// 4. Marquee, from the update list.
+	// 4. Atlas (Marquee before the rename), from the update list. An install from before the rename moves
+	// from apps\Marquee to apps\Atlas first and gets Atlas shortcuts (and firewall rule) at the end.
 	if st.IsDeployed("marquee") && c.In["marquee"] != "false" {
+		migrated, err := migrateMarquee(c)
+		if err != nil {
+			return err
+		}
+		if migrated {
+			note(&changed, "Marquee is called Atlas now: moved to %s (settings kept)", MarqueeDir(st))
+		}
 		have := st.DeployedVersion("marquee")
+		app := m.App()
 		switch {
-		case m == nil || m.Marquee == nil:
-			c.J.Warn("Marquee: no release in the update list, left at %s", have)
-		case !core.VersionNewer(m.Marquee.Version, have):
-			note(&current, "Marquee %s is the newest release", have)
+		case app == nil:
+			c.J.Warn("Atlas: no release in the update list, left at %s", have)
+		case !core.VersionNewer(app.Version, have):
+			note(&current, "Atlas %s is the newest release", have)
 		default:
-			f, ok := m.Marquee.File("windows-x64")
+			f, ok := app.File("windows-x64")
 			if !ok {
-				c.J.Warn("Marquee %s has no Windows download in the update list", m.Marquee.Version)
+				c.J.Warn("Atlas %s has no Windows download in the update list", app.Version)
 				break
 			}
-			zip := filepath.Join(st.Root, "downloads-cache", "Marquee-windows-x64.zip")
-			c.J.Info("Downloading Marquee %s...", m.Marquee.Version)
+			zip := filepath.Join(st.Root, "downloads-cache", "Atlas-windows-x64.zip")
+			c.J.Info("Downloading Atlas %s...", app.Version)
 			if err := core.FetchFile(c, c.J, m, f, zip); err != nil {
-				return fmt.Errorf("Marquee update: %w", err)
+				return fmt.Errorf("Atlas update: %w", err)
 			}
 			err := installMarquee(c, zip)
 			os.Remove(zip)
@@ -160,8 +169,12 @@ func runUpdate(c *Ctx) error {
 				return err
 			}
 			// Its settings stay exactly as they are: only the program files change.
-			st.SetDeployed("marquee", m.Marquee.Version)
-			note(&changed, "Marquee: %s -> %s (settings kept)", have, m.Marquee.Version)
+			st.SetDeployed("marquee", app.Version)
+			note(&changed, "Atlas: %s -> %s (settings kept)", have, app.Version)
+		}
+		if migrated {
+			marqueeShortcuts(c)
+			migrateMarqueeFirewall(c)
 		}
 	}
 

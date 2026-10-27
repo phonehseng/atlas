@@ -1,4 +1,4 @@
-"""Your taste profile: what Marquee has learned about what you like to watch, kept in plain JSON on this PC
+"""Your taste profile: what Atlas has learned about what you like to watch, kept in plain JSON on this PC
 (%APPDATA%\\Marquee\\taste.json) so it can be shown, edited and reset. Works with and without AI.
 
 What goes in
@@ -1076,7 +1076,7 @@ def classic_comment(fit):
     kind = "series" if f.get("kind") == "tv" else "film"
     s = fit.get("score", 50)
     if fit.get("empty"):
-        return "Tell Marquee what you like (Settings > Taste & memory) and it will say whether this suits you."
+        return "Tell Atlas what you like (Settings > Taste & memory) and it will say whether this suits you."
     first = (fit.get("reasons") or [""])[0]
     if first.startswith("You loved this one"):
         return f"You loved {title} before, so it's an easy rewatch."

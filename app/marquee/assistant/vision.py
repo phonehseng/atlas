@@ -44,18 +44,18 @@ def ollama_vision_models():
 
 
 def provider():
-    """{"kind": "ollama"|"openai", "model", "url", "key"?, "name"} or None. Follows Marquee's AI setting."""
+    """{"kind": "ollama"|"openai", "model", "url", "key"?, "name"} or None. Follows Atlas's AI setting."""
     s = settings.load()
     mode = ai.setting(s)  # auto | atlas | custom | builtin | classic (old names openai/off mapped)
     if mode == "classic":
         return None  # Classic: no model of any kind, nothing is contacted
     want = config.load().get("vision_model") or ""
-    if mode == "atlas":  # Ollama is Atlas's engine: used only when Atlas is chosen in Settings
+    if mode == "atlas":  # Ollama is the LocalAI assistant's engine: used only when it's chosen in Settings
         local = ollama_vision_models()
         if want and want in local:
-            return {"kind": "ollama", "model": want, "url": OLLAMA, "name": "Atlas" if ai.atlas_detected() else "Ollama"}
+            return {"kind": "ollama", "model": want, "url": OLLAMA, "name": ai.LOCALAI_NAME if ai.atlas_detected() else "Ollama"}
         if local:
-            return {"kind": "ollama", "model": local[0], "url": OLLAMA, "name": "Atlas" if ai.atlas_detected() else "Ollama"}
+            return {"kind": "ollama", "model": local[0], "url": OLLAMA, "name": ai.LOCALAI_NAME if ai.atlas_detected() else "Ollama"}
     if mode in ("auto", "custom") and s["ai_url"] and s["ai_key"]:
         return {"kind": "openai", "model": want or s["ai_model"] or "gpt-4o-mini", "url": s["ai_url"].rstrip("/"),
                 "key": s["ai_key"], "name": "AI"}

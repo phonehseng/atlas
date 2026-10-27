@@ -1,10 +1,11 @@
 """Optional AI touches: a short welcome line on the home page and a few picks from your library.
 
 Where the words come from (setting "ai_provider"):
-    auto     your own key if set, else Atlas when it runs on this PC, else the built-in AI if it was downloaded,
-             else Classic
+    auto     your own key if set, else the built-in AI if it was downloaded, else Classic (never the LocalAI
+             assistant)
     custom   any OpenAI-compatible chat API (your URL, key and model)        ("openai" is the old name)
-    atlas    Atlas on this PC (found automatically; its key is read from its own folder when needed)
+    atlas    the LocalAI assistant: a separate program on this PC (C:/LocalAI, found automatically; its key is read
+             from its own folder when needed). Shown as "LocalAI"; the setting value stays "atlas".
     builtin  the built-in AI (marquee.localllm: llama.cpp + a small Qwen3-VL model on this PC)
     classic  no AI at all, ever: prepared lines and rule-made picks (marquee.scripted)  ("off" is the old name)
 
@@ -20,7 +21,8 @@ import requests
 from . import settings
 from . import taste as taste_profile
 
-ATLAS_URL = "http://127.0.0.1:8765/v1"
+ATLAS_URL = "http://127.0.0.1:8765/v1"   # the LocalAI assistant (setting value "atlas", its name before the app's)
+LOCALAI_NAME = "LocalAI"                 # how that provider is shown
 ATLAS_HOMES = [Path(os.environ.get("ATLAS_HOME", "")), Path("C:/LocalAI")]
 PROVIDERS = ("auto", "atlas", "custom", "builtin", "classic")
 ALIASES = {"openai": "custom", "off": "classic"}
@@ -40,7 +42,7 @@ def atlas_detected():
     return bool(_atlas_key())
 
 
-# Small, fast instruct models Atlas can pass straight through (no tools): a few seconds instead of half a
+# Small, fast instruct models the LocalAI assistant can pass straight through (no tools): a few seconds instead of half a
 # minute for the full assistant. The first one installed wins; "atlas" itself is the fallback.
 FAST_MODELS = ("qwen3:4b-instruct", "qwen3.5:9b", "qwen2.5:7b-instruct", "llama3.2:3b", "gemma3:4b")
 _atlas_models = {"at": 0, "pick": None}
@@ -79,7 +81,7 @@ _atlas_seen = {"at": 0.0, "up": False}
 
 
 def _atlas_up():
-    """Is Atlas actually answering on its port right now? (A quick local connect, remembered for 15 s.) Its key
+    """Is the LocalAI assistant actually answering on its port right now? (A quick local connect, remembered for 15 s.) Its key
     file can exist while it's switched off; Auto then moves on to the next provider instead of failing."""
     import socket
     import time
@@ -106,10 +108,10 @@ def _provider(allow_during_playback=True):
     if p in ("auto", "custom") and s["ai_url"] and s["ai_key"]:
         return {"url": s["ai_url"].rstrip("/"), "key": s["ai_key"], "model": s["ai_model"] or "gpt-4o-mini",
                 "name": "AI", "kind": "custom", "vision": True}
-    # Atlas (a separate local assistant) only when chosen in Settings; Auto never picks it
+    # the LocalAI assistant (a separate program) only when chosen in Settings; Auto never picks it
     if p == "atlas" and _atlas_key():
-        return {"url": ATLAS_URL, "key": _atlas_key(), "model": s["ai_model"] or _atlas_model(), "name": "Atlas",
-                "kind": "atlas", "vision": False}  # Atlas' OpenAI endpoint drops images (the assistant uses Ollama)
+        return {"url": ATLAS_URL, "key": _atlas_key(), "model": s["ai_model"] or _atlas_model(),
+                "name": LOCALAI_NAME, "kind": "atlas", "vision": False}  # its OpenAI endpoint drops images
     if p in ("auto", "builtin"):
         return _builtin(allow_during_playback)
     return None
@@ -126,7 +128,7 @@ def available():
     prepared lines and rules instead of a model ("llm": false)."""
     p = _provider()
     if not p:
-        return {"on": True, "name": "Marquee", "mode": "classic", "llm": False, "vision": False}
+        return {"on": True, "name": "Atlas", "mode": "classic", "llm": False, "vision": False}
     return {"on": True, "name": p["name"], "mode": p["kind"], "llm": True, "vision": bool(p.get("vision"))}
 
 

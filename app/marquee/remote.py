@@ -1,6 +1,6 @@
-"""Marquee Mobile's web server: the phone app (watch on the phone, or remote-control the PC) on its own port.
+"""Atlas Mobile's web server: the phone app (watch on the phone, or remote-control the PC) on its own port.
 
-Off unless "Marquee Mobile" (or the older "Phone remote") is on in Settings. It listens on this PC's Tailscale
+Off unless "Atlas Mobile" (or the older "Phone remote") is on in Settings. It listens on this PC's Tailscale
 address (and 127.0.0.1, which `tailscale serve` forwards HTTPS to), plus the home network address when the bind mode
 is "lan+tailscale" - never on 0.0.0.0. Pairing: a one-time token in the QR code's URL fragment (never in a request
 line, so it stays out of logs) is traded for a long-lived HttpOnly cookie for that device alone (marquee.mobile.auth).
@@ -152,7 +152,7 @@ def start(app, port=None, hosts=None):
         good = []
         srv = None
         try:
-            srv = create_server(rapp, listen=" ".join(f"{h}:{port}" for h in hosts), threads=16, ident="Marquee",
+            srv = create_server(rapp, listen=" ".join(f"{h}:{port}" for h in hosts), threads=16, ident="Atlas",
                                 channel_timeout=120, connection_limit=200, outbuf_high_watermark=8 << 20)
             good = hosts
         except OSError:
@@ -161,9 +161,9 @@ def start(app, port=None, hosts=None):
                     create_server(rapp, host=h, port=port).close()
                     good.append(h)
                 except OSError as e:
-                    print(f"Marquee Mobile can't listen on {h}:{port}: {e}", flush=True)
+                    print(f"Atlas Mobile can't listen on {h}:{port}: {e}", flush=True)
             if good:
-                srv = create_server(rapp, listen=" ".join(f"{h}:{port}" for h in good), threads=16, ident="Marquee",
+                srv = create_server(rapp, listen=" ".join(f"{h}:{port}" for h in good), threads=16, ident="Atlas",
                                     channel_timeout=120, connection_limit=200, outbuf_high_watermark=8 << 20)
         if srv is None:
             _last_error = f"Port {port} is in use by another program"
@@ -173,7 +173,7 @@ def start(app, port=None, hosts=None):
         _thread = threading.Thread(target=_run, args=(srv,), name="marquee-mobile", daemon=True)
         _thread.start()
     mapi.warm(app)
-    print(f"Marquee Mobile on {', '.join(good)} port {port}", flush=True)
+    print(f"Atlas Mobile on {', '.join(good)} port {port}", flush=True)
     return pairing_info(port)
 
 
@@ -182,7 +182,7 @@ def _run(srv):
         srv.run()
     except Exception as e:  # closed under it by stop(), or the address vanished
         if _srv is srv:
-            print("Marquee Mobile stopped:", e)
+            print("Atlas Mobile stopped:", e)
 
 
 def _stop_locked(keep_streams=False):
@@ -193,7 +193,7 @@ def _stop_locked(keep_streams=False):
             srv.close()
             srv.task_dispatcher.shutdown(timeout=2)
         except Exception as e:
-            print("Marquee Mobile stop failed:", e)
+            print("Atlas Mobile stop failed:", e)
     if not keep_streams:
         stream.stop_all()
 
@@ -248,10 +248,10 @@ def _watch():
                 net.forget()
                 want = net.bind_hosts(_bind_mode())
                 if sorted(want) != sorted(_hosts):
-                    print("Marquee Mobile: network changed, listening on", ", ".join(want), flush=True)
+                    print("Atlas Mobile: network changed, listening on", ", ".join(want), flush=True)
                     start(APP, _port, want)
         except Exception as e:
-            print("Marquee Mobile watcher:", type(e).__name__, e)
+            print("Atlas Mobile watcher:", type(e).__name__, e)
 
 
 def _mtime():
@@ -324,7 +324,7 @@ def guard():
             return jsonify(ok=False, message="Only the PC's owner can do that"), 403
         return None
     count_failure(ip)
-    return jsonify(ok=False, message="Not paired - scan the QR code in Marquee's Settings", reason="unpaired"), 401
+    return jsonify(ok=False, message="Not paired - scan the QR code in Atlas's Settings", reason="unpaired"), 401
 
 
 @rapp.after_request
@@ -350,7 +350,7 @@ def on_error(e):
     if not isinstance(code, int) or not 400 <= code < 600:
         code = 500
     if code == 500:
-        print("Marquee Mobile error:", type(e).__name__, e)
+        print("Atlas Mobile error:", type(e).__name__, e)
     return jsonify(ok=False, message="Something went wrong" if code == 500 else str(e)), code
 
 
@@ -398,7 +398,7 @@ def _ensure_icons():
     try:
         _make_icons(d, want)
     except Exception as e:  # e.g. a read-only install folder
-        print("Marquee Mobile icons:", e)
+        print("Atlas Mobile icons:", e)
 
 
 def _make_icons(d, want):
@@ -425,7 +425,7 @@ def manifest():
     dev = auth.device_for(request.cookies.get(COOKIE), _client_ip())
     if dev:
         start_url = "/r#h=" + auth.clone_token(dev["id"])
-    m = {"name": "Marquee", "short_name": "Marquee", "id": "/r", "start_url": start_url, "scope": "/r",
+    m = {"name": "Atlas", "short_name": "Atlas", "id": "/r", "start_url": start_url, "scope": "/r",
          "display": "standalone", "orientation": "any", "background_color": "#070c1d", "theme_color": "#070c1d",
          "description": "Your movies and shows from your PC",
          "icons": [{"src": "/r/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
@@ -450,7 +450,7 @@ def api_pair():
         if not parent:
             count_failure(ip)
             return jsonify(ok=False, reason="used", message="This pairing code was already used or has expired. "
-                           "Show a new one in Marquee's Settings on your PC."), 401
+                           "Show a new one in Atlas's Settings on your PC."), 401
         cookie, dev = auth.create_device(parent.get("user") or {"kind": "owner"}, ua, ip,
                                          jf_token=auth.jf_token(parent) or None,
                                          name=(parent.get("name") or "") + " (app)")
@@ -784,7 +784,7 @@ def _firewall():
 
 @desk.get("/api/mobile")
 def desk_mobile():
-    """Everything Settings > Marquee Mobile shows."""
+    """Everything Settings > Atlas Mobile shows."""
     st = settings.load()
     port = _port or st.get("remote_port") or DEFAULT_PORT
     info = pairing_info(port)

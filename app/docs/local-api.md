@@ -1,15 +1,16 @@
-# Marquee's local API
+# Atlas's local API
 
-Other programs on the same PC can call a small part of Marquee's API. The Atlas assistant uses it, for example to
+Other programs on the same PC can call a small part of Atlas's API. The separate LocalAI assistant uses it, for example to
 handle "mark Dune as watched", and you can call it from your own scripts. It listens only on `127.0.0.1` and works
-only while Marquee is running.
+only while Atlas is running.
 
-## Finding Marquee: the discovery file
+## Finding Atlas: the discovery file
 
-Marquee picks a random port each time it starts, so it writes where it is to a file:
+Atlas picks a random port each time it starts, so it writes where it is to a file:
 
 ```
 %APPDATA%\Marquee\local-api.json        (or %MARQUEE_HOME%\local-api.json when MARQUEE_HOME is set)
+%APPDATA%\Marquee\atlas-local-api.json  (the same content under the app's new name)
 ```
 
 ```json
@@ -24,17 +25,19 @@ Marquee picks a random port each time it starts, so it writes where it is to a f
 }
 ```
 
-- The file is rewritten each time Marquee starts and removed when it exits. If Marquee crashed, a stale file can be
-  left behind. If `pid` isn't running, or the port refuses the connection, Marquee isn't running.
+- The file is rewritten each time Atlas starts and removed when it exits. If Atlas crashed, a stale file can be
+  left behind. If `pid` isn't running, or the port refuses the connection, Atlas isn't running.
 - `token` is random for each install and stays the same across restarts. It's stored encrypted (Windows DPAPI) in
-  Marquee's settings. Treat it like a password: any program that has it can mark titles watched.
-- Marquee runs outside any app container, so this is the real `%APPDATA%`. A program packaged as MSIX (such as a
+  Atlas's settings. Treat it like a password: any program that has it can mark titles watched.
+- Atlas runs outside any app container, so this is the real `%APPDATA%`. A program packaged as MSIX (such as a
   Store app) sees a redirected AppData of its own, so it should read the file by its full real path
   (`C:\Users\<you>\AppData\Roaming\Marquee\local-api.json`).
 
 ## Calling it
 
-Send every request with the header `X-Marquee-Token: <token>`.
+Send every request with the header `X-Marquee-Token: <token>` (`X-Atlas-Token: <token>` works the same).
+The names keep "Marquee", the app's name before it became Atlas, so programs written for it keep working;
+the data folder is still `%APPDATA%\Marquee`.
 
 | Request | Result |
 |---|---|
@@ -44,19 +47,19 @@ Send every request with the header `X-Marquee-Token: <token>`.
 | token sent from a web page (it has an `Origin` or a cross-site `Sec-Fetch-Site` header) | `403` |
 | `POST` / `DELETE` with a body that isn't JSON | `415` |
 
-Only routes marked as local API accept the token. Every other route of Marquee's server is for its own window only.
+Only routes marked as local API accept the token. Every other route of Atlas's server is for its own window only.
 
 ## Watched
 
 Mark any film or show as watched: one in your library, one Seerr can request, or neither. Library titles are marked
 in Jellyfin. Other titles are kept on this PC, and when one of them is downloaded later its watched state is carried
-over to Jellyfin. Either way, Marquee's taste profile learns from it the same way it learns from a title you
+over to Jellyfin. Either way, Atlas's taste profile learns from it the same way it learns from a title you
 finish, and Home stops recommending it.
 
 ### `GET /api/watched?kind=&q=`
 
 Lists everything watched, newest first, one entry per title. It merges library titles played in Jellyfin, titles
-marked here (by Marquee, the chat, Atlas or a Letterboxd import) and titles watched and then removed to save space.
+marked here (in Atlas, the chat, another program such as the LocalAI assistant, or a Letterboxd import) and titles watched and then removed to save space.
 `kind` is `movie` or `tv`; `q` filters by title.
 
 ```json
@@ -95,12 +98,12 @@ These fields are optional:
 - `"rating"`: 1 to 5 stars, which also go into the taste profile.
 - `"season"` or `"seasons"`: `1` or `[1, 2]`. For a show, marks only those seasons.
 - `"source"`: one of `manual`, `atlas`, `chat` or `letterboxd`. It defaults to `atlas` when the request has the
-  token, and to `manual` when it comes from Marquee's own window.
+  token, and to `manual` when it comes from Atlas's own window.
 
 `200` returns `{"ok": true, "watched": true, "item": <the list entry>, "taste": {"moved": {"Drama": [0.12, 0.21]}},
 "rating": null}`.
 
-When you send a title, Marquee looks it up in your library and through Seerr's search, matching on the year. If
+When you send a title, Atlas looks it up in your library and through Seerr's search, matching on the year. If
 more than one title fits, it marks nothing and answers `409`:
 
 ```json
@@ -160,9 +163,9 @@ if r.status_code == 409:
     print([f"{c['title']} ({c['year']})" for c in r.json()["candidates"]])
 ```
 
-## For Marquee developers
+## For Atlas developers
 
 To add a route to the local API, put `@local_api("METHOD /path")` under the Flask route decorator
-(`marquee/localapi.py`). Routes without it never accept the token. Marquee's own window reaches local API routes
+(`marquee/localapi.py`). Routes without it never accept the token. Atlas's own window reaches local API routes
 because WebView2 marks its same-origin requests with `Sec-Fetch-Site: same-origin`. A request with an `Origin` from
-another site is refused, as on Marquee's other guarded routes.
+another site is refused, as on Atlas's other guarded routes.

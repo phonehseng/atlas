@@ -1,4 +1,4 @@
-/* Marquee casting: the Cast button on title pages, the device picker (a liquid-glass sheet that searches the home
+/* Atlas casting: the Cast button on title pages, the device picker (a liquid-glass sheet that searches the home
    network), the "Casting to <TV>" bar that stays at the bottom of every page while a TV plays, and Settings > Casting.
    Talks to marquee/cast/blueprint.py (/api/cast/*); the backend pushes "cast-state" events while a cast runs.
    Self-contained: exposes window.MarqueeCast, uses app.css tokens + cast.css. */
@@ -183,10 +183,10 @@ function fwCard(fw, compact) {
   if (!fw || !fw.checked || fw.allowed) return '';
   const where = `${fw.category === 'Public' ? 'public' : fw.category === 'Domain' ? 'work' : 'private'} network${fw.interface ? ` (${esc(fw.interface)})` : ''}`;
   const why = fw.blocked_by && fw.blocked_by.length
-    ? `A Windows Firewall rule (${esc(fw.blocked_by.join(', '))}) blocks Marquee on this ${where}. Turn it off in Windows Security › Firewall › Allow an app, then look again.`
-    : `Windows Firewall doesn’t let TVs on this ${where} reach Marquee${!fw.mdns ? ', so they can’t be found either' : ''}. Allowing adds one rule for Marquee and the casting port, for devices on your local network only.`;
+    ? `A Windows Firewall rule (${esc(fw.blocked_by.join(', '))}) blocks Atlas on this ${where}. Turn it off in Windows Security › Firewall › Allow an app, then look again.`
+    : `Windows Firewall doesn’t let TVs on this ${where} reach Atlas${!fw.mdns ? ', so they can’t be found either' : ''}. Allowing adds one rule for Atlas and the casting port, for devices on your local network only.`;
   return `<div class="cp-fw${compact ? ' compact' : ''}">${ico('shield', 20)}<div><b>Windows Firewall is in the way</b><p>${why}</p></div>
-    ${fw.blocked_by && fw.blocked_by.length ? '' : `<button class="btn small" data-cast-fw>Allow Marquee</button>`}</div>`;
+    ${fw.blocked_by && fw.blocked_by.length ? '' : `<button class="btn small" data-cast-fw>Allow Atlas</button>`}</div>`;
 }
 function drawPicker() {
   const el = $('#cast-picker'), P = C.picker;
@@ -203,7 +203,7 @@ function drawPicker() {
     const p = ins.total ? ins.done / ins.total : 0;
     P.html = null;
     body.innerHTML = `<div class="cp-empty">${ico('apple', 28)}<b>AirPlay needs a one-time download</b>
-      <p>About ${Math.max(1, Math.round((P.busy.size || 0) / 1e6))} MB of AirPlay support for Marquee. It stays on this PC.</p>
+      <p>About ${Math.max(1, Math.round((P.busy.size || 0) / 1e6))} MB of AirPlay support for Atlas. It stays on this PC.</p>
       ${ins.state === 'working' ? `<div class="cp-progress"><i style="--p:${p.toFixed(3)}"></i></div><p class="cp-small">${esc(ins.step || 'Downloading…')}</p>`
         : ins.state === 'error' ? `<p class="cp-small">Download failed: ${esc(ins.error || '')}</p><button class="btn small" data-cp="airplay-dl">Try again</button>`
         : `<div class="cp-row-btns"><button class="btn small ghost" data-cp="back">Back</button><button class="btn small" data-cp="airplay-dl">Download</button></div>`}</div>`;
@@ -548,7 +548,7 @@ function mountSettings(el, s) {
   s = s || {};
   const q = s.cast_quality || 'auto';
   el.innerHTML = `<section class="panel glass cast-panel" id="cast-settings" style="--i:6"><h2>${ico('cast', 20)} Casting</h2>
-    <p>Play on a TV with Chromecast or AirPlay, and use Marquee as the remote. The TV streams from this PC, so this PC has to stay on.</p>
+    <p>Play on a TV with Chromecast or AirPlay, and use Atlas as the remote. The TV streams from this PC, so this PC has to stay on.</p>
     <div class="set"><div class="lbl"><b>Casting</b><span>Cast buttons on title pages and in the player.</span></div>
       <button class="switch" role="switch" data-switch="cast" aria-checked="${s.cast !== false}" aria-label="Casting"></button></div>
     <div class="set stack"><div class="lbl"><b>Quality</b><span>Auto sends the best the TV plays. Original never shrinks the video, so it needs strong Wi-Fi.</span></div>
@@ -567,7 +567,7 @@ async function loadSettings(el, n = 0) {
   if (d.enabled === false) { box.innerHTML = ''; return; }
   const fw = d.firewall || {};
   const fwLine = fw.pending || !fw.checked ? 'Checking Windows Firewall…'
-    : fw.allowed ? `TVs on this ${fw.category === 'Public' ? 'public' : (fw.category || 'private').toLowerCase()} network${fw.interface ? ` (${esc(fw.interface)})` : ''} can reach Marquee on port ${d.port}.` : '';
+    : fw.allowed ? `TVs on this ${fw.category === 'Public' ? 'public' : (fw.category || 'private').toLowerCase()} network${fw.interface ? ` (${esc(fw.interface)})` : ''} can reach Atlas on port ${d.port}.` : '';
   const devs = d.devices || [];
   box.innerHTML = `${fw.checked && !fw.allowed ? fwCard(fw, true) : `<div class="set"><div class="lbl"><b>Network</b><span>${fwLine}</span></div></div>`}
     <div class="set stack"><div class="lbl"><b>TVs on your network</b><span>${d.searching ? 'Searching…' : devs.length ? '' : 'None found right now.'}</span></div>

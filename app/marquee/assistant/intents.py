@@ -4,7 +4,8 @@ parse(text) returns {"intent": name, ...arguments} or None (then the language mo
 plain regular expressions, so it answers in well under a millisecond."""
 import re
 
-WAKE = re.compile(r"^\s*(?:(?:hey|hi|ok|okay|a|hay)[\s,]+)?(?:marquee|marky|markee|marquis|marquie|mark e)\b[\s,.!?]*", re.I)
+WAKE = re.compile(r"^\s*(?:(?:(?:hey|hi|ok|okay|a|hay)[\s,]+)?(?:atlas|atlus|atlis)|(?:hey|hi|ok|okay|hay)[\s,]+(?:at last|outlast))"
+                  r"\b[\s,.!?]*", re.I)
 FILLER = re.compile(r"^(?:(?:please|can you|could you|would you|will you|would you mind|i want to|i wanna|i'd like to|"
                     r"let's|lets|just|now|ok|okay|go ahead and|um+|uh+|so)\s+)+", re.I)
 
@@ -345,7 +346,7 @@ def _parse(t):  # noqa: C901 - one flat table of rules reads best
                 episode = int(_num(ep.group(1)) or 1)
                 title = title[:ep.start()].strip()
         title = re.sub(r"^(?:the (?:movie|film|show|series)|movie|film|show)\s+", "", title)
-        title = re.sub(r"\s+(?:movie|film|the movie|the show|on marquee)$", "", title).strip()
+        title = re.sub(r"\s+(?:movie|film|the movie|the show|on atlas)$", "", title).strip()
         if title:
             return {"intent": "play", "title": title, "season": season, "episode": episode}
     return None

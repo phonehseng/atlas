@@ -1,4 +1,4 @@
-/* Ask Marquee: the chat page (window.MarqueeChat.mount(pageEl)).
+/* Ask Atlas: the chat page (window.MarqueeChat.mount(pageEl)).
    With AI: liquid-glass bubbles, a streamed reply, title cards under each answer (like ClearHome's listings under the
    chat bubble), "Saved to memory" chips with undo. Classic mode: an honest rule-based finder (chips + search box).
    Needs taste.js (window.MarqueeKit). Talks to /api/chat/* (marquee/taste_api.py). */
@@ -12,7 +12,7 @@ async function mount(page) {
   const { api, esc, icon } = K();
   C.page = page;
   page.classList.add('page-chat');
-  page.innerHTML = `<div class="chat-wrap"><div class="chat-head"><div class="grow"><span class="eyebrow orange">Ask Marquee</span>
+  page.innerHTML = `<div class="chat-wrap"><div class="chat-head"><div class="grow"><span class="eyebrow orange">Ask Atlas</span>
       <h1>What are we watching?</h1><p class="chat-sub">Loading…</p></div>
       <div class="chat-head-acts"></div></div><div class="chat-main"></div></div>`;
   let st;
@@ -36,7 +36,7 @@ function mountChat(st) {
     <div class="chat-dock"><div class="chat-chips" role="group" aria-label="Suggestions"></div>
       <form class="chat-composer glass"><textarea rows="1" placeholder="Ask for a film, a show, a mood… or “remember I hate jump scares”" aria-label="Message" maxlength="1000"></textarea>
         <button class="chat-send" type="submit" aria-label="Send">${sendIcon}</button></form>
-      <p class="chat-note">Marquee can be wrong about titles; cards are matched to your library and Seerr.</p></div>`;
+      <p class="chat-note">Atlas can be wrong about titles; cards are matched to your library and Seerr.</p></div>`;
   const log = $('.chat-log');
   if (st.history.length) {
     st.history.forEach(m => m.role === 'user' ? userBubble(m.text, false) : botBubble(m, false));
@@ -283,10 +283,10 @@ function mountFinder(st) {
   const { esc, icon } = K();
   $('.eyebrow').textContent = 'Finder';
   $('h1').textContent = 'Find something to watch';
-  $('.chat-sub').innerHTML = `Classic mode: no AI. Pick a mood, genre or era, or type a title; Marquee filters your library and Seerr by rules and sorts by your taste. Type “I love …” or “I hate …” and it's remembered. <span class="chat-engine">${icon('film', 12)} Rules only</span>`;
+  $('.chat-sub').innerHTML = `Classic mode: no AI. Pick a mood, genre or era, or type a title; Atlas filters your library and Seerr by rules and sorts by your taste. Type “I love …” or “I hate …” and it's remembered. <span class="chat-engine">${icon('film', 12)} Rules only</span>`;
   const group = (name, label, list, multi = true) => `<div class="f-group"><span class="f-label">${label}</span><div class="f-chips">${list.map((v, k) => `<button type="button" class="f-chip" style="--i:${k}" data-cact="f-chip" data-group="${name}" data-v="${esc(v)}" aria-pressed="${!multi && v === 'any'}">${esc({ any: 'Anything', movie: 'Films', tv: 'Shows' }[v] || v)}</button>`).join('')}</div></div>`;
   $('.chat-main').innerHTML = `<div class="finder glass">
-      <form class="finder-search"><svg width="20" height="20" aria-hidden="true"><use href="#i-search"/></svg><input class="finder-q" placeholder="A title, a word, or “I love slow-burn mysteries”" aria-label="Search or tell Marquee what you like" autocomplete="off"><button class="btn small">Find</button></form>
+      <form class="finder-search"><svg width="20" height="20" aria-hidden="true"><use href="#i-search"/></svg><input class="finder-q" placeholder="A title, a word, or “I love slow-burn mysteries”" aria-label="Search or tell Atlas what you like" autocomplete="off"><button class="btn small">Find</button></form>
       ${group('kind', 'Type', ['any', 'movie', 'tv'], false)}
       ${group('moods', 'Mood', st.finder.moods)}
       ${group('genres', 'Genre', st.finder.genres)}
@@ -397,7 +397,7 @@ function actionCard(el, a, animate, at) {
     btns = [{ label: a.on ? 'Mark watched' : 'Mark unwatched', primary: true, icon: 'check', do: 'mark-watched' }, { label: 'Cancel', do: 'cancel' }];
     card.innerHTML = `<div class="acard-row"><div class="acard-poster">${a.poster ? `<img src="${esc(a.poster)}" alt="">` : ''}</div>
       <div class="acard-main"><span class="acard-kicker">Confirm</span><b class="acard-line">${esc(a.title)}</b><span class="acard-sub">${a.tmdb
-        ? (a.on ? `Not in your library: Marquee keeps ${a.season_text ? esc(a.season_text) : 'it'} as watched on this PC, and your taste profile learns from it.` : 'Marquee forgets it was watched.')
+        ? (a.on ? `Not in your library: Atlas keeps ${a.season_text ? esc(a.season_text) : 'it'} as watched on this PC, and your taste profile learns from it.` : 'Atlas forgets it was watched.')
         : `${a.season_text ? esc(a.season_text) : a.series ? 'Every episode' : 'The film'} will be marked ${a.on ? 'watched' : 'unwatched'}, here and in Jellyfin.`}</span></div></div><div class="acard-btns"></div>`;
   } else if (a.type === 'mylist') {
     btns = [{ label: 'Undo', do: 'mylist-undo' }];

@@ -1,4 +1,4 @@
-"""Playback: libmpv drawn into a panel inside the app window, with the Marquee controls (osc/marquee.lua).
+"""Playback: libmpv drawn into a panel inside the app window, with the Atlas controls (osc/marquee.lua).
 
 * Local first: Original quality plays the file itself when it's on this PC (no transcoding, full 4K HDR, every
   audio and subtitle track), started from what we already know about the item (LocalMap, learned from every
@@ -1838,7 +1838,7 @@ def _retry_pending(jf):
 
 
 class LocalMap:
-    """What Marquee knows about items without asking Jellyfin: id -> path, titles, numbering, streams and the
+    """What Atlas knows about items without asking Jellyfin: id -> path, titles, numbering, streams and the
     resume point, learned from every Jellyfin response the app gets (browsing fills it) and from our own
     playback. Kept in localmap.json so a slow or dead Jellyfin never stands between a click and the picture."""
     FILE = settings.DIR / "localmap.json"

@@ -1,7 +1,7 @@
 """Getting SDH ("hearing impaired") English subtitles from Bazarr for titles that don't have them.
 
 They carry sound cues ([gunshot], (SCREAMING)) and speaker names, which make scene search and the loud-moment
-helper much better. Bazarr saves them next to the video (*.en.hi.srt); Marquee reads that file for searching only:
+helper much better. Bazarr saves them next to the video (*.en.hi.srt); Atlas reads that file for searching only:
 the subtitles the viewer picked don't change.
 
 When: a few minutes into playing a title (background, low priority, one at a time); right away when a scene search

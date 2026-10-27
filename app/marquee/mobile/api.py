@@ -702,7 +702,7 @@ def jellyfin_login(username, password, ua, ip):
         raise ValueError("Jellyfin isn't set up on this PC")
     try:
         r = requests.post(jf.base + "/Users/AuthenticateByName", json={"Username": username, "Pw": password},
-                          timeout=15, headers={"Authorization": f'MediaBrowser Client="Marquee Mobile", '
+                          timeout=15, headers={"Authorization": f'MediaBrowser Client="Atlas Mobile", '
                                                                 f'Device="{auth.device_name(ua)}", '
                                                                 f'DeviceId="marquee-m-{secrets.token_hex(6)}", '
                                                                 f'Version="{__version__}"'})

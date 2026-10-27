@@ -50,7 +50,7 @@ They're the same as on Windows (see the [Windows guide](windows.md#the-steps)), 
 - Nothing installs system-wide and there are no permission prompts.
 - **Phones, TVs & away from home** installs Tailscale on the server with its official script (nothing if
   it's already installed) and prints a sign-in link.
-- **Marquee** is Windows-only for now: on Linux the Media Hub is your stack app, and Jellyfin the player.
+- **Atlas** is Windows-only for now: on Linux the Media Hub is your stack app, and Jellyfin the player.
 - Admin pages (Sonarr, Radarr...) always ask for your login, even on your home network, because a container
   can't tell "this computer" apart from other devices.
 - The Media Hub container makes the nightly settings backup (into `/srv/mediastack/backups`) and runs the

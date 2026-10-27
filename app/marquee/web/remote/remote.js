@@ -1,4 +1,4 @@
-/* Marquee Mobile: the Remote tab, which controls the player on the PC. Polls the PC once a second while the tab is
+/* Atlas Mobile: the Remote tab, which controls the player on the PC. Polls the PC once a second while the tab is
    open, moves the progress bar smoothly in between, and applies taps optimistically so it feels instant. */
 (() => {
   'use strict';

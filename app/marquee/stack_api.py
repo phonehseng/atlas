@@ -1,4 +1,4 @@
-"""Routes for "Your stack" (marquee.stack): the Media Hub's dashboard inside Marquee.
+"""Routes for "Your stack" (marquee.stack): the Media Hub's dashboard inside Atlas.
 Register in server.py: `from .stack_api import bp; app.register_blueprint(bp)`.
 Every answer is {ok, ...}; errors are {ok: false, message}."""
 import urllib.parse

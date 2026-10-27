@@ -16,7 +16,7 @@ from ..mobile import net
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 MDNS_PORT = 5353
-RULE_NAME = "Marquee Casting"
+RULE_NAME = "Atlas Casting"
 _cache = {}
 _busy = set()
 
@@ -131,7 +131,7 @@ def forget():
 
 
 def fix_commands(port, category="Private"):
-    """The two rules "Allow Marquee" adds (run elevated). category: the home network's (Private / Public / Domain)."""
+    """The two rules "Allow Atlas" adds (run elevated). category: the home network's (Private / Public / Domain)."""
     prog = net.program_path()
     prof = {"public": "public", "domain": "domain"}.get((category or "").lower(), "private")
     base = ["netsh", "advfirewall", "firewall", "add", "rule", "dir=in", "action=allow", f"profile={prof}",
@@ -141,7 +141,7 @@ def fix_commands(port, category="Private"):
 
 
 def _quote(a):
-    if "=" in a and " " in a:   # netsh wants name="Marquee Casting", program="C:\Program Files\..."
+    if "=" in a and " " in a:   # netsh wants name="Atlas Casting", program="C:\Program Files\..."
         k, _, v = a.partition("=")
         return f'{k}="{v}"'
     return f'"{a}"' if " " in a else a

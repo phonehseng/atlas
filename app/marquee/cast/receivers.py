@@ -293,7 +293,7 @@ class AirPlayReceiver(Receiver):
             if exc is not None:
                 name = type(exc).__name__
                 if "Authentication" in name:
-                    out["error"] = ("The Apple TV refused Marquee. On the Apple TV, open Settings > AirPlay and "
+                    out["error"] = ("The Apple TV refused Atlas. On the Apple TV, open Settings > AirPlay and "
                                     "HomeKit > Allow Access and pick \"Anyone on the Same Network\".")
                 else:
                     out["error"] = f"The TV stopped playing ({name}: {str(exc)[:120]})"

@@ -1,7 +1,7 @@
 # Test helper: starts the setup wizard for a throwaway test install next to the real media server
 # (D:\StackTest, every port +20000, Task Scheduler folder "Media Stack Test"). It runs as a one-shot
 # scheduled task so it behaves exactly as if the user had double-clicked it.
-#   -Env @{ MEDIASTACK_MARQUEE_ZIP = 'D:\...\Marquee-windows-x64.zip' }   environment for the installer
+#   -Env @{ MEDIASTACK_MARQUEE_ZIP = 'D:\...\Atlas-windows-x64.zip' }     environment for the installer
 #   -Extra '--update'                                                    more command-line options
 param([string] $Exe = "$PSScriptRoot\..\dist\MediaStackSetup.exe", [string] $Root = 'D:\StackTest', [int] $Port = 8599,
       [hashtable] $Env = @{}, [string] $Extra = '')

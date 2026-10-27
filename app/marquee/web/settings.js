@@ -29,7 +29,7 @@ const CATS = [
   { id: 'ai', name: 'Taste & AI', icon: 'sparkle', hint: 'AI provider, taste & memory' },
   { id: 'assistant', name: 'Assistant & voice', icon: 'sx-mic', hint: 'Voice control' },
   { id: 'index', name: 'Media index', icon: 'search', hint: 'Scene search, content filter' },
-  { id: 'phone', name: 'Phone & casting', icon: 'phone', hint: 'Marquee Mobile, TVs' },
+  { id: 'phone', name: 'Phone & casting', icon: 'phone', hint: 'Atlas Mobile, TVs' },
   { id: 'sharing', name: 'Sharing', icon: 'share', hint: 'Google Drive links' },
   { id: 'stack', name: 'Your stack', icon: 'sx-stack', hint: 'Media Hub' },
   { id: 'about', name: 'About & updates', icon: 'info', hint: 'Version, updates' },
@@ -52,7 +52,7 @@ const KW = {
   voice_focus: 'dialogue voice speech clarity isolation hear', dialogue_boost: 'dialogue speech voice', base_volume: 'volume loud level start',
   passthrough: 'dolby atmos dts truehd receiver soundbar bitstream hdmi audio', audio_device: 'speakers headphones output device sound card hdmi audio',
   sub_lang: 'subtitles subs captions cc language srt', audio_lang_anime: 'anime audio language japanese dub dual audio',
-  ai_provider: 'ai key openai api chatgpt llm atlas built-in classic provider model', ai_url: 'ai key endpoint openai api url',
+  ai_provider: 'ai key openai api chatgpt llm localai local assistant built-in classic provider model', ai_url: 'ai key endpoint openai api url',
   ai_key: 'ai key api token secret openai', ai_model: 'ai model gpt', ai_builtin_size: 'ai model size built-in', ai_builtin_gpu: 'ai gpu graphics card built-in', ai_vram_gb: 'vram gpu memory limit cap graphics memory ai', ai_while_watching: 'ai background gpu while watching playing movie performance lag stutter',
   builtin: 'ai built-in local model download offline', seerr: 'requests jellyseerr overseerr server address', seerr_form: 'requests seerr password connect login sign in',
   qbt_url: 'qbittorrent torrent downloads progress', autosort_after: 'sort downloads organise organize move', watch_folders: 'downloads folders watch path',
@@ -70,9 +70,9 @@ const KW = {
   'share-connect': 'google drive connect sign in', 'share-disconnect': 'google drive disconnect', update_check: 'updates auto update version upgrade', update_channel: 'beta channel stable pre-release',
   updCheck: 'updates check version', indexlib: 'index scan library scene search', sens: 'blur skip violence gore nudity content filter parental',
   'index-install': 'index install scene search model', learning: 'taste learn history recommendations', tasteactions: 'taste letterboxd import memory note reset launchpad',
-  tastecard: 'taste memory genres favourite people', voice: 'voice microphone mic wake word hey marquee push to talk speech', hotkey: 'voice key push to talk hotkey f8',
-  stt_model: 'voice speech recognition whisper model', stt_device: 'voice gpu cpu cuda', wake_engine: 'wake word hey marquee', language: 'voice language speech',
-  'voice-install': 'voice install download speech', 'ask marquee': 'chat assistant', 'media hub': 'stack hub health backups downloads vpn phone alerts ntfy watchdog',
+  tastecard: 'taste memory genres favourite people', voice: 'voice microphone mic wake word hey atlas push to talk speech', hotkey: 'voice key push to talk hotkey f8',
+  stt_model: 'voice speech recognition whisper model', stt_device: 'voice gpu cpu cuda', wake_engine: 'wake word hey atlas', language: 'voice language speech',
+  'voice-install': 'voice install download speech', 'ask atlas': 'chat assistant', 'media hub': 'stack hub health backups downloads vpn phone alerts ntfy watchdog',
   shortcuts: 'keyboard keys hotkeys', 'release notes': 'changelog what changed version',
 };
 const UNIT = '.set, .tp-learn, .tp-actions, .tp-card, .mqs-dash';
@@ -194,7 +194,7 @@ function hay(u) {
     const kw = [KW[key], KW[label]].filter(Boolean).join(' ');
     const parts = [], w = document.createTreeWalker(u, NodeFilter.SHOW_TEXT);
     while (w.nextNode()) parts.push(w.currentNode.nodeValue);
-    const text = parts.join(' ');   // "Answers come from" + "Atlas" stay two words
+    const text = parts.join(' ');   // "Answers come from" + "LocalAI" stay two words
     u._sx = { html: u.childElementCount + ':' + u.textContent.length, text: norm(text + ' ' + tips), kw: norm(kw + ' ' + key.replace(/_/g, ' ')) };
   }
   return u._sx;
@@ -437,10 +437,10 @@ async function loadVoice() {
   const pills = (key, opts, cur, label) => `<div class="pill-toggle" role="group" aria-label="${esc(label)}">${opts.map(([v, n]) => `<button data-vset="${key}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${n}</button>`).join('')}</div>`;
   const ai = st.llm || {};
   slot.innerHTML = `<section class="panel glass setx-card" data-card="voice"><h2>${icon('sx-mic')} Voice control</h2>
-      <p>Talk to Marquee instead of typing. Speech is recognised on this PC, and the microphone only opens while voice is on.</p>
+      <p>Talk to Atlas instead of typing. Speech is recognised on this PC, and the microphone only opens while voice is on.</p>
       ${have ? '' : `<div class="set"><div class="lbl"><b>Voice pack</b><span>${ins.running ? esc(ins.step || 'Installing…') : ins.error ? 'Install failed: ' + esc(ins.error) : `Speech recognition that runs on this PC${(ins.download_mb || {}).voice ? ` (about ${ins.download_mb.voice} MB)` : ''}.`}</span></div>
         <button class="btn small" data-vact="install" ${ins.running ? 'disabled' : ''}>${ins.running ? 'Installing…' : 'Install'}</button></div>`}
-      <div class="set stack"><div class="lbl"><b>Listening</b><span>${mode === 'wake_word' ? 'Say “Hey Marquee”, then your request.' : mode === 'push_to_talk' ? `Hold ${esc((s.hotkey || 'F8').toUpperCase())} while you speak.` : 'Off: the microphone stays closed.'}</span></div>
+      <div class="set stack"><div class="lbl"><b>Listening</b><span>${mode === 'wake_word' ? 'Say “Hey Atlas”, then your request.' : mode === 'push_to_talk' ? `Hold ${esc((s.hotkey || 'F8').toUpperCase())} while you speak.` : 'Off: the microphone stays closed.'}</span></div>
         ${pills('voice', [['off', 'Off'], ['push_to_talk', 'Push to talk'], ['wake_word', 'Wake word']], mode, 'Listening')}</div>
       <div class="set"><div class="lbl"><b>Push-to-talk key</b><span>Hold it while speaking, or tap it for one sentence.</span></div>
         <input class="input setx-key" data-vset="hotkey" value="${esc(s.hotkey || 'f8')}" maxlength="20" spellcheck="false" aria-label="Push-to-talk key"></div>
@@ -449,7 +449,7 @@ async function loadVoice() {
       <details class="setx-adv" data-adv="voice"><summary>Advanced</summary><div class="setx-adv-body">
         <div class="set"><div class="lbl"><b>Speech model</b><span>Bigger understands more, but is slower.</span></div>${pills('stt_model', [['tiny', 'Tiny'], ['base', 'Base'], ['small', 'Small']], s.stt_model || 'base', 'Speech model')}</div>
         <div class="set"><div class="lbl"><b>Recognise speech on</b><span>Auto uses the graphics card when it works.</span></div>${pills('stt_device', [['auto', 'Auto'], ['cuda', 'Graphics card'], ['cpu', 'Processor']], s.stt_device || 'auto', 'Recognise speech on')}</div>
-        <div class="set"><div class="lbl"><b>Wake word engine</b><span>Whisper listens for “Hey Marquee”; openWakeWord is lighter.</span></div>${pills('wake_engine', [['whisper', 'Whisper'], ['openwakeword', 'openWakeWord']], s.wake_engine || 'whisper', 'Wake word engine')}</div>
+        <div class="set"><div class="lbl"><b>Wake word engine</b><span>Whisper listens for “Hey Atlas”; openWakeWord is lighter.</span></div>${pills('wake_engine', [['whisper', 'Whisper'], ['openwakeword', 'openWakeWord']], s.wake_engine || 'whisper', 'Wake word engine')}</div>
         <div class="set"><div class="lbl"><b>Spoken language</b><span>Two-letter code, like en or es.</span></div>
           <input class="input setx-key" data-vset="language" value="${esc(s.language || 'en')}" maxlength="5" spellcheck="false" aria-label="Spoken language"></div>
       </div></details></section>`;
@@ -510,7 +510,7 @@ async function loadStack() {
     if (!line || !d) return;
     const s = d.summary || {};
     const sum = String(s.text || 'Checked').replace(/[.!?]?$/, '.');
-    const text = d.error ? `Couldn’t check: ${d.error}` : d.source === 'hub' ? sum : `${sum} No Media Hub found, so Marquee runs its own read-only checks.`;
+    const text = d.error ? `Couldn’t check: ${d.error}` : d.source === 'hub' ? sum : `${sum} No Media Hub found, so Atlas runs its own read-only checks.`;
     if (line.textContent !== text) quietly(() => { line.textContent = text; delete line.dataset.sx; line.closest('.lbl').querySelectorAll('.sx-tip').forEach(x => x.remove()); condense(slot); });
   }
 }

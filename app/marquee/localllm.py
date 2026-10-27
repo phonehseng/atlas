@@ -8,7 +8,7 @@ pinned by version/commit and SHA-256 and checked after download; nothing is fetc
     standard  Qwen3-VL 4B Instruct, Q4_K_M + mmproj Q8_0   (about 3.0 GB, best on a graphics card)
     small     Qwen3-VL 2B Instruct, Q4_K_M + mmproj Q8_0   (about 1.6 GB, for weaker PCs / CPU only)
 
-The server starts lazily on 127.0.0.1 at a random port (below-normal priority, no window, tied to Marquee's
+The server starts lazily on 127.0.0.1 at a random port (below-normal priority, no window, tied to Atlas's
 process so it can't outlive it) and stops again after 5 minutes without a request. It is never started while a
 video plays, except for callers that pass allow_during_playback (Ask Atlas, the ending comment).
 
@@ -302,7 +302,7 @@ def _free_port():
 
 
 class _JobObject:
-    """A Windows job that kills its processes when Marquee exits, even on a hard exit (os._exit / a crash)."""
+    """A Windows job that kills its processes when Atlas exits, even on a hard exit (os._exit / a crash)."""
 
     def __init__(self):
         self.handle = None
@@ -606,7 +606,7 @@ def provider(allow_during_playback=True):
     if not size or not _backend():
         return None
     return {"url": gateway_url() + ("/play" if allow_during_playback else "") + "/v1", "key": "local",
-            "model": MODELS[size]["alias"], "name": "Marquee AI", "kind": "builtin", "vision": True}
+            "model": MODELS[size]["alias"], "name": "Atlas AI", "kind": "builtin", "vision": True}
 
 
 # ------------------------------------------------------------------ status for the settings page

@@ -1,4 +1,4 @@
-"""Friends who signed in with their own Jellyfin account (Settings > Marquee Mobile > "Sign in with Jellyfin").
+"""Friends who signed in with their own Jellyfin account (Settings > Atlas Mobile > "Sign in with Jellyfin").
 
 The library itself comes from the local catalog, but what they may see and their watch state are theirs:
   * allowed items: the ids Jellyfin lists for their account (refreshed every 15 minutes while they use the app, and

@@ -1,4 +1,4 @@
-/* Marquee Mobile player: plays a title on the phone straight from the PC.
+/* Atlas Mobile player: plays a title on the phone straight from the PC.
    The PC decides direct play / remux / transcode from what this phone says it can play (canPlayType, MSE and
    MediaCapabilities) and, on Auto, a quick bandwidth probe; HLS goes through hls.js where Media Source exists, or the
    phone's own HLS player (iOS). YouTube-style controls: double-tap the sides to jump 10 s, red progress bar,
@@ -688,7 +688,7 @@
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: info.type === 'Episode' ? info.subtitle : info.title, artist: info.type === 'Episode' ? info.title : (info.subtitle || ''),
-        album: 'Marquee', artwork: info.poster ? [{ src: info.poster, sizes: '600x900', type: 'image/jpeg' }] : [],
+        album: 'Atlas', artwork: info.poster ? [{ src: info.poster, sizes: '600x900', type: 'image/jpeg' }] : [],
       });
       const ms = navigator.mediaSession;
       ms.setActionHandler('play', () => v.play());

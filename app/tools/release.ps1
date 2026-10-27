@@ -1,15 +1,17 @@
 <#
-Publishes a Marquee release on GitHub in one command: bumps the version, builds, writes the update manifest
-(marquee-update.json, see docs\updates.md) and creates the GitHub release with the zip and the manifest.
+Publishes an Atlas release on GitHub in one command: bumps the version, builds, writes the update manifest
+(atlas-update.json, plus the same file as marquee-update.json for installs from before the rename; see
+docs\updates.md) and creates the GitHub release with the zip and the manifests.
 
     powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 1.4.0 -Notes notes\1.4.0.md
-    ... -Draft                      create it as a draft (Marquee only sees it once it's published)
+    ... -Draft                      create it as a draft (Atlas only sees it once it's published)
     ... -DryRun                     do everything except git and gh; print those commands instead
     ... -InstallerDir ..\MediaStackSetup\dist [-InstallerVersion 1.4.0] [-InstallerNotes notes.md]
                                     also attach the Media Stack Setup builds and add the "installer" and
                                     "stack-assets" entries (version read from MediaStackSetup.exe --version)
     ... -Merge extra.json           merge more top-level manifest entries (e.g. "stack-assets") from a JSON file
     ... -ExtraAssets a.zip,b.zip    more files to upload with the release
+    ... -DistDir <folder>           the build folder (default dist\; build.ps1 -OutDir builds elsewhere)
 
 Needs: gh (signed in with access to the repo), the .venv and everything build.ps1 needs.
 If this folder is a git repository, the version bump is committed and tagged v<version> (author Phone) and pushed
@@ -20,7 +22,7 @@ param(
     [string]$Notes = '',
     [switch]$Draft,
     [switch]$DryRun,
-    [string]$Repo = 'phonehseng/marquee',
+    [string]$Repo = 'phonehseng/atlas',
     [string]$MinOs = '10.0.17763',   # Windows 10 1809: the oldest Windows with WebView2
     [switch]$Critical,
     [switch]$NoBuild,                 # use the build already in dist\ (its VERSION must match)
@@ -29,10 +31,12 @@ param(
     [string]$InstallerNotes = '',
     [string]$StackAssetsVersion = '',
     [string]$Merge = '',
-    [string[]]$ExtraAssets = @()
+    [string[]]$ExtraAssets = @(),
+    [string]$DistDir = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$dist = if ($DistDir) { [IO.Path]::GetFullPath($DistDir) } else { Join-Path $root 'dist' }
 $Version = $Version.TrimStart('v')
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Version must look like 1.4.0 or 1.4.0-beta.1 (got $Version)" }
 $tag = "v$Version"
@@ -49,7 +53,7 @@ function Sha256([string]$path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $p
 function AssetUrl([string]$name) { "https://github.com/$Repo/releases/download/$tag/$name" }
 
 if (-not $DryRun -and -not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'gh (GitHub CLI) is not installed' }
-$notesText = if ($Notes) { (Get-Content -LiteralPath $Notes -Raw -Encoding UTF8).Trim() } else { "Marquee $Version" }
+$notesText = if ($Notes) { (Get-Content -LiteralPath $Notes -Raw -Encoding UTF8).Trim() } else { "Atlas $Version" }
 
 # 1. version
 $init = Join-Path $root 'marquee\__init__.py'
@@ -63,37 +67,35 @@ try {
     # 2. build
     if (-not $NoBuild) {
         Say 'building'
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'build.ps1')
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'build.ps1') -OutDir $dist
         if ($LASTEXITCODE) { throw 'build.ps1 failed' }
     }
-    $zip = Join-Path $root 'dist\Marquee-windows-x64.zip'
-    $built = (Get-Content -LiteralPath (Join-Path $root 'dist\Marquee\VERSION') -Raw).Trim()
-    if ($built -ne $Version) { throw "dist\Marquee\VERSION says $built, not $Version" }
+    $zip = Join-Path $dist 'Atlas-windows-x64.zip'
+    $built = (Get-Content -LiteralPath (Join-Path $dist 'Atlas\VERSION') -Raw).Trim()
+    if ($built -ne $Version) { throw "$dist\Atlas\VERSION says $built, not $Version" }
     if (-not (Test-Path $zip)) { throw "$zip is missing" }
 
     # 3. manifest
-    Say 'writing the update manifest'
-    $out = Join-Path $root "dist\release\$tag"
+    Say 'writing the update manifests'
+    $out = Join-Path $dist "release\$tag"
     New-Item -ItemType Directory -Force $out | Out-Null
     $short = if ($notesText.Length -gt 4000) { $notesText.Substring(0, 4000).TrimEnd() + "`n`n(more on GitHub)" } else { $notesText }
     $published = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-    # One schema shared with Media Stack Setup (internal/core/manifest.go): see docs\updates.md
-    $manifest = [ordered]@{
-        schema    = 1
+    # One schema shared with Media Stack Setup (internal/core/manifest.go): see docs\updates.md. The app's entry is
+    # written twice: "atlas", and "marquee" for Marquee 1.5.1 and older and Media Stack Setup 1.4 (same content).
+    $app = [ordered]@{
+        version   = $Version
+        notes     = $short
         published = $published
-        marquee   = [ordered]@{
-            version   = $Version
-            notes     = $short
-            published = $published
-            notes_url = "https://github.com/$Repo/releases/tag/$tag"
-            min_os    = $MinOs
-            critical  = [bool]$Critical
-            files     = [ordered]@{
-                'windows-x64' = [ordered]@{ name = 'Marquee-windows-x64.zip'; url = (AssetUrl 'Marquee-windows-x64.zip')
-                                            sha256 = (Sha256 $zip); size = (Get-Item $zip).Length }
-            }
+        notes_url = "https://github.com/$Repo/releases/tag/$tag"
+        min_os    = $MinOs
+        critical  = [bool]$Critical
+        files     = [ordered]@{
+            'windows-x64' = [ordered]@{ name = 'Atlas-windows-x64.zip'; url = (AssetUrl 'Atlas-windows-x64.zip')
+                                        sha256 = (Sha256 $zip); size = (Get-Item $zip).Length }
         }
     }
+    $manifest = [ordered]@{ schema = 1; published = $published; atlas = $app; marquee = $app }
     $uploads = @($zip)
     if ($InstallerDir) {
         $files = Get-ChildItem -LiteralPath $InstallerDir -File | Where-Object { $_.Name -like 'MediaStackSetup*' -and $_.Extension -notin '.sha256', '.txt', '.json', '.md' }
@@ -125,13 +127,18 @@ try {
         foreach ($p in $extra.PSObject.Properties) { $manifest[$p.Name] = $p.Value }
     }
     foreach ($a in $ExtraAssets) { if (-not (Test-Path -LiteralPath $a)) { throw "$a is missing" }; $uploads += (Resolve-Path -LiteralPath $a).Path }
-    $manifestFile = Join-Path $out 'marquee-update.json'
-    [IO.File]::WriteAllText($manifestFile, ($manifest | ConvertTo-Json -Depth 10), $utf8)
+    $json = $manifest | ConvertTo-Json -Depth 10
+    $manifestFile = Join-Path $out 'atlas-update.json'
+    [IO.File]::WriteAllText($manifestFile, $json, $utf8)
+    # the same manifest under the old name: installs from before the rename look for marquee-update.json
+    $legacyManifest = Join-Path $out 'marquee-update.json'
+    [IO.File]::WriteAllText($legacyManifest, $json, $utf8)
     $notesFile = Join-Path $out 'notes.md'
     [IO.File]::WriteAllText($notesFile, $notesText, $utf8)
-    $uploads += $manifestFile
-    Write-Host ("   {0}  {1:N1} MB  sha256 {2}" -f 'Marquee-windows-x64.zip', ((Get-Item $zip).Length / 1MB), $manifest.marquee.files.'windows-x64'.sha256)
+    $uploads += $manifestFile, $legacyManifest
+    Write-Host ("   {0}  {1:N1} MB  sha256 {2}" -f 'Atlas-windows-x64.zip', ((Get-Item $zip).Length / 1MB), $app.files.'windows-x64'.sha256)
     Write-Host "   $manifestFile"
+    Write-Host "   $legacyManifest"
 
     # 4. git (only when this folder is a repository)
     $isGit = $false
@@ -144,8 +151,8 @@ try {
     if ($isGit) {
         Say 'committing and tagging'
         Run git @('-C', $root, 'add', 'marquee/__init__.py')
-        Run git @('-C', $root, 'commit', '-m', "Marquee $Version")   # as the repo's configured git user
-        Run git @('-C', $root, 'tag', '-a', $tag, '-m', "Marquee $Version")
+        Run git @('-C', $root, 'commit', '-m', "Atlas $Version")   # as the repo's configured git user
+        Run git @('-C', $root, 'tag', '-a', $tag, '-m', "Atlas $Version")
         Run git @('-C', $root, 'push', 'origin', 'HEAD', $tag)
     } else {
         Say 'not a git repository: gh creates the tag on the repo'
@@ -153,12 +160,12 @@ try {
 
     # 5. the GitHub release
     Say "creating the release $tag on $Repo"
-    $ghArgs = @('release', 'create', $tag) + $uploads + @('--repo', $Repo, '--title', "Marquee $Version", '--notes-file', $notesFile)
+    $ghArgs = @('release', 'create', $tag) + $uploads + @('--repo', $Repo, '--title', "Atlas $Version", '--notes-file', $notesFile)
     if ($isGit) { $ghArgs += '--verify-tag' }
     if ($Draft) { $ghArgs += '--draft' }
     if ($prerelease) { $ghArgs += '--prerelease' } else { $ghArgs += '--latest' }
     Run gh $ghArgs
-    if ($DryRun) { Say "dry run done: nothing was committed or uploaded; dist\ holds the $Version build" }
+    if ($DryRun) { Say "dry run done: nothing was committed or uploaded; $dist holds the $Version build" }
     else { Say "released: https://github.com/$Repo/releases/tag/$tag" }
 }
 finally {

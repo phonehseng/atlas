@@ -13,7 +13,7 @@ import (
 )
 
 // Protect encrypts data for the signed-in Windows account (DPAPI, CryptProtectData with no description,
-// no extra entropy and no flags: the same call Marquee's settings.py makes).
+// no extra entropy and no flags: the same call Atlas's settings.py makes).
 func Protect(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, nil
@@ -48,6 +48,17 @@ func ProgramsDir() string {
 		return ""
 	}
 	return dir
+}
+
+// FirewallRuleExists reports whether a Windows Firewall rule with this display name exists (reading the
+// rules needs no administrator).
+func FirewallRuleExists(name string) bool {
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+		"if (Get-NetFirewallRule -DisplayName $env:MS_RULE -ErrorAction SilentlyContinue) { 'yes' }")
+	cmd.Env = append(os.Environ(), "MS_RULE="+name)
+	hideWindow(cmd)
+	out, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(out)) == "yes"
 }
 
 // Shortcut describes a .lnk file.

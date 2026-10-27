@@ -78,7 +78,7 @@ def has_nvidia():
 
 def _pip(part):
     if getattr(sys, "frozen", False):
-        raise RuntimeError(f"This build can't add {part} (it needs pip); run Marquee from source for it")
+        raise RuntimeError(f"This build can't add {part} (it needs pip); run Atlas from source for it")
     r = subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-q",
                         *PACKAGES[part]], capture_output=True, text=True, timeout=1800, creationflags=0x08000000)
     if r.returncode != 0:

@@ -1,4 +1,4 @@
-/* Marquee updates: the top-bar pill ("Update to 1.4.0"), the update sheet (notes, Update now / Later / Skip),
+/* Atlas updates: the top-bar pill ("Update to 1.4.0"), the update sheet (notes, Update now / Later / Skip),
    Settings > About, the "Updated to 1.4.0" toast after a restart, and the quiet "newer Media Stack" line on Your stack.
    Talks to marquee/updater.py (/api/update/...). Self-contained: exposes window.MarqueeUpdate, styles in update.css. */
 (() => {
@@ -102,7 +102,7 @@ function drawPill() {
   p.style.setProperty('--p', busy ? pct(d) / 100 : 0);
   const label = ready ? 'Restart to update' : busy ? (d.state === 'paused' ? `Update paused · ${pct(d)}%` : d.state === 'downloading' ? `Updating · ${pct(d)}%` : 'Checking update…') : `Update to ${a.version}`;
   p.innerHTML = `<span class="upd-pill-ico">${ready ? ico('restart', 15) : UP(16)}</span><span class="upd-pill-txt">${esc(label)}</span>${busy ? '<i class="upd-pill-bar" aria-hidden="true"></i>' : ''}`;
-  p.title = ready ? `Marquee ${a.version} is ready. Restart to finish updating.` : `Marquee ${a.version} is available`;
+  p.title = ready ? `Atlas ${a.version} is ready. Restart to finish updating.` : `Atlas ${a.version} is available`;
   p.setAttribute('aria-label', label);
 }
 
@@ -114,7 +114,7 @@ function openSheet(mode = 'update') {
     layer.className = 'upd-layer';
     layer.setAttribute('role', 'dialog');
     layer.setAttribute('aria-modal', 'true');
-    layer.setAttribute('aria-label', 'Update Marquee');
+    layer.setAttribute('aria-label', 'Update Atlas');
     layer.innerHTML = `<div class="upd-scrim" data-upd="close"></div><div class="upd-sheet glass"><div class="upd-body"></div></div>`;
     document.body.append(layer);
     layer.addEventListener('click', onSheetClick);
@@ -140,7 +140,7 @@ function drawSheet() {
   const body = $('.upd-body', U.sheet), s = U.st || {};
   if (U.mode === 'news') {
     const j = s.just_updated || U.news || {};
-    body.innerHTML = `<div class="upd-head"><span class="upd-badge done">${ico('check', 22)}</span><div><span class="eyebrow">What’s new</span><h2>Marquee ${esc(j.to || s.version)}</h2></div>
+    body.innerHTML = `<div class="upd-head"><span class="upd-badge done">${ico('check', 22)}</span><div><span class="eyebrow">What’s new</span><h2>Atlas ${esc(j.to || s.version)}</h2></div>
         <button class="icon-btn small" data-upd="close" aria-label="Close">${ico('close', 18)}</button></div>
       <div class="upd-notes">${md(j.notes)}</div>
       <div class="upd-foot">${j.notes_url ? `<a class="btn ghost small" href="${esc(j.notes_url)}" target="_blank" rel="noopener noreferrer">On GitHub</a>` : ''}<button class="btn small" data-upd="close">Done</button></div>`;
@@ -150,7 +150,7 @@ function drawSheet() {
   if (!a) {
     body.innerHTML = `<div class="upd-head"><span class="upd-badge done">${ico('check', 22)}</span><div><span class="eyebrow">Updates</span><h2>You’re up to date</h2></div>
         <button class="icon-btn small" data-upd="close" aria-label="Close">${ico('close', 18)}</button></div>
-      <p class="upd-dim">Marquee ${esc(s.version || '')} is the newest version.</p>`;
+      <p class="upd-dim">Atlas ${esc(s.version || '')} is the newest version.</p>`;
     return;
   }
   const d = s.download || {}, mine = d.version === a.version;
@@ -160,7 +160,7 @@ function drawSheet() {
     : busy ? (d.state === 'paused' ? 'Paused while a video plays.' : d.state === 'verifying' ? 'Checking the download…' : d.state === 'unpacking' ? 'Unpacking…' : `Downloading · ${mb(d.done)} of ${mb(d.total)}`)
     : err ? esc(d.error) : '';
   body.innerHTML = `<div class="upd-head"><span class="upd-badge">${UP(24)}</span><div><span class="eyebrow${a.critical ? ' orange' : ''}">${a.critical ? 'Important update' : a.prerelease ? 'Beta update' : 'Update available'}</span>
-      <h2>Marquee ${esc(a.version)}</h2><span class="upd-dim">You have ${esc(s.version)}${a.size ? ` · ${mb(a.size)}` : ''}${a.published ? ` · ${esc(new Date(a.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))}` : ''}</span></div>
+      <h2>Atlas ${esc(a.version)}</h2><span class="upd-dim">You have ${esc(s.version)}${a.size ? ` · ${mb(a.size)}` : ''}${a.published ? ` · ${esc(new Date(a.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))}` : ''}</span></div>
       <button class="icon-btn small" data-upd="close" aria-label="Close">${ico('close', 18)}</button></div>
     <div class="upd-notes">${md(a.notes)}</div>
     ${busy || ready || err ? `<div class="upd-progress${err ? ' bad' : ''}"><div class="index-bar"><i style="--p:${ready ? 1 : (pct(d) / 100).toFixed(3)}"></i></div><span>${stateLine}</span></div>` : ''}
@@ -197,13 +197,13 @@ function drawAbout() {
   if (!s) { el.innerHTML = `<section class="panel glass" style="--i:8"><h2>${ico('info', 20)} About</h2><div class="skel dx-skel-line"></div></section>`; return; }
   const a = s.available, d = s.download || {};
   const line = s.status === 'checking' ? 'Checking…'
-    : a ? `Marquee ${esc(a.version)} is available${s.skipped ? ' (skipped)' : ''}.`
+    : a ? `Atlas ${esc(a.version)} is available${s.skipped ? ' (skipped)' : ''}.`
     : s.status === 'unreachable' ? 'Can’t reach updates right now.'
     : s.status === 'error' ? esc(s.message)
     : s.checked ? 'You’re up to date.' : 'Not checked yet.';
   const seg = (key, opts, cur) => `<div class="pill-toggle" role="group">${opts.map(([v, n]) => `<button data-upd-set="${key}" data-v="${v}" aria-pressed="${cur === v}">${n}</button>`).join('')}</div>`;
   el.innerHTML = `<section class="panel glass upd-about" style="--i:8"><h2>${ico('info', 20)} About</h2>
-    <div class="set"><div class="lbl"><b>Marquee ${esc(s.version)}</b><span>${line} <span class="upd-dim">Last checked ${esc(ago(s.checked))}.</span></span>
+    <div class="set"><div class="lbl"><b>Atlas ${esc(s.version)}</b><span>${line} <span class="upd-dim">Last checked ${esc(ago(s.checked))}.</span></span>
       ${a && dlBusy(d) ? `<div class="index-bar"><i style="--p:${(pct(d) / 100).toFixed(3)}"></i></div>` : ''}</div>
       ${a ? `<button class="btn small" data-upd-open>${d.state === 'ready' && d.version === a.version ? 'Restart to update' : 'See update'}</button>`
         : `<button class="btn small ghost" data-upd-check>${ico('restart', 15)} Check for updates</button>`}</div>
@@ -215,7 +215,7 @@ function drawAbout() {
     <div class="set"><div class="lbl"><b>Release notes</b><span title="${esc(s.installed_in ? `Installed in ${s.installed_in}` : 'Running from source')}">What changed in each version.</span></div>
       <div class="upd-links"><a class="link" href="${esc(s.releases_url)}/tag/v${esc(s.version)}" target="_blank" rel="noopener noreferrer">This version</a>
       <a class="link" href="${esc(s.releases_url)}" target="_blank" rel="noopener noreferrer">All releases ↗</a></div></div>
-    <p class="upd-license">Marquee is free software under the GPL-3.0 licence.</p>
+    <p class="upd-license">Atlas is free software under the GPL-3.0 licence.</p>
   </section>`;
 }
 document.addEventListener('click', async e => {
@@ -229,7 +229,7 @@ document.addEventListener('click', async e => {
       U.st = await api('/api/update/check', {});
       drawAll();
       if (U.st.available) openSheet('update');
-      else if (U.st.status === 'ok') toast('Marquee is up to date', { icon: 'check' });
+      else if (U.st.status === 'ok') toast('Atlas is up to date', { icon: 'check' });
       else toast(U.st.message || 'Can’t reach updates right now');
       return;
     }
@@ -273,7 +273,7 @@ function onEvent(name, data) {
     return true;
   }
   if (name === 'update-error') toast(data.message || 'The update failed');
-  if (name === 'update-ready' && !U.sheet) toast(`Marquee ${data.version} is ready`, { icon: 'check', action: 'Restart', onAction: () => openSheet('update'), ms: 8000 });
+  if (name === 'update-ready' && !U.sheet) toast(`Atlas ${data.version} is ready`, { icon: 'check', action: 'Restart', onAction: () => openSheet('update'), ms: 8000 });
   refresh();
   return true;
 }
@@ -287,7 +287,7 @@ async function start() {
     toast(`Updated to ${s.just_updated.to} ✓`, { icon: 'check', action: 'What’s new', onAction: () => openSheet('news'), ms: 12000 });
     api('/api/update/ack', {}).catch(() => {});
   } else if (s.update_failed) {
-    toast(`Marquee ${s.update_failed.version || ''} didn’t start, so you’re still on ${s.version}.`, { icon: 'info', ms: 12000 });
+    toast(`Atlas ${s.update_failed.version || ''} didn’t start, so you’re still on ${s.version}.`, { icon: 'info', ms: 12000 });
     api('/api/update/ack', {}).catch(() => {});
   }
 }

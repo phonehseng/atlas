@@ -1,4 +1,4 @@
-/* Marquee Mobile service worker: makes the app installable and opens it instantly. Only the app's own files are
+/* Atlas Mobile service worker: makes the app installable and opens it instantly. Only the app's own files are
    cached (network first, so updates show at once); the API, artwork and video always come from the PC. */
 const CACHE = 'marquee-shell-1';
 const SHELL = ['/r', '/r/app.css', '/r/app.js', '/r/player.js', '/r/remote.js', '/r/vendor/hls.min.js',

@@ -1,4 +1,4 @@
-// Marquee liquid glass: frosts and refracts the video under the player controls.
+// Atlas liquid glass: frosts and refracts the video under the player controls.
 // The controls (osc/marquee.lua) push up to four rounded rectangles as runtime parameters, in pixels of the
 // video area on screen: gNx/gNy/gNw/gNh (box), gNr (corner radius), gNa (strength 0..1, follows the controls'
 // fade). g_vw/g_vh is the video's size on screen: the hooked image may be another size (before/after scaling),
@@ -175,7 +175,7 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC Marquee liquid glass
+//!DESC Atlas liquid glass
 
 #define TAPS 24
 

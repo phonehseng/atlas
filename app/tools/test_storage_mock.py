@@ -83,7 +83,7 @@ for s in (1, 2):
 local = scratch / "stack" / "loose" / "Home Video (2024).mkv"
 local.parent.mkdir(parents=True)
 local.write_bytes(os.urandom(1024) * 512)
-rows.append({"id": "local:homevideo", "type": "Movie", "name": "Marquee storage test dummy (safe to delete)",
+rows.append({"id": "local:homevideo", "type": "Movie", "name": "Atlas storage test dummy (safe to delete)",
              "path": str(local), "library": "movies", "source": "local", "provider": {}})
 with cat.lock:
     for r in rows:

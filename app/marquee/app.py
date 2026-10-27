@@ -1,7 +1,7 @@
-"""Marquee: a local, Netflix-style player for your Jellyfin library. Entry point.
+"""Atlas: a local, Netflix-style player for your Jellyfin library. Entry point.
 
 Starts the local UI server, opens the window (Edge WebView2), and puts the mpv player inside the same window.
-Run: python -m marquee   (or Marquee.exe)
+Run: python -m marquee   (or Atlas.exe)
 """
 import ctypes
 import json
@@ -162,10 +162,10 @@ def main():
             break
         except OSError:
             time.sleep(0.05)
-    app.window = webview.create_window("Marquee", f"http://127.0.0.1:{port}/", width=1500, height=900,
+    app.window = webview.create_window("Atlas", f"http://127.0.0.1:{port}/", width=1500, height=900,
                                        min_size=(960, 600), background_color="#0b1433")
     app.window.events.closing += app.closing
-    print(f"Marquee on http://127.0.0.1:{port}/", flush=True)
+    print(f"Atlas on http://127.0.0.1:{port}/", flush=True)
     webview.start(app.started, private_mode=False, storage_path=str(server.settings.DIR / "webview"),
                   debug="--debug" in sys.argv)
     # The window is gone: shut mpv down, but never let a stuck video driver keep the process alive.

@@ -4,14 +4,15 @@ people who have it can open (not searchable, no sign-in needed to view).
 How it works
 - Sign-in is OAuth 2.0 for installed apps: the system browser opens Google's consent page, Google redirects to a
   one-shot listener on 127.0.0.1 (random port), and the code is exchanged with PKCE. The only scope asked for is
-  drive.file, so Marquee can see and change nothing in Drive except the files it uploaded itself.
+  drive.file, so Atlas can see and change nothing in Drive except the files it uploaded itself.
 - The refresh token is kept DPAPI-encrypted in settings ("gdrive_token"). Signing out revokes it at Google.
 - The OAuth client (ID + secret) is the user's own (see docs/google-drive.md). A packaged build can embed a default
   through MARQUEE_GDRIVE_CLIENT_ID / MARQUEE_GDRIVE_CLIENT_SECRET or the DEFAULT_CLIENT_* constants below.
 - Uploads use Drive's resumable protocol in 16 MB chunks on a background thread at background priority, with an
   optional speed cap. The session URI and offset are kept in %APPDATA%\\Marquee\\shares.json, so an upload picks up
   where it stopped after a network drop or an app restart.
-- Files go into a "Marquee Shares" folder (made on first use). A video with subtitles next to it (same name,
+- Files go into an "Atlas Shares" folder (made on first use; found by its id, so the "Marquee Shares" folder from
+  before the rename is the same folder, and it's renamed the first time it's used). A video with subtitles next to it (same name,
   .srt/.ass/.ssa/.vtt) goes into its own subfolder and the folder is what gets shared.
 - The share is a permission {type: anyone, role: reader, allowFileDiscovery: false}.
 
@@ -54,11 +55,12 @@ REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 API = "https://www.googleapis.com/drive/v3"
 UPLOAD = "https://www.googleapis.com/upload/drive/v3"
 
-FOLDER_NAME = "Marquee Shares"
+FOLDER_NAME = "Atlas Shares"
+OLD_FOLDER_NAME = "Marquee Shares"  # the folder's name before the app was renamed
 FOLDER_MIME = "application/vnd.google-apps.folder"
 CHUNK = 16 * 1024 * 1024          # multiple of 256 KiB, as Drive requires (16-32 MB is a good size)
 CONNECT_TIMEOUT = 300             # seconds to finish signing in in the browser
-EXPIRY_CHECK = 30                 # seconds between checks for links Marquee has to turn off itself
+EXPIRY_CHECK = 30                 # seconds between checks for links Atlas has to turn off itself
 SUB_EXTS = (".srt", ".ass", ".ssa", ".vtt")
 SHAREABLE_EXTS = (".mkv", ".mp4", ".m4v", ".avi", ".mov", ".webm", ".ts", ".m2ts", ".wmv", ".mpg", ".mpeg",
                   ".gif") + SUB_EXTS
@@ -219,7 +221,7 @@ def auth_url(client_id, redirect_uri, challenge, state):
     return AUTH_URL + "?" + urllib.parse.urlencode(q)
 
 
-_PAGE = """<!doctype html><meta charset="utf-8"><title>Marquee</title>
+_PAGE = """<!doctype html><meta charset="utf-8"><title>Atlas</title>
 <body style="font:16px system-ui,sans-serif;background:#0d1738;color:#fff;display:grid;place-items:center;height:90vh">
 <div style="text-align:center"><h2>{title}</h2><p>{text}</p></div></body>"""
 
@@ -239,8 +241,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.server.result = {k: v[0] for k, v in q.items()}
         ok = "code" in q and q.get("state", [""])[0] == self.server.state
         title = "Google Drive is connected" if ok else "Couldn't connect Google Drive"
-        text = ("You can close this tab and go back to Marquee." if ok else
-                html.escape(q.get("error", ["the reply didn't match this sign-in"])[0]) + ". Go back to Marquee and try again.")
+        text = ("You can close this tab and go back to Atlas." if ok else
+                html.escape(q.get("error", ["the reply didn't match this sign-in"])[0]) + ". Go back to Atlas and try again.")
         body = _PAGE.format(title=title, text=text).encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -294,7 +296,7 @@ def connect(timeout=CONNECT_TIMEOUT, open_browser=None):
         tok = _token_request({"client_id": cid, "client_secret": sec, "code": r["code"], "code_verifier": verifier,
                               "grant_type": "authorization_code", "redirect_uri": redirect})
         if not tok.get("refresh_token"):
-            raise ShareError("Google didn't return a long-lived sign-in. Remove Marquee's access at "
+            raise ShareError("Google didn't return a long-lived sign-in. Remove Atlas's access at "
                              "myaccount.google.com/permissions and connect again.", 400)
         settings.save({"gdrive_token": tok["refresh_token"]})
         with _token_lock:
@@ -457,15 +459,20 @@ def create_folder(name, parent=None):
 
 
 def root_folder():
-    """The "Marquee Shares" folder's id, made on first use (and again if it was deleted or trashed)."""
+    """The "Atlas Shares" folder's id, made on first use (and again if it was deleted or trashed)."""
     with _lock:
         fid = _store().get("folder_id")
     if fid and fid in _verified:
         return fid
     if fid:
         try:
-            meta = call("GET", f"{API}/files/{fid}", params={"fields": "id,trashed"}).json()
+            meta = call("GET", f"{API}/files/{fid}", params={"fields": "id,name,trashed"}).json()
             if not meta.get("trashed"):
+                if meta.get("name") == OLD_FOLDER_NAME:
+                    try:  # links keep working: they point at the files, not at the folder's name
+                        call("PATCH", f"{API}/files/{fid}", params={"fields": "id"}, json={"name": FOLDER_NAME})
+                    except Exception as e:
+                        print("share: couldn't rename the shares folder:", e)
                 _verified.add(fid)
                 return fid
         except ShareError as e:
@@ -495,11 +502,11 @@ def add_permission(file_id, expires=None):
                      json={**body, "expirationTime": _rfc3339(expires)})
             if r.json().get("expirationTime"):
                 return r.json()["id"], "drive"
-            return r.json()["id"], "marquee"  # accepted but ignored: Marquee turns it off itself
+            return r.json()["id"], "marquee"  # accepted but ignored: Atlas turns it off itself
         except ShareError as e:
             if e.code not in (400, 403):
                 raise
-            # Drive only allows expiry on some permission/account types: fall back to Marquee doing it
+            # Drive only allows expiry on some permission/account types: fall back to Atlas doing it
     r = call("POST", url, params={"fields": "id"}, json=body)
     return r.json()["id"], ("marquee" if expires else None)
 
@@ -704,9 +711,9 @@ def _expiry_message(mode, expires):
         return ""
     if mode == "drive":
         return f"Google turns this link off on {_when(expires)}."
-    return (f"Google Drive doesn't support automatic expiry for public links on this account, so Marquee will turn "
-            f"the link off on {_when(expires)}. That only happens while Marquee is running; if it's closed then, the "
-            f"link stays live until Marquee next starts.")
+    return (f"Google Drive doesn't support automatic expiry for public links on this account, so Atlas will turn "
+            f"the link off on {_when(expires)}. That only happens while Atlas is running; if it's closed then, the "
+            f"link stays live until Atlas next starts.")
 
 
 def set_expiry(sid, expires):
@@ -902,7 +909,7 @@ def _run(sid, ev):
     except _Cancelled:
         rec = _store()["shares"].get(sid)
         if rec and rec.get("status") in ("uploading", "queued"):
-            _update(sid, status="paused", message="Paused; resumes when Marquee starts again.")
+            _update(sid, status="paused", message="Paused; resumes when Atlas starts again.")
     except AuthError as e:
         _update(sid, status="paused", message=str(e), reason="reauth")
         notify("share-auth", {"message": str(e)})
@@ -1161,7 +1168,7 @@ def progress_of(sid):
     return {k: v for k, v in live.items() if not k.startswith("_")}
 
 
-# ------------------------------------------------------------------ links that Marquee turns off itself
+# ------------------------------------------------------------------ links that Atlas turns off itself
 def _expiry_loop():
     while not _stop.is_set():
         try:
@@ -1209,7 +1216,7 @@ def _inside(path, folder):
 
 
 def resolve(body):
-    """(path, kind, item_id, info) from a POST /api/share body. Only files on this PC that Marquee knows about
+    """(path, kind, item_id, info) from a POST /api/share body. Only files on this PC that Atlas knows about
     (library items, library folders, exported clips) can be shared."""
     from . import server
     if body.get("item_id"):
@@ -1231,7 +1238,7 @@ def resolve(body):
     if body.get("clip_path"):
         path = os.path.abspath(str(body["clip_path"]))
         if not _inside(path, _clips_root()):
-            raise ShareError("That isn't one of Marquee's saved clips.", 400)
+            raise ShareError("That isn't one of Atlas's saved clips.", 400)
         return path, "clip", None, None
     if body.get("path"):
         path = os.path.abspath(str(body["path"]))
@@ -1274,7 +1281,7 @@ def _fail(e):
 
 @bp.before_request
 def _guard():
-    # Only Marquee's own page may drive this (a web page elsewhere can't post JSON here without a preflight,
+    # Only Atlas's own page may drive this (a web page elsewhere can't post JSON here without a preflight,
     # and a foreign Origin is refused outright).
     origin = request.headers.get("Origin")
     if origin and urllib.parse.urlsplit(origin).netloc != request.host:

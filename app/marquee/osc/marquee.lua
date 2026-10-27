@@ -1,4 +1,4 @@
--- Marquee player controls: a YouTube-style layer drawn by mpv itself (so it sits on the video, at full
+-- Atlas player controls: a YouTube-style layer drawn by mpv itself (so it sits on the video, at full
 -- frame rate). Talks to the Python app through `script-message marquee <action> [value]` and reads what
 -- the app knows (title, quality, intro times, next episode) from the user-data/marquee/* properties.
 local mp = require "mp"

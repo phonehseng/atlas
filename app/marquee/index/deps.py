@@ -1,6 +1,6 @@
 """What the media index needs, and installing it on first use.
 
-Three things, all optional for the rest of Marquee:
+Three things, all optional for the rest of Atlas:
   * Python packages (numpy, onnxruntime-directml, tokenizers). Taken from the environment when present
     (requirements-ai.txt); otherwise their pinned wheels are fetched from PyPI and unpacked into
     %APPDATA%\\Marquee\\ai\\py312, which also works in the packaged app (no pip needed).

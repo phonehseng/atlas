@@ -11,8 +11,12 @@ import (
 	"strings"
 )
 
-// ManifestURL is the update manifest published with every release (marquee-update.json).
-const ManifestURL = "https://github.com/phonehseng/marquee/releases/latest/download/marquee-update.json"
+// ManifestURL is the update manifest published with every release (atlas-update.json).
+const ManifestURL = "https://github.com/phonehseng/atlas/releases/latest/download/atlas-update.json"
+
+// LegacyManifestURL is the same manifest under its name from before the app was renamed (Marquee to Atlas):
+// releases keep publishing it for older installs, and it's read when a release has no atlas-update.json.
+const LegacyManifestURL = "https://github.com/phonehseng/atlas/releases/latest/download/marquee-update.json"
 
 // EnvManifest overrides ManifestURL: an http(s) address or a local file (for testing a release before it
 // is published). A local manifest may also point at local files.
@@ -50,14 +54,27 @@ func (e *ManifestEntry) File(key string) (ManifestFile, bool) {
 	return ManifestFile{}, false
 }
 
-// Manifest is marquee-update.json.
+// Manifest is atlas-update.json. The app's entry is "atlas"; releases also carry it as "marquee", its key
+// before the rename (App() takes either).
 type Manifest struct {
 	Schema      int            `json:"schema"`
+	Atlas       *ManifestEntry `json:"atlas,omitempty"`
 	Marquee     *ManifestEntry `json:"marquee,omitempty"`
 	Installer   *ManifestEntry `json:"installer,omitempty"`
 	StackAssets *ManifestEntry `json:"stack-assets,omitempty"`
 	// Local is true when the manifest came from a local file (EnvManifest); only then may it name local files.
 	Local bool `json:"-"`
+}
+
+// App is the app's (Atlas's) entry: "atlas", else "marquee".
+func (m *Manifest) App() *ManifestEntry {
+	if m == nil {
+		return nil
+	}
+	if m.Atlas != nil {
+		return m.Atlas
+	}
+	return m.Marquee
 }
 
 // PlatformKey is this program's platform in manifest terms.
@@ -69,11 +86,19 @@ func PlatformKey() string {
 	return runtime.GOOS + "-" + arch
 }
 
-// FetchManifest reads the update manifest (EnvManifest, else ManifestURL).
+// FetchManifest reads the update manifest (EnvManifest, else ManifestURL, else LegacyManifestURL).
 func FetchManifest(ctx context.Context) (*Manifest, error) {
 	src := os.Getenv(EnvManifest)
 	if src == "" {
-		src = ManifestURL
+		m := &Manifest{}
+		err := GetJSON(ctx, ManifestURL, m)
+		if err != nil {
+			m = &Manifest{}
+			if err2 := GetJSON(ctx, LegacyManifestURL, m); err2 != nil {
+				return nil, err
+			}
+		}
+		return m, nil
 	}
 	m := &Manifest{}
 	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {

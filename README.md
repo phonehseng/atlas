@@ -1,9 +1,9 @@
-# Marquee
+# Atlas
 
 A Netflix-style home theatre for your own films and shows, and one guided installer that builds the whole
 media server behind it.
 
-- **Marquee** (Windows): rows of posters instead of folders, previews that play when you rest on a poster, and a
+- **Atlas** (Windows): rows of posters instead of folders, previews that play when you rest on a poster, and a
   player that plays your files directly (4K HDR, every audio track, full anime subtitles) with nothing in between
   to buffer. Requests, recommendations, your phone and the server's health live in the same app.
 - **The installer**: one small program (about 11 MB) that installs and connects everything else, one explained
@@ -12,13 +12,13 @@ media server behind it.
 
 Request a film or show from your phone, and a few minutes later it's in your library, named properly, with
 English subtitles for anime. It takes whatever copy is available first and keeps upgrading it (films up to 4K,
-shows up to 1080p), and if a request is stuck, Marquee tells you why and fixes what it can.
+shows up to 1080p), and if a request is stuck, Atlas tells you why and fixes what it can.
 
 - **Windows 10/11**: apps are installed natively and run in the background (Task Scheduler), no Docker needed.
 - **Linux** (PCs, servers, Raspberry Pi 4/5 with a 64-bit OS): apps run as Docker containers, with the Media Hub
-  as the dashboard (Marquee is Windows-only for now). *Preview: the Linux version is newer and less tested.*
+  as the dashboard (Atlas is Windows-only for now). *Preview: the Linux version is newer and less tested.*
 
-## Marquee, the app
+## Atlas, the app
 
 **Browsing**
 - Home is rows, not folders: continue watching, next up, My List, because-you-watched, sequels and recommended
@@ -28,7 +28,7 @@ shows up to 1080p), and if a request is stuck, Marquee tells you why and fixes w
   seasons and episodes, trailers, collections, and your own 5-star rating.
 - A taste profile that learns from what you finish, rate and say ("Is this for you?" on every title), started by
   a first-launch question or your Letterboxd, and fully visible and editable in Settings.
-- **Ask Marquee**: a chat that recommends, opens titles, plays the next episode, requests "seasons 5-8 of Doctor
+- **Ask Atlas**: a chat that recommends, opens titles, plays the next episode, requests "seasons 5-8 of Doctor
   Who" (you confirm first) and explains why something isn't working.
 
 **Playing**
@@ -45,8 +45,8 @@ shows up to 1080p), and if a request is stuck, Marquee tells you why and fixes w
 **Around it**
 - Requests with a quality picker and size estimate, "smart" season-by-season requests, a storage limit and
   optional clean-up of watched or forgotten titles (they stay in your history).
-- **Marquee Mobile**: browse and stream to your phone over Tailscale, or use it as a remote.
-- **Your stack**: the Media Hub's dashboard inside Marquee, with Fix buttons.
+- **Atlas Mobile**: browse and stream to your phone over Tailscale, or use it as a remote.
+- **Your stack**: the Media Hub's dashboard inside Atlas, with Fix buttons.
 - Share a clip or file to your own Google Drive as a private link.
 - Updates itself from this page's releases (automatic, notify or off) and rolls back if an update won't start.
 
@@ -68,7 +68,7 @@ later. Sizes are rough (programs only, not media).
 | Media folders *(always)* | One folder for the library, downloads and every app's settings, easy to back up or move | - |
 | **Jellyfin** *(always)* | Your own streaming service: films and shows on phones, TVs and browsers, at home or away | ~450 MB, ~500 MB RAM |
 | Intro Skipper | A Netflix-style "Skip Intro" button on episodes | ~5 MB |
-| **Marquee** *(Windows)* | A Netflix-style player for the PC with requests and the stack's dashboard in one app; plays files directly | ~250 MB, ~400 MB RAM |
+| **Atlas** *(Windows)* | A Netflix-style player for the PC with requests and the stack's dashboard in one app; plays files directly | ~250 MB, ~400 MB RAM |
 
 **Find & organise**
 
@@ -117,15 +117,15 @@ later. Sizes are rough (programs only, not media).
 
 **Minimal** = Jellyfin, Seerr, Sonarr, Radarr, Prowlarr, VPN + qBittorrent. **Recommended** adds Intro
 Skipper, Recyclarr, Bazarr, MediaSorter, Unpackerr, Cleanuparr, the Media Hub with nightly backups, Tailscale
-and (on Windows) Marquee.
+and (on Windows) Atlas.
 
-## Marquee or Media Hub only
+## Atlas or Media Hub only
 
-On *Choose your stack*, pick **Use Marquee as your stack
+On *Choose your stack*, pick **Use Atlas as your stack
 app (recommended)** or **Media Hub only** (the browser dashboard, with Jellyfin as the player). The installer
-downloads Marquee, adds Start menu and desktop shortcuts, and fills in its settings for the stack, so the
+downloads Atlas, adds Start menu and desktop shortcuts, and fills in its settings for the stack, so the
 first launch only asks for your Jellyfin password. The Media Hub keeps running in the background either way.
-Marquee is Windows-only for now; on Linux the Media Hub is the stack app.
+Atlas is Windows-only for now; on Linux the Media Hub is the stack app.
 
 ## Download
 
@@ -133,8 +133,8 @@ Get the file for your computer from the [Releases](../../releases) page:
 
 | File | For |
 |---|---|
-| `MediaStackSetup.exe` | Windows 10/11 (64-bit), about 11 MB: installs the stack and Marquee |
-| `Marquee-windows-x64.zip` | Marquee on its own, for an existing Jellyfin server: unzip and run `Marquee.exe` |
+| `MediaStackSetup.exe` | Windows 10/11 (64-bit), about 11 MB: installs the stack and Atlas |
+| `Atlas-windows-x64.zip` | Atlas on its own, for an existing Jellyfin server: unzip and run `Atlas.exe` |
 | `MediaStackSetup-linux-x64` | Linux on Intel/AMD |
 | `MediaStackSetup-linux-arm64` | Linux on ARM (Raspberry Pi 4/5, ARM servers) |
 
@@ -160,7 +160,7 @@ remembered, and running a step again updates that app to its newest version.
 
 When a new version is released, the wizard offers it at the top (**Update the installer**: downloaded,
 checksum-verified, and restarted into). Then **Update my stack** on the first page (or `--update`) brings the
-installed stack up to date: the MediaSorter / Media Hub files, pinned apps, Marquee, and optionally every app
+installed stack up to date: the MediaSorter / Media Hub files, pinned apps, Atlas, and optionally every app
 with a newer release. It never touches settings or media, and ends with a summary of what changed.
 
 ## Guides
@@ -180,7 +180,7 @@ with a newer release. It never touches settings or media, and ends with a summar
 
 ## Building from source
 
-The installer is the Go program at the top of this repository; Marquee is in [`app/`](app) (Python, see its
+The installer is the Go program at the top of this repository; Atlas is in [`app/`](app) (Python, see its
 README).
 
 Needs [Go](https://go.dev/dl/) 1.27 or newer; no C compiler.
@@ -193,10 +193,11 @@ GOOS=linux   GOARCH=arm64 go build -ldflags "-s -w" -o dist/MediaStackSetup-linu
 ```
 
 On Windows, `build.ps1` does all of that. The wizard page (`assets/web`) and the MediaSorter / Media Hub
-Python apps (`assets/python`) are built into the program; everything else (Marquee included) is downloaded
-when its step runs, so the program stays about 11 MB. Before a release, set Marquee's download in
-`internal/steps/marquee.go` (`MarqueeVersion`, `MarqueeURL`, `MarqueeSHA256`, `MarqueeSize`) and publish
-`marquee-update.json` with the release (format in [How it works](docs/how-it-works.md#updates)).
+Python apps (`assets/python`) are built into the program; everything else (Atlas included) is downloaded
+when its step runs, so the program stays about 11 MB. Before a release, set Atlas's download in
+`internal/steps/marquee.go` (`MarqueeVersion`, `MarqueeSHA256`, `MarqueeSize`; `MarqueeURL` follows the
+version) and publish `atlas-update.json` and `marquee-update.json` with the release (format in
+[How it works](docs/how-it-works.md#updates)).
 
 Command-line options (run with `--help`):
 

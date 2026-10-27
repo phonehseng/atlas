@@ -1,4 +1,4 @@
-/* Marquee storage UI (storage.js): quality picker, Settings > Storage, Leaving soon, delete sheet, smart line.
+/* Atlas storage UI (storage.js): quality picker, Settings > Storage, Leaving soon, delete sheet, smart line.
    Uses app.css tokens only, so both themes follow; animations touch transform/opacity. */
 
 .mqs-skel { height: 120px; border-radius: var(--r); background: linear-gradient(110deg, var(--sage) 30%, var(--soft) 50%, var(--sage) 70%) 0 0 / 250% 100%; animation: shimmer 1.6s linear infinite; }

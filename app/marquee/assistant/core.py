@@ -302,7 +302,7 @@ class Assistant:
             cards = res.get("items") or []
             names = [c["name"] for c in cards[:5]]
             reply = (res.get("answer") or "Here's what I found.") + (f" {_list(names)}." if names else "")
-            self.ctl.card("Marquee", reply)
+            self.ctl.card("Atlas", reply)
             return reply, [{"type": "results", "items": cards[:8]}]
         else:
             items = jf.items(searchTerm=query, Recursive="true", IncludeItemTypes=types, Limit=8)
@@ -312,7 +312,7 @@ class Assistant:
         from ..server import cards as to_cards
         names = [i["Name"] for i in items[:5]]
         reply = f"{lead}: {_list(names)}. Say \"play\" and a title to start one."
-        self.ctl.card("Marquee", reply)
+        self.ctl.card("Atlas", reply)
         return reply, [{"type": "results", "items": to_cards(items)}]
 
     def _what_said(self, seconds):
@@ -429,7 +429,7 @@ class Assistant:
             reply, actions = self.run(it)
             return reply, actions + [{"type": "llm", "ms": ms}]
         answer = str(data.get("answer") or "").strip()
-        self.ctl.card("Marquee", answer)
+        self.ctl.card("Atlas", answer)
         return answer, [{"type": "answer", "llm_ms": ms}]
 
 
@@ -438,7 +438,7 @@ QUESTIONS = ATLAS | {"cast", "what_said", "summarize", "time_left", "now_playing
 
 
 def search_index(item_id, query):
-    """Scene search through the library index (/api/index/<item>/search, served by Marquee itself).
+    """Scene search through the library index (/api/index/<item>/search, served by Atlas itself).
     None when there's no index for this video; else [{"time", "text"}] best first."""
     from .. import server
     try:

@@ -60,7 +60,7 @@ def stt_check():
     eng.load(wait=True)
     print(f"\nspeech model: {eng.status()} (load {int((time.perf_counter() - t0) * 1000)} ms)")
     synth = SpeechSynthesizer()
-    for sentence in ["Hey Marquee, skip forward thirty seconds.", "Turn on the subtitles.",
+    for sentence in ["Hey Atlas, skip forward thirty seconds.", "Turn on the subtitles.",
                      "What did that character just say?", "Play the next episode."]:
         ms = MemoryStream()
         synth.SetOutputToAudioStream(ms, SpeechAudioFormatInfo(16000, AudioBitsPerSample.Sixteen, AudioChannel.Mono))

@@ -383,7 +383,7 @@ def fetch_rss(username):
     if not USER_RX.match(username or ""):
         raise ValueError("That doesn't look like a Letterboxd username")
     r = requests.get(f"https://letterboxd.com/{username}/rss/", timeout=15,
-                     headers={"User-Agent": "Marquee (taste import; RSS only)"}, stream=True)
+                     headers={"User-Agent": "Atlas (taste import; RSS only)"}, stream=True)
     if r.status_code == 404:
         raise ValueError("No Letterboxd profile with that username (or it's private)")
     r.raise_for_status()

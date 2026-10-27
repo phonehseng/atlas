@@ -1,4 +1,4 @@
-/* Marquee storage UI: the request sheet's quality picker with size estimates, Settings > Storage (dashboard,
+/* Atlas storage UI: the request sheet's quality picker with size estimates, Settings > Storage (dashboard,
    cleanup rules, deletion log), the Home "Leaving soon" row, the delete-by-hand sheet and the smart-request line.
    Talks to marquee/storage_api.py. Self-contained: exposes window.MarqueeStorage, uses app.css tokens + storage.css. */
 (() => {
@@ -411,7 +411,7 @@ function mountSettings(el, opts = {}) {
         ${d.log.length > 6 ? `<button class="mqs-more" data-mqs-act="log">${st.showLog ? 'Show less' : `Show all ${d.log.length}`}</button>` : ''}` : '<p>Nothing has been removed yet.</p>'}
     </section>
     <section class="panel glass" style="--i:8"><h2>${ico('gear', 20)} Radarr &amp; Sonarr</h2>
-      <p class="mqs-arr-status">${d.arrs.length ? `Connected: ${d.arrs.map(a => `${esc(a.name)}${a.source === 'seerr' ? ' (through Seerr)' : ''}`).join(', ')}.` : 'Not connected. Marquee asks Seerr for these when you\'re a Seerr admin; otherwise enter them here.'}</p>
+      <p class="mqs-arr-status">${d.arrs.length ? `Connected: ${d.arrs.map(a => `${esc(a.name)}${a.source === 'seerr' ? ' (through Seerr)' : ''}`).join(', ')}.` : 'Not connected. Atlas asks Seerr for these when you\'re a Seerr admin; otherwise enter them here.'}</p>
       <details class="setx-adv" data-adv="storage-arr"${d.arrs.length ? '' : ' open'}><summary>Advanced</summary><div class="setx-adv-body">${['radarr', 'sonarr'].map(k => `<div class="set stack"><div class="lbl"><b>${k === 'radarr' ? 'Radarr' : 'Sonarr'}</b></div>
         <div class="fields mqs-arr-fields"><input class="input wide" data-arr="${k}_url" value="${esc(s[k + '_url'] || '')}" placeholder="http://localhost:${k === 'radarr' ? 7878 : 8989}" spellcheck="false" aria-label="${k} address">
         <input class="input wide" type="password" data-arr="${k}_key" placeholder="${s[k + '_key_set'] ? 'API key saved (type to replace)' : 'API key'}" autocomplete="off" aria-label="${k} API key"></div></div>`).join('')}</div></details>

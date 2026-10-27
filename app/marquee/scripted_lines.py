@@ -247,7 +247,7 @@ WELCOME = {
         "Good to see you again, {name}.",
     ],
     "first_time": [
-        "Welcome to Marquee, {name}. Pick anything, it's all yours.",
+        "Welcome to Atlas, {name}. Pick anything, it's all yours.",
         "Welcome! Your library is lit and ready.",
         "First show's on us. Pick anything.",
     ],

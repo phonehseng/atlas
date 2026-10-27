@@ -263,7 +263,7 @@ def firewall_status(port):
 
 def firewall_fix_command(port):
     """What "Allow through Windows Firewall" runs (elevated, after a UAC prompt): one rule, Private profile only."""
-    return ["netsh", "advfirewall", "firewall", "add", "rule", "name=Marquee Mobile", "dir=in", "action=allow",
+    return ["netsh", "advfirewall", "firewall", "add", "rule", "name=Atlas Mobile", "dir=in", "action=allow",
             "protocol=TCP", f"localport={int(port)}", "profile=private", f"program={program_path()}"]
 
 

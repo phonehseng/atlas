@@ -1,4 +1,4 @@
-r"""Development: the phone app (Marquee Mobile) without the desktop window or the PC player.
+r"""Development: the phone app (Atlas Mobile) without the desktop window or the PC player.
 
     . tools\dev.ps1; $env:MARQUEE_DEV_NO_ARRIVALS = '1'
     python tools\devmobile.py [--port 8738] [--host 127.0.0.1] [--host <tailscale ip>] [--pair]

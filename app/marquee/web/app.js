@@ -1,4 +1,4 @@
-/* Marquee browsing UI: a small single-page app over the local JSON API (see marquee/server.py).
+/* Atlas browsing UI: a small single-page app over the local JSON API (see marquee/server.py).
    No framework: template strings + event delegation. Every animation is transform/opacity. */
 (() => {
 'use strict';
@@ -165,7 +165,7 @@ function tmdbCard(c, n = 0, withBtn = false) {
   const st = STATUS[c.status];
   const removed = c.state === 'removed_watched' || c.state === 'removed' || c.removed;
   const watchedGone = removed && (c.state === 'removed_watched' || c.played);
-  /* Marked watched here without being on this PC (title page, chat, Atlas, Letterboxd): a check and "Watched". */
+  /* Marked watched here without being on this PC (title page, chat, another program, Letterboxd): a check and "Watched". */
   const seen = !removed && (c.state === 'watched' || c.state === 'watched_partly');
   const seenText = c.state === 'watched_partly' && (c.watched_seasons || []).length ? `Watched S${c.watched_seasons.join(', ')}` : 'Watched';
   const glass = (removed && !(c.status >= 2 && c.status <= 5) ? 'is-requestable' + (watchedGone ? ' is-removed' : ' is-gone') : availClass(c.status)) + (seen ? ' is-watched' : '');
@@ -1421,7 +1421,7 @@ function renderDetails(opts = {}) {
   if (D.kind === 'item') drawWhy();
   const isSeries = v.type === 'Series';
   const people = (v.people || []).filter(p => p.type === 'Actor' || p.type === 'GuestStar');
-  const offline = isOffline() ? `<span class="dx-saved" title="Jellyfin or the internet isn't reachable: this page comes from what Marquee saved on this PC.">${icon('cloud-off', 14)} Saved on this PC</span>` : '';
+  const offline = isOffline() ? `<span class="dx-saved" title="Jellyfin or the internet isn't reachable: this page comes from what Atlas saved on this PC.">${icon('cloud-off', 14)} Saved on this PC</span>` : '';
   $('.dx-body', box).innerHTML = `
     <div class="dx-cols dx-sec" style="--i:0">
       <div class="dx-left">
@@ -1738,7 +1738,7 @@ async function storageLines() {
   const watched = r.played || r.any_played;
   const at = t => fmtDate(typeof t === 'number' ? new Date(t * 1000).toISOString() : t);
   el.innerHTML = `<div class="dx-removed">${watched ? `<span class="tick">${icon('check')}</span>` : ''}<span>${watched && r.last_played ? `Watched on ${esc(at(r.last_played))} · ` : ''}removed ${esc(at(r.removed_at))} to save space</span>
-    <button class="btn small on-dark" data-act="removed-forget" data-tmdb="${esc(tmdb)}" title="Drop this from Marquee's memory">Forget</button></div>`;
+    <button class="btn small on-dark" data-act="removed-forget" data-tmdb="${esc(tmdb)}" title="Drop this from Atlas's memory">Forget</button></div>`;
   const kick = $('.dx-kicker'), req = $('.dx-play[data-act="tmdb-request"]');
   if (kick) kick.textContent = watched ? 'Watched · removed' : 'Removed to save space';
   if (req) req.innerHTML = `${icon('plus')} Request again`;
@@ -1849,7 +1849,7 @@ function startHeroMedia(src) {
     v.play().catch(() => {});
     if (src.hero) heroClock(m);
     else if (src.seek) m.timer = setTimeout(() => { if (D.media === m) endHero(); }, 32000);   // a whole file: stop after ~30 s
-  } else {   // last resort (trailerSrc): YouTube's own player, when Marquee couldn't fetch the trailer itself
+  } else {   // last resort (trailerSrc): YouTube's own player, when Atlas couldn't fetch the trailer itself
     const f = document.createElement('iframe');
     const origin = encodeURIComponent(location.origin);
     f.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(src.key)}?autoplay=1&mute=${D.muted ? 1 : 0}&controls=0&rel=0&playsinline=1&iv_load_policy=3&modestbranding=1&disablekb=1&fs=0&enablejsapi=1&cc_load_policy=1&cc_lang_pref=en&hl=en&vq=hd1080&origin=${origin}`;
@@ -1951,7 +1951,7 @@ function replayHero() {
   if (m) { ytCommand('seekTo', [0, true]); ytCommand('playVideo'); return; }
   if (D.pendingSrc) startHeroMedia(D.pendingSrc);
 }
-/* Trailers play in Marquee's own video, like the previews: the server fetches one from YouTube the first time
+/* Trailers play in Atlas's own video, like the previews: the server fetches one from YouTube the first time
    (marquee/trailers.py), streaming it while it downloads, and keeps it, so it starts at once and plays offline next
    time. The YouTube embed is only the fallback for when that fails. */
 async function trailerSrc(key) {
@@ -2078,7 +2078,7 @@ async function runSceneSearch(q) {
   if (r.available === false) { out.innerHTML = '<p class="scene-note">Scene search needs the media index (Settings › Media index).</p>'; return; }
   if (!r.indexed) {
     const st = r.index || {};
-    out.innerHTML = `<p class="scene-note">${icon('sparkle', 14)} Marquee is indexing this film${st.progress ? ` (${Math.round(st.progress * 100)}%)` : ''}. Try again in a few minutes.</p>`;
+    out.innerHTML = `<p class="scene-note">${icon('sparkle', 14)} Atlas is indexing this film${st.progress ? ` (${Math.round(st.progress * 100)}%)` : ''}. Try again in a few minutes.</p>`;
     return;
   }
   const hits = r.results || [];
@@ -2253,8 +2253,8 @@ function watchedLocal(key, on, entry) {
   if (S.route === 'mylist' && mlTab() === 'watched' && $('.page-mylist')) loadWatched(true).then(() => drawWatched($('.page-mylist')), () => {});
 }
 
-/* --- Watched: everything you've seen (library plays, titles marked here or by Atlas / Letterboxd, removed ones) */
-const WSRC = { library: 'On this PC', manual: 'Marked here', atlas: 'Atlas', chat: 'Chat', letterboxd: 'Letterboxd', removed: 'Removed' };
+/* --- Watched: everything you've seen (library plays, titles marked here or by LocalAI / Letterboxd, removed ones) */
+const WSRC = { library: 'On this PC', manual: 'Marked here', atlas: 'LocalAI', chat: 'Chat', letterboxd: 'Letterboxd', removed: 'Removed' };
 async function loadWatched(force) {
   if (!force && S.watchedData && Date.now() - S.watchedData.at < 30e3) return S.watchedData;
   const d = await api('/api/watched');
@@ -2477,7 +2477,7 @@ async function renderRequests(page, seq) {
   catch (e) {
     if (stale(seq)) return;
     $('#rows', page).innerHTML = e.status === 409
-      ? `<div class="notice glass"><span class="big">🎟️</span><h2>Connect Seerr to request titles</h2><p>Marquee uses Seerr (Jellyseerr/Overseerr) to find new films and shows and send them to your downloaders.</p><a class="btn" href="#/settings/library">${icon('gear')} Open Settings</a></div>`
+      ? `<div class="notice glass"><span class="big">🎟️</span><h2>Connect Seerr to request titles</h2><p>Atlas uses Seerr (Jellyseerr/Overseerr) to find new films and shows and send them to your downloaders.</p><a class="btn" href="#/settings/library">${icon('gear')} Open Settings</a></div>`
       : errorBox(e);
     $('#req-q', page).disabled = true;
     return;
@@ -2684,7 +2684,7 @@ function playbackPane(s) {
       ${seg('upscaler', up, 'Upscaler', 'Sharpens lower-resolution video.')}
       ${has('sdr_to_hdr') ? seg('sdr_to_hdr', [['auto', 'Auto'], ['off', 'Off']], 'SDR to HDR', 'Brightens standard video on an HDR screen.') : sw('rtx_hdr', 'RTX HDR', 'Turns SDR video into HDR on supported NVIDIA cards.')}`;
   const watching = `
-      ${has('fullscreen_on_play') ? sw('fullscreen_on_play', 'Fullscreen when playing', 'Playing something fills the screen; Marquee goes back to a window when it ends.') : ''}
+      ${has('fullscreen_on_play') ? sw('fullscreen_on_play', 'Fullscreen when playing', 'Playing something fills the screen; Atlas goes back to a window when it ends.') : ''}
       ${has('ai_while_watching') ? sw('ai_while_watching', 'AI while watching', 'Off: nothing runs in the background during a film (the AI frees its graphics memory; end-of-film comments use prepared lines). Questions you ask still work.') : ''}
       ${sw('autoplay_next', 'Autoplay next episode', '')}
       ${has('credits_mini') ? sw('credits_mini', 'Up next during the credits', 'When the credits roll, the video shrinks to a corner and what to watch next appears.') : ''}
@@ -2726,14 +2726,14 @@ async function loadAudioDevices() {
   sel.innerHTML = opts.map(o => `<option value="${esc(o.name)}"${o.name === cur ? ' selected' : ''}>${esc(o.description)}</option>`).join('');
 }
 
-/* Settings > Mobile: Marquee Mobile (the phone app on this PC's server: watch on the phone, or use it as a remote).
+/* Settings > Mobile: Atlas Mobile (the phone app on this PC's server: watch on the phone, or use it as a remote).
    Talks to /api/mobile* (marquee/remote.py). Replaces the old "Phone remote" panel. */
 const REM = { data: null, idx: 0, seq: 0, pairVersion: null };
 function remotePanel(s) {
-  return `<section class="panel glass setx-card mobile-panel" data-card="mobile"><h2>${icon('phone')} Marquee Mobile</h2>
+  return `<section class="panel glass setx-card mobile-panel" data-card="mobile"><h2>${icon('phone')} Atlas Mobile</h2>
       <p>Your library on your phone: watch anything from this PC, or use the phone as a remote for the player here.</p>
-      <div class="set"><div class="lbl"><b>Marquee Mobile</b><span>Phones connect after scanning a pairing code.</span></div>
-        <button class="switch" role="switch" data-switch="mobile" aria-checked="${!!(s.mobile || s.remote)}" aria-label="Marquee Mobile"></button></div>
+      <div class="set"><div class="lbl"><b>Atlas Mobile</b><span>Phones connect after scanning a pairing code.</span></div>
+        <button class="switch" role="switch" data-switch="mobile" aria-checked="${!!(s.mobile || s.remote)}" aria-label="Atlas Mobile"></button></div>
       <div id="remote-box"></div></section>`;
 }
 async function loadRemote(quiet) {
@@ -2744,7 +2744,7 @@ async function loadRemote(quiet) {
   if (!quiet || !REM.data) box.innerHTML = `<div class="remote-card glass"><div class="qr skel"></div><div><div class="skel" style="height:14px;width:180px;border-radius:9px"></div></div></div>`;
   let d;
   try { d = await api('/api/mobile'); } catch (e) {
-    if (seq === REM.seq) box.innerHTML = `<p class="note" style="color:var(--muted);font-size:13px;margin-top:10px">Marquee Mobile isn't available yet: ${esc(e.message)}</p>`;
+    if (seq === REM.seq) box.innerHTML = `<p class="note" style="color:var(--muted);font-size:13px;margin-top:10px">Atlas Mobile isn't available yet: ${esc(e.message)}</p>`;
     return;
   }
   if (seq !== REM.seq || !document.contains(box)) return;
@@ -2771,13 +2771,13 @@ function drawRemote() {
       <div class="remote-info">
         ${addrs.length > 1 ? `<div class="pill-toggle" role="group" aria-label="Address">${addrs.map((x, k) => `<button data-remote-addr="${k}" aria-pressed="${k === REM.idx}">${esc(x.label || x.ip || 'Address ' + (k + 1))}</button>`).join('')}</div>` : `<span class="eyebrow">${esc(a.label || 'Scan with your phone')}</span>`}
         <p class="remote-url" data-selectable>${esc(a.address || a.url || d.url || '')}</p>
-        <p class="remote-steps">Point your phone's camera at the code and tap the link. Each code pairs one phone, then a new one appears.${d.running === false ? ' <b>Marquee Mobile isn’t running right now.</b>' : ''}</p>
+        <p class="remote-steps">Point your phone's camera at the code and tap the link. Each code pairs one phone, then a new one appears.${d.running === false ? ' <b>Atlas Mobile isn’t running right now.</b>' : ''}</p>
         ${d.hint ? `<p class="remote-steps mobile-hint">${esc(d.hint)}</p>` : ''}${d.error ? `<p class="remote-steps mobile-err">${esc(d.error)}</p>` : ''}
         <div class="mobile-btns"><button class="btn small ghost" data-action="mobile-pair">${icon('restart', 16)} New pairing code</button>
           <button class="btn small ghost" data-action="remote-reset">${icon('logout', 16)} Sign out all phones</button></div>
       </div></div>
-    ${fw.checked && !fw.allowed ? `<div class="set mobile-fw"><div class="lbl"><b>Windows Firewall blocks phones on Tailscale</b><span>Allow Marquee through: one rule, private networks only, for Marquee and this port. Windows asks for permission.</span></div>
-      <button class="btn small" data-action="mobile-firewall">Allow Marquee</button></div>` : ''}
+    ${fw.checked && !fw.allowed ? `<div class="set mobile-fw"><div class="lbl"><b>Windows Firewall blocks phones on Tailscale</b><span>Allow Atlas through: one rule, private networks only, for Atlas and this port. Windows asks for permission.</span></div>
+      <button class="btn small" data-action="mobile-firewall">Allow Atlas</button></div>` : ''}
     <div class="set stack"><div class="lbl"><b>Default phone quality</b><span>Each phone can change its own.</span></div>
       <div class="pill-toggle" role="group" aria-label="Default phone quality">${[['auto', 'Auto'], ['original', 'Original'], ['1080', '1080p'], ['720', '720p'], ['480', '480p']].map(([v, n]) => `<button data-seg="mobile_quality" data-v="${v}" aria-pressed="${qual === v}">${n}</button>`).join('')}</div></div>
     ${sw('mobile_jellyfin_signin', 'Let friends sign in with Jellyfin', 'Friends use their own Jellyfin account on the phone app, with their own watch history.')}
@@ -2849,8 +2849,8 @@ function renderSettings(page) {
     + setCard('keyboard', 'dots', 'Keyboard', `<div class="set stack setx-keys"><div class="lbl"><b>Shortcuts</b></div><div class="shortcuts"><kbd>/</kbd><span>Search (on this page: search settings)</span><kbd>Esc</kbd><span>Close whatever is open</span><kbd>← →</kbd><span>Move along a row</span><kbd>Enter</kbd><span>Open the focused title</span></div></div>`);
   const folders = `
       ${has('autosort_after') ? seg('autosort_after', [[0, 'Right away'], [30, '30 min'], [120, '2 h'], [360, '6 h']], 'Sort new downloads', 'How long to wait before tidying finished downloads into the library.') : ''}
-      ${has('watch_folders') ? listBox('watch_folders', 'Watch folders', 'Folders Marquee keeps an eye on for new downloads. One per line.', 'D:\\Downloads') : ''}
-      ${has('library_folders') ? listBox('library_folders', 'Library folders', 'Folders of films and shows Marquee plays even when Jellyfin is away. One per line.', 'D:\\Media\\Movies') : ''}`;
+      ${has('watch_folders') ? listBox('watch_folders', 'Watch folders', 'Folders Atlas keeps an eye on for new downloads. One per line.', 'D:\\Downloads') : ''}
+      ${has('library_folders') ? listBox('library_folders', 'Library folders', 'Folders of films and shows Atlas plays even when Jellyfin is away. One per line.', 'D:\\Media\\Movies') : ''}`;
   const library = setCard('servers', 'film', 'Servers', `
       <div class="set setx-account"><div class="account"><span class="avatar">${esc((S.user || '?')[0].toUpperCase())}</span><div class="lbl"><b>${esc(S.user || 'Signed in')}</b><span>Jellyfin · ${esc(s.server || 'this PC')}</span></div></div>
         <button class="btn small danger" data-action="logout">Sign out</button></div>
@@ -2861,18 +2861,18 @@ function renderSettings(page) {
     + setCard('smart', 'sparkle', 'Smart seasons', '<div id="smart-settings" class="setx-contents"></div>')
     + setCard('folders', 'film', 'Library folders', folders)
     + setCard('mylist', 'plus', 'My List', has('mylist_sync_favorites') ? sw('mylist_sync_favorites', 'Sync with Jellyfin favourites', 'Your list follows your favourites on every Jellyfin app, both ways. Titles you haven’t got yet join once they arrive.') : '');
-  const ais = [['auto', 'Auto'], ['builtin', 'Built-in'], ['custom', 'Custom key'], ['atlas', 'Atlas', 'Uses the Atlas assistant on this PC (only when picked)'], ['classic', 'Off (Classic, no AI)']];
+  const ais = [['auto', 'Auto'], ['builtin', 'Built-in'], ['custom', 'Custom key'], ['atlas', 'LocalAI', 'The separate LocalAI assistant on this PC (only when picked)'], ['classic', 'Off (Classic, no AI)']];
   const tasteAi = setCard('ai', 'sparkle', 'AI provider', `
       <div class="set stack"><div class="lbl"><b>Provider</b><span data-sx="keep">Auto uses your own key if set, else the built-in AI, else Classic (no AI).</span></div>
         <div class="pill-toggle" role="group" aria-label="AI provider">${ais.map(([v, n, tip]) => `<button data-seg="ai_provider" data-v="${v}" aria-pressed="${ai === v}"${tip ? ` title="${esc(tip)}"` : ''}>${n}</button>`).join('')}</div>
-        <span class="setx-sub">${S.ai.mode === 'classic' ? 'Now: Classic, prepared lines and rules, no AI.' : S.ai.on ? `Now using ${esc(S.ai.name)}.` : ''}<span data-ai-atlas ${ai === 'atlas' ? '' : 'hidden'}> Atlas: uses the Atlas assistant on this PC (only when picked).</span></span></div>
+        <span class="setx-sub">${S.ai.mode === 'classic' ? 'Now: Classic, prepared lines and rules, no AI.' : S.ai.on ? `Now using ${esc(S.ai.name)}.` : ''}<span data-ai-atlas ${ai === 'atlas' ? '' : 'hidden'}> LocalAI: the separate LocalAI assistant on this PC (only when picked).</span></span></div>
       <div class="fields" id="ai-fields" ${ai === 'custom' ? '' : 'hidden'}>
         <label>Endpoint URL<input class="input wide" data-text="ai_url" value="${esc(s.ai_url || '')}" placeholder="https://api.openai.com/v1" spellcheck="false"></label>
         <label>API key<input class="input wide" type="password" data-text="ai_key" placeholder="${s.ai_key_set ? 'Key saved (type to replace)' : 'Paste your API key'}" autocomplete="off"></label>
         <label>Model<input class="input wide" data-text="ai_model" value="${esc(s.ai_model || '')}" placeholder="gpt-4o-mini" spellcheck="false"></label>
       </div>`)
     + setCard('builtin', 'sparkle', 'Built-in AI', '<div id="builtin-box"></div>')
-    + setCard('chat', 'sparkle', 'Chat', `<div class="set"><div class="lbl"><b>Ask Marquee</b><span>Chat about what to watch. What you tell it lands in Taste &amp; memory.</span></div><a class="btn small ghost" href="#/chat">Open chat</a></div>`)
+    + setCard('chat', 'sparkle', 'Chat', `<div class="set"><div class="lbl"><b>Ask Atlas</b><span>Chat about what to watch. What you tell it lands in Taste &amp; memory.</span></div><a class="btn small ghost" href="#/chat">Open chat</a></div>`)
     + '<section class="panel glass setx-card setx-wide taste-panel" id="taste-panel" data-card="taste"></section>';
   page.innerHTML = `<div class="page-head setx-head"><div class="grow"><span class="eyebrow">Settings</span><h1 style="margin-top:8px">Make it yours</h1><p>Changes save as you go.</p></div></div>
   <div class="setx">
@@ -3008,7 +3008,7 @@ function renderSignin() {
   setAmbient(null);
   const s = (S.state && S.state.settings) || {};
   $('#view').innerHTML = `<div class="page signin"><div class="signin-card glass">
-    <div class="brand"><span class="brand-mark"><img src="icon.svg" alt="" width="40" height="40"></span>marquee<span class="brand-dot">.</span></div>
+    <div class="brand"><span class="brand-mark"><img src="icon.svg" alt="" width="40" height="40"></span>atlas<span class="brand-dot">.</span></div>
     <h1>Lights, camera…</h1><p>Sign in with your Jellyfin account to start watching.</p>
     <form id="signin-form">
       <label>Jellyfin address<input class="input" name="server" value="${esc(s.server || 'http://localhost:8096')}" spellcheck="false" required></label>
@@ -3277,12 +3277,17 @@ function unPick(x, k) {
       <div class="wide-info"><b>${esc(titleOf(c))}</b><span>${esc(c.type === 'Episode' ? epCode(c) : [c.year, c.type === 'Series' ? 'Series' : fmtRuntime(c.runtime)].filter(Boolean).join(' · '))}</span></div>
       <span class="play-glyph">${icon('play')}</span></div></div>${x.why ? `<div class="why">${esc(x.why)}</div>` : ''}</div>`;
 }
+/* Who answers, on answer labels: Atlas itself (built-in AI, or no AI), else the provider's name ("LocalAI"). */
+function aiLabel() {
+  return !S.ai || S.ai.mode === 'builtin' || S.ai.mode === 'classic' ? 'Atlas' : (S.ai.name || 'Atlas');
+}
+
 function drawAtlasComment() {
   const box = $('#un-atlas');
   if (!box) return;
   const a = UN.atlas;
   if (!a) { box.hidden = true; return; }
-  const name = (S.ai && S.ai.name) || 'Atlas';
+  const name = aiLabel();
   box.hidden = false;
   if (a.state === 'pending' || !a.comment) {
     box.innerHTML = `<span class="ai-badge">${icon('sparkle', 15)} ${esc(name)}</span><p class="un-thinking">${esc(typeof a.thinking === 'string' && a.thinking ? a.thinking : 'Thinking about that ending')}<span class="dots"><i></i><i></i><i></i></span></p>`;
@@ -3348,7 +3353,7 @@ function atlasToast(d) {
   clearTimeout(ATL.timer);
   if (d.state === 'clear') { if (el) { el.classList.remove('open'); setTimeout(() => { if (!el.classList.contains('open')) el.hidden = true; }, 350); } return; }
   if (!el) { el = document.createElement('div'); el.id = 'atlas-toast'; el.className = 'atlas-toast glass'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.append(el); }
-  const name = d.name || (S.ai && S.ai.name) || 'Atlas';
+  const name = d.name || aiLabel();
   ATL.keep = false;
   if (d.state === 'listening' || d.state === 'thinking') {
     el.className = 'atlas-toast glass pill';
@@ -3500,7 +3505,7 @@ async function loadSharePanel() {
   const caps = [[0, 'Off'], [5, '5'], [10, '10'], [25, '25'], [50, '50']];
   box.innerHTML = `<div class="set"><div class="lbl"><b>Google Drive</b><span>${line}</span></div>
       ${st.signed_in ? '<button class="btn small ghost" data-act="share-disconnect">Disconnect</button>' : `<button class="btn small" data-act="share-connect" ${st.configured ? '' : 'disabled'}>Connect Google Drive</button>`}</div>
-    ${setAdv('share', `    <div class="set stack"><div class="lbl"><b>Your Google client</b><span>Marquee uploads with your own Google “Desktop app” client. <a class="link" href="https://github.com/phonehseng/marquee/blob/main/docs/google-drive.md" target="_blank" rel="noopener">How to get these</a></span></div>
+    ${setAdv('share', `    <div class="set stack"><div class="lbl"><b>Your Google client</b><span>Atlas uploads with your own Google “Desktop app” client. <a class="link" href="https://github.com/phonehseng/atlas/blob/main/app/docs/google-drive.md" target="_blank" rel="noopener">How to get these</a></span></div>
       <div class="fields"><label>Client ID<input class="input wide" data-share-cfg="client_id" value="${esc(st.client_id || '')}" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com"></label>
       <label>Client secret<input class="input wide" type="password" data-share-cfg="client_secret" autocomplete="off" placeholder="${st.client_secret_set ? 'Saved (type to replace)' : 'Paste the client secret'}"></label></div></div>
     <div class="set"><div class="lbl"><b>Upload speed cap</b><span>Mbit/s, so sharing doesn't hog your connection.</span></div>
@@ -3753,7 +3758,7 @@ function setUser(name) {
 }
 
 /* ================================================================== offline (local-first) */
-/* When Jellyfin can't be reached Marquee keeps playing from this PC; a calm pill says so. */
+/* When Jellyfin can't be reached Atlas keeps playing from this PC; a calm pill says so. */
 let offlinePoll = 0;
 function setOffline(st) {
   const pill = $('#offline-pill');

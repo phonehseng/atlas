@@ -23,7 +23,7 @@ async function show(opts = {}) {
   let st = opts.state;
   if (!st) { try { st = await api('/api/taste/state'); } catch (e) { st = { ai: { llm: false } }; } }
   L.ai = !!(st.ai && st.ai.llm);
-  L.aiName = (st.ai && st.ai.name) || 'Marquee';
+  L.aiName = (st.ai && st.ai.name) || 'Atlas';
   L.rerun = !!opts.rerun;
   Object.assign(L, { step: 0, likes: new Set(), vibes: new Set(), dislikes: new Set(), texts: [], turns: { likes: 0, dislikes: 0 } });
   const el = document.createElement('div');
@@ -31,7 +31,7 @@ async function show(opts = {}) {
   el.tabIndex = -1;
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-modal', 'true');
-  el.setAttribute('aria-label', 'Tell Marquee what you like');
+  el.setAttribute('aria-label', 'Tell Atlas what you like');
   el.innerHTML = `<div class="lp-top"><span class="lp-mark"><img src="icon.svg" alt="" width="26" height="26"></span>
       <div class="lp-steps" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
       <button class="lp-skip" data-lp="skip">${L.rerun ? 'Close' : 'Skip for now'}</button></div>

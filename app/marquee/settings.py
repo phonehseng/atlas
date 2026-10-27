@@ -1,4 +1,4 @@
-"""Marquee's settings: one JSON file in %APPDATA%\\Marquee. Secrets (Jellyfin token, Seerr session) are
+"""Atlas's settings: one JSON file in %APPDATA%\\Marquee. Secrets (Jellyfin token, Seerr session) are
 encrypted with Windows DPAPI, so only this Windows account can read them."""
 import base64
 import ctypes
@@ -55,7 +55,7 @@ DEFAULTS = {
     "library_folders": [],   # folders of films/shows to play without Jellyfin (scanned into the local catalog)
     "remote": False,         # phone remote (LAN listener, paired by QR code)
     "remote_port": 8737,
-    "mobile": False,         # Marquee Mobile: the phone app (watch on the phone over Tailscale, or remote control)
+    "mobile": False,         # Atlas Mobile: the phone app (watch on the phone over Tailscale, or remote control)
     "mobile_bind": "tailscale",  # where the phone server listens: tailscale (this PC's Tailscale address) | lan+tailscale
     "mobile_max_streams": 2, # phones converting video at the same time (remux/transcode; direct play doesn't count)
     "mobile_quality": "auto",  # default phone quality: auto | original | 1080 | 720 | 480
@@ -96,7 +96,7 @@ DEFAULTS = {
     "update_check": "auto",      # updates (marquee.updater): auto (download in the background, ask to restart) |
                                  # notify (only say a new version is out) | off
     "update_channel": "stable",  # stable | beta (also offers pre-releases)
-    "update_repo": "phonehseng/marquee",  # GitHub owner/repo the releases come from (not settable from the page)
+    "update_repo": "phonehseng/atlas",    # GitHub owner/repo the releases come from (not settable from the page)
     "update_skip": "",           # a version the user chose to skip ("Skip this version")
     "local_api_token": "",       # encrypted: the local API's token for other programs on this PC (docs/local-api.md)
 }

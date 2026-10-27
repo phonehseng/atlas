@@ -1,4 +1,4 @@
-"""The local catalog: Marquee's own copy of the library, so every page and every play works from this PC alone.
+"""The local catalog: Atlas's own copy of the library, so every page and every play works from this PC alone.
 
 Jellyfin is only a background source. A snapshot of all films, shows, seasons and episodes (names, artwork
 references, ratings, genres, cast, file paths, intro/credits segments) is kept in %APPDATA%\\Marquee\\catalog.db and

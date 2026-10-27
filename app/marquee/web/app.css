@@ -1,4 +1,4 @@
-/* Marquee: Clear Home's design system (palette, Google Sans, liquid glass, navy glass pills) turned into a
+/* Atlas: Clear Home's design system (palette, Google Sans, liquid glass, navy glass pills) turned into a
    playful movie browser. Light = Clear Home, dark = "theater". Animations touch transform/opacity only. */
 
 /* ------------------------------------------------------------------ tokens */
@@ -1186,7 +1186,7 @@ a.r-chip:hover { transform: translateY(-2px); background: var(--btn-glass-hover)
   .remote-card { flex-wrap: wrap; }
 }
 
-/* ------------------------------------------------------------------ Settings > Marquee Mobile */
+/* ------------------------------------------------------------------ Settings > Atlas Mobile */
 .mobile-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .mobile-hint { color: #b85d06; }
 .mobile-err { color: var(--rose); }

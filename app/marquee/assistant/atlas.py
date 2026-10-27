@@ -30,8 +30,9 @@ class Asker:
 
     @property
     def name(self):
+        """Who answers: "Atlas" (the app, with its built-in AI) or the provider's name ("LocalAI", "AI")."""
         p = vision.provider()
-        return (p or {}).get("name") or "Atlas"
+        return "Atlas" if not p or p.get("builtin") else p.get("name") or "Atlas"
 
     # ------------------------------------------------------------------ capture
     def capture(self, need_frame=True, pause=False):

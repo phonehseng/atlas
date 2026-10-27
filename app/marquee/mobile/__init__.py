@@ -1,4 +1,4 @@
-"""Marquee Mobile: the phone web app (browse and stream from this PC, or remote-control the PC player).
+"""Atlas Mobile: the phone web app (browse and stream from this PC, or remote-control the PC player).
 
 Parts:
   net     where the phone server listens (Tailscale address by default), `tailscale serve` HTTPS, firewall check

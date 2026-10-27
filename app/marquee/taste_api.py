@@ -1,5 +1,5 @@
 """Routes for the taste profile, the "Is this for you?" fit comment, the Launchpad, Letterboxd import and the
-Ask Marquee chat (a Flask blueprint on the local UI server). Register with:
+Ask Atlas chat (a Flask blueprint on the local UI server). Register with:
 
     from .taste_api import bp as taste_bp; app.register_blueprint(taste_bp)
 
@@ -164,7 +164,7 @@ def onboard_chat():
                 f"Step: {'what they love to watch' if step != 'dislikes' else 'what they cannot stand'}. "
                 f"Turn {turn} of 3. Chips they ticked so far: {', '.join(b.get('picks') or []) or 'none'}.\n"
                 f"They wrote: {text}",
-                "You are Marquee, a movie app meeting a new viewer to learn their taste. Reply with JSON only: "
+                "You are Atlas, a movie app meeting a new viewer to learn their taste. Reply with JSON only: "
                 '{"reply": "one warm, specific sentence reacting to what they said (max 22 words)", '
                 '"question": "one short follow-up question to learn more (max 14 words), or empty if turn 3"}. '
                 "If they are listing things they dislike, just acknowledge you'll steer clear of them (never praise "
@@ -270,7 +270,7 @@ def _ai_comment(fit, facts):
               f"Fit score: {fit['score']}/100 ({fit['verdict']}). Signals: {'; '.join(fit['reasons']) or 'none'}. "
               f"Different from their usual: {'yes' if fit['different'] else 'no'}.")
     text = ai.chat(prompt,
-                   "You are Marquee, a home movie app. In ONE short sentence (max 28 words), tell the viewer whether "
+                   "You are Atlas, a home movie app. In ONE short sentence (max 28 words), tell the viewer whether "
                    "this title suits their taste and how it compares with what they usually watch; say so plainly if "
                    "it's different from their usual, and name one concrete link (a person, a title they loved, a mood) "
                    "when there is one (only titles the profile lists as loved). Second person, honest, warm. No spoilers, no emojis, no quotes, don't start "
@@ -328,7 +328,7 @@ def fit(key):
                 out.update(comment=hit["comment"], source="ai")
         else:
             out["ai_pending"] = True
-    out["engine"] = ai.available()["name"] if out["source"] == "ai" else "Marquee"
+    out["engine"] = ai.available()["name"] if out["source"] == "ai" else "Atlas"
     out["mine"] = taste.my_rating(facts)
     return ok(**out)
 
@@ -412,7 +412,7 @@ def lbx_status():
     return ok(status=letterboxd.status())
 
 
-# ------------------------------------------------------------------ Ask Marquee (chat)
+# ------------------------------------------------------------------ Ask Atlas (chat)
 @bp.get("/api/chat/state")
 def chat_state():
     return ok(mode="classic" if chat.classic() else "ai", engine=chat.engine_label(), ai=_ai_info(),

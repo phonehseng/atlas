@@ -30,7 +30,7 @@ selection*. Unticking something already installed only hides its step.
 **"Update the installer" failed**: the download didn't match the release's checksum or couldn't be saved next
 to the program. Download the new version from the Releases page instead; your install is unaffected.
 
-**Update my stack: "Marquee is open"**: close Marquee (and its tray icon), then run *Update my stack* again.
+**Update my stack: "Atlas is open"**: close Atlas (and its tray icon), then run *Update my stack* again.
 
 **Seerr's build fails (Windows)**: it needs about 4 GB of free memory and 3 GB of disk space. Close other
 programs and run the step again.
@@ -103,18 +103,18 @@ Tasks*). Some apps don't show the button yet; Jellyfin's web page and official a
 
 **Subtitles sit too high or too low**: in the Jellyfin app, *Settings → Subtitles → Vertical position*.
 
-## Marquee
+## Atlas
 
-**Marquee asks for the Jellyfin address**: it was already signed in to another Jellyfin server, so setup left
-its settings alone (the step's log says so). In Marquee: *Settings → Sign out*, then sign in with
+**Atlas asks for the Jellyfin address**: it was already signed in to another Jellyfin server, so setup left
+its settings alone (the step's log says so). In Atlas: *Settings → Sign out*, then sign in with
 `http://localhost:8096`.
 
-**Marquee's "Your stack" page says it can't find the Media Hub**: check that the Media Hub task is running
-(Task Scheduler → *Media Stack* → *Media Hub*). Run the *Marquee* step again to rewrite Marquee's settings
-for this stack (your other Marquee settings are kept).
+**Atlas's "Your stack" page says it can't find the Media Hub**: check that the Media Hub task is running
+(Task Scheduler → *Media Stack* → *Media Hub*). Run the *Atlas* step again to rewrite Atlas's settings
+for this stack (your other Atlas settings are kept).
 
-**Marquee Mobile doesn't load on the phone**: the phone must be on Tailscale; check that the firewall rule
-*Marquee Mobile (Tailscale)* exists (*Windows Defender Firewall → Inbound Rules*) and run the
+**Atlas Mobile doesn't load on the phone**: the phone must be on Tailscale; check that the firewall rule
+*Atlas Mobile (Tailscale)* exists (*Windows Defender Firewall → Inbound Rules*) and run the
 *Phones, TVs & away from home* step again with the firewall box ticked if it doesn't.
 
 ## Access and network

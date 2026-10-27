@@ -1,6 +1,6 @@
-/* Your stack: the Media Hub's dashboard inside Marquee (window.MarqueeStack.mount(page)).
+/* Your stack: the Media Hub's dashboard inside Atlas (window.MarqueeStack.mount(page)).
    The hub keeps doing the work in the background; this page reads it through /api/stack (marquee/stack_api.py) and
-   presses the hub's own buttons. Without a hub it shows Marquee's read-only checks. Needs taste.js (MarqueeKit). */
+   presses the hub's own buttons. Without a hub it shows Atlas's read-only checks. Needs taste.js (MarqueeKit). */
 (() => {
 'use strict';
 const K = () => window.MarqueeKit;
@@ -70,7 +70,7 @@ async function mount(page) {
   page.classList.add('page-stack');
   page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Your stack</span><h1 class="stk-title">Checking your stack…</h1>
       <p class="stk-sub">Asking the Media Hub…</p></div>
-      <div class="stk-head-acts"><button class="btn small ghost" data-sact="ask">${K().icon('sparkle', 15)} Ask Marquee</button>
+      <div class="stk-head-acts"><button class="btn small ghost" data-sact="ask">${K().icon('sparkle', 15)} Ask Atlas</button>
       <button class="btn small ghost" data-sact="refresh">${K().icon('restart', 15)} Refresh</button></div></div>
     <div class="stk-update" hidden></div>
     <div class="stk-body"><div class="stk-grid">${'<div class="skel stk-skel"></div>'.repeat(6)}</div></div>`;
@@ -104,7 +104,7 @@ function draw(d) {
   $('.stk-title').innerHTML = `<span class="stk-dot lv-${LEVEL[s.level] || 'unknown'}" aria-hidden="true"></span>${esc(s.text || '')}`;
   $('.stk-sub').innerHTML = (d.source === 'hub'
     ? `From the Media Hub at <b>${esc(d.hub.url.replace(/^https?:\/\//, ''))}</b>, which keeps checking in the background. `
-    : `Marquee's own read-only checks: no Media Hub was found, so there's no watchdog, request doctor or backups here. `)
+    : `Atlas's own read-only checks: no Media Hub was found, so there's no watchdog, request doctor or backups here. `)
     + `<span class="stk-when">Checked ${esc(ago(d.checked))}.</span>` + (d.hub_error ? ` <span class="stk-err">${esc(d.hub_error)}</span>` : '');
   const keep = new Set($$('details[data-sec]').filter(x => x.open).map(x => x.dataset.sec));
   const sections = [
@@ -156,10 +156,10 @@ function doctorHTML(d) {
   const doc = d.doctor;
   const hub = d.source === 'hub';
   const head = `<h2>${icon('plus')} Requests on the way</h2>`;
-  if (!doc) return `<section class="panel glass" style="--i:2">${head}<p>${hub ? 'The request doctor hasn’t written a report yet.' : 'Seerr isn’t connected, so Marquee can’t list requests.'}</p></section>`;
+  if (!doc) return `<section class="panel glass" style="--i:2">${head}<p>${hub ? 'The request doctor hasn’t written a report yet.' : 'Seerr isn’t connected, so Atlas can’t list requests.'}</p></section>`;
   const items = doc.items || [];
   return `<section class="panel glass stk-doc" style="--i:2">${head}
-    <p>${doc.local ? 'What Marquee can see from Seerr and the download queue.' : `Why each request isn't here yet, from the request doctor (${esc(ago(doc.time))}${doc.running ? ', checking again now' : ''}).`}</p>
+    <p>${doc.local ? 'What Atlas can see from Seerr and the download queue.' : `Why each request isn't here yet, from the request doctor (${esc(ago(doc.time))}${doc.running ? ', checking again now' : ''}).`}</p>
     ${items.length ? `<ul class="stk-list">${items.map(i => `<li><div class="grow"><b>${esc(i.title)}${i.year ? ` <span class="stk-y">(${esc(i.year)})</span>` : ''}</b>
       <span>${esc(i.reason || '')}</span>${(i.fixed || []).length ? `<span class="stk-fixed">${icon('check', 12)} ${esc(i.fixed.join('; '))}</span>` : ''}</div>
       <span class="stk-tag st-${esc(i.state)}">${esc(DOC_STATE[i.state] || i.state)}</span></li>`).join('')}</ul>` : '<p class="stk-none">Every request has arrived.</p>'}
@@ -261,15 +261,15 @@ function phoneHTML(d) {
       <div class="stk-topic"><code class="stk-secret" data-sact="reveal" title="Click to show" tabindex="0">${esc(ph.topic)}</code><button class="stk-mini" data-sact="copy" data-v="${esc(ph.topic)}">Copy</button></div></div>
       <div class="stk-acts"><button class="btn small ghost" data-sact="phone-test">${icon('phone', 14)} Send a test</button></div>` : ''}
     ${ph.can_notify !== false ? `<div class="set"><div class="lbl"><b>Desktop notifications on the server</b></div><button class="switch" role="switch" aria-checked="${!!ph.notifications}" data-sact="notif-toggle" aria-label="Desktop notifications"></button></div>` : ''}
-    ${d.hub && (d.hub.features || []).includes('info') ? `<div class="set"><div class="lbl"><b>Media Hub web page</b><span>With Marquee, the hub's own page can just point here. Its API and background jobs keep running either way.</span></div>
-      <div class="pill-toggle" role="group" aria-label="Media Hub web page"><button data-sact="hub-ui" data-v="marquee" aria-pressed="${ph.ui === 'marquee'}">Point to Marquee</button><button data-sact="hub-ui" data-v="hub" aria-pressed="${ph.ui !== 'marquee'}">Full dashboard</button></div></div>` : ''}</section>`;
+    ${d.hub && (d.hub.features || []).includes('info') ? `<div class="set"><div class="lbl"><b>Media Hub web page</b><span>With Atlas, the hub's own page can just point here. Its API and background jobs keep running either way.</span></div>
+      <div class="pill-toggle" role="group" aria-label="Media Hub web page"><button data-sact="hub-ui" data-v="marquee" aria-pressed="${ph.ui === 'marquee'}">Point to Atlas</button><button data-sact="hub-ui" data-v="hub" aria-pressed="${ph.ui !== 'marquee'}">Full dashboard</button></div></div>` : ''}</section>`;
 }
 
 function connectHTML(d) {
   const { esc, icon } = K();
   const s = d.settings || {};
   return `<section class="panel glass stk-connect" style="--i:9"><h2>${icon('gear')} Connection</h2>
-    <p>${s.found_hub ? `Using the Media Hub at ${esc(s.found_hub)}${s.hub_configured ? '' : ' (found by itself)'}.` : 'No Media Hub found. Marquee looks at this PC (port 8585) unless you give it an address.'}</p>
+    <p>${s.found_hub ? `Using the Media Hub at ${esc(s.found_hub)}${s.hub_configured ? '' : ' (found by itself)'}.` : 'No Media Hub found. Atlas looks at this PC (port 8585) unless you give it an address.'}</p>
     <form class="fields stk-form" data-sform>
       <label>Media Hub address<input class="input wide" name="hub_url" value="${esc(s.hub_url || '')}" placeholder="http://127.0.0.1:8585" spellcheck="false"></label>
       <label>Stack settings file (mediastack.json)<input class="input wide" name="stack_config" value="${esc(s.stack_config || '')}" placeholder="C:\\MediaStack\\config\\shared\\mediastack.json" spellcheck="false"></label>

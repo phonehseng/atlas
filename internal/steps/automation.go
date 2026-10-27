@@ -314,7 +314,7 @@ func runHub(c *Ctx) error {
 		c.J.OK("Every app's settings are backed up nightly at 3:30 to %s", filepath.Join(st.Root, "backups"))
 	}
 	hubHooks(c)
-	// Marquee is the dashboard only once it's installed (its step sets "marquee").
+	// Atlas is the dashboard only once it's installed (its step sets "marquee").
 	if !st.IsDeployed("marquee") || StackApp(st) != "marquee" {
 		if err := setHubSettings(st, map[string]any{"ui": "hub"}); err != nil {
 			c.J.Warn("hub.json: %v", err)

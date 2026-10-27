@@ -47,9 +47,9 @@ var Components = []*Component{
 		What:   "Your own streaming service: watch your films and shows on phones, TVs and browsers, at home or away.", Legacy: true},
 	{ID: "introskipper", Name: "Intro Skipper", Group: "Watch", DiskMB: 5, Needs: []string{"jellyfin"}, Minimal: false, Recommended: true, Legacy: true,
 		What: "Adds a Netflix-style \"Skip Intro\" button to episodes in Jellyfin."},
-	{ID: "marquee", Name: "Marquee", Group: "Watch", OS: "windows", DiskMB: 250, RAMMB: 400, Steps: []string{"marquee"},
+	{ID: "marquee", Name: "Atlas", Group: "Watch", OS: "windows", DiskMB: 250, RAMMB: 400, Steps: []string{"marquee"},
 		Needs: []string{"jellyfin", "seerr"}, Recommended: true,
-		Why:  map[string]string{"jellyfin": "Marquee plays your Jellyfin library", "seerr": "Marquee's requests go through Seerr"},
+		Why:  map[string]string{"jellyfin": "Atlas plays your Jellyfin library", "seerr": "Atlas's requests go through Seerr"},
 		What: "A Netflix-style player for this PC with requests and your stack's dashboard in one app; plays your files directly."},
 
 	// Find & organise
@@ -298,7 +298,7 @@ func runChoose(c *Ctx) error {
 	}
 	switch StackApp(st) {
 	case "marquee":
-		c.J.OK("Stack app: Marquee (the Media Hub keeps working in the background)")
+		c.J.OK("Stack app: Atlas (the Media Hub keeps working in the background)")
 	case "hub":
 		c.J.OK("Stack app: the Media Hub in your browser, with Jellyfin as the player")
 	}

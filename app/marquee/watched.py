@@ -322,7 +322,7 @@ def mark(b):
 
 
 def _taste_source(source):
-    return {"atlas": "Atlas", "chat": "chat", "letterboxd": "letterboxd"}.get(source, "marked watched")
+    return {"atlas": "LocalAI", "chat": "chat", "letterboxd": "letterboxd"}.get(source, "marked watched")
 
 
 def unmark(b):

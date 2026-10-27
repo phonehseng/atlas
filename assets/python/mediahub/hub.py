@@ -84,7 +84,7 @@ def allowed():
 
 
 def token_ok():
-    """Marquee on another computer (or talking to a Docker hub) sends the hub's API token instead of signing in."""
+    """Atlas on another computer (or talking to a Docker hub) sends the hub's API token instead of signing in."""
     tok = hub_settings().get("api_token")
     got = request.headers.get("X-Hub-Token") or ""
     return bool(tok and got and secrets.compare_digest(tok, got))
@@ -681,7 +681,7 @@ _db_lock = threading.Lock()
 
 
 def hub_settings():
-    # "ui": "hub" (this page is the dashboard) or "marquee" (Marquee's "Your stack" page is; this page only says so,
+    # "ui": "hub" (this page is the dashboard) or "marquee" (Atlas's "Your stack" page is; this page only says so,
     # the API and every background job keep running exactly the same).
     defaults = {"notifications": not DOCKER, "watchdog": True, "phone": False, "ui": "hub"}
     try:
@@ -911,8 +911,8 @@ def settings_route():
     return jsonify({**{k: v for k, v in s.items() if k != "api_token"}, "can_notify": not DOCKER})
 
 
-# --------------------------------------------------------------------------- Marquee (the stack's app)
-# Marquee's "Your stack" page is a second face for this hub: it reads the JSON routes below and presses the same
+# --------------------------------------------------------------------------- Atlas (the stack's app)
+# Atlas's "Your stack" page is a second face for this hub: it reads the JSON routes below and presses the same
 # actions. Nothing is duplicated there; the hub keeps doing the work (watchdog, VPN check, webhooks, Linux jobs).
 API_VERSION = 2
 FEATURES = ["status", "events", "incidents", "requests", "backups", "restore", "actions", "settings", "phone",
@@ -921,7 +921,7 @@ FEATURES = ["status", "events", "incidents", "requests", "backups", "restore", "
 
 @app.get("/api/info")
 def info():
-    """What this hub is and can do, so a client (Marquee) knows which routes exist."""
+    """What this hub is and can do, so a client (Atlas) knows which routes exist."""
     s = hub_settings()
     return jsonify(ok=True, app="mediahub", api=API_VERSION, features=FEATURES, ui=s.get("ui", "hub"),
                    name=cfg().get("name"), platform=cfg().get("platform"), docker=DOCKER,
@@ -940,7 +940,7 @@ def health_report():
 
 @app.get("/api/token")
 def api_token():
-    """The token Marquee on another computer sends as X-Hub-Token (made on first use). Only reachable from this
+    """The token Atlas on another computer sends as X-Hub-Token (made on first use). Only reachable from this
     PC or by a signed-in administrator (see guard)."""
     s = hub_settings()
     if not s.get("api_token"):
@@ -1327,8 +1327,8 @@ MARQUEE_NOTE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   background:#fff;border:1px solid var(--line);box-shadow:0 2px 8px #14203f12}
  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#1f9a63;box-shadow:0 0 0 4px #1f9a6322}
 </style></head><body><div class="card">
-<h1>This stack is managed in Marquee</h1>
-<p>Open the Marquee app and choose <b>Your stack</b> for status, problems, requests, downloads and backups.</p>
+<h1>This stack is managed in Atlas</h1>
+<p>Open the Atlas app and choose <b>Your stack</b> for status, problems, requests, downloads and backups.</p>
 <p><span class="dot"></span>The Media Hub keeps running in the background: health checks, the watchdog, alerts and backups.</p>
 <a href="/?full=1">Open the Media Hub anyway</a>
 </div></body></html>"""

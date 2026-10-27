@@ -6,7 +6,7 @@ token (/c/<token>/...), which is valid for that one cast and dropped when it end
 from outside private address ranges are refused. Responses allow any origin (CORS): the Chromecast receiver is a
 web page on the TV and fetches the playlist, segments and subtitles with XHR.
 
-The media itself comes from Marquee Mobile's streaming engine (marquee.mobile.stream sessions), served by the same
+The media itself comes from Atlas Mobile's streaming engine (marquee.mobile.stream sessions), served by the same
 helpers the phone app uses (marquee.mobile.api.serve_*).
 """
 import ipaddress
@@ -66,7 +66,7 @@ def ensure():
             return base_url()
         _stop_locked()
         try:
-            srv = create_server(capp, host=host, port=port, threads=8, ident="Marquee", channel_timeout=120,
+            srv = create_server(capp, host=host, port=port, threads=8, ident="Atlas", channel_timeout=120,
                                 connection_limit=50, outbuf_high_watermark=8 << 20)
         except OSError as e:
             last_error = f"Port {port} on {host} is in use by another program ({e.strerror or e})"

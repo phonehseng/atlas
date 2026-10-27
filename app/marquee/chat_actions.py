@@ -1,4 +1,4 @@
-"""Ask Marquee, doing things: "pull up Dune", "play the next episode of South Park", "request seasons 5-8 of Doctor
+"""Ask Atlas, doing things: "pull up Dune", "play the next episode of South Park", "request seasons 5-8 of Doctor
 Who", "add Fury to my list", "what's downloading", "when will Dune: Part Three be ready", "why isn't X here yet",
 "is everything ok", "why is Sonarr not working", "is the VPN on".
 
@@ -11,7 +11,7 @@ What it never does by itself: requests (a confirmation card; only the Request bu
 /api/storage/request the request sheet uses), marking watched (a confirmation card), deleting (it opens the existing
 hold-to-delete sheet), restarting a service (a Fix button the person presses, then confirms).
 
-Stack answers come from marquee.stack (the Media Hub's own checks, or Marquee's read-only checks without a hub) and
+Stack answers come from marquee.stack (the Media Hub's own checks, or Atlas's read-only checks without a hub) and
 never claim a status that wasn't reported. Events go to the page as chat.stream() events: "action" {card} and
 "ui" {do, ...} besides the usual delta / cards / done."""
 import difflib
@@ -29,10 +29,10 @@ NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 
        "eighteen": 18, "nineteen": 19, "twenty": 20, "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
        "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10, "eleventh": 11, "twelfth": 12}
 N = r"(?:\d{1,2}|" + "|".join(sorted(NUM, key=len, reverse=True)) + r")"
-FILLER = re.compile(r"^(?:(?:hey|hi|ok|okay|yo)\s+)?(?:marquee[\s,]+)?(?:(?:please|pls|can you|could you|would you|will you|"
+FILLER = re.compile(r"^(?:(?:hey|hi|ok|okay|yo)\s+)?(?:atlas[\s,]+)?(?:(?:please|pls|can you|could you|would you|will you|"
                     r"can u|i want to|i wanna|i'd like to|i would like to|let's|lets|just|go ahead and|now|quickly|"
                     r"kindly)\s+)+", re.I)
-TAIL = re.compile(r"(?:\s+(?:for me|please|pls|thanks|thank you|now|right now|on marquee|in marquee|real quick))+\s*$", re.I)
+TAIL = re.compile(r"(?:\s+(?:for me|please|pls|thanks|thank you|now|right now|on atlas|in atlas|real quick))+\s*$", re.I)
 VAGUE = re.compile(r"^(?:something|anything|some|a (?:movie|film|show|series)|an? (?:good|funny|scary|new)|me (?:something|"
                    r"a)|what|whatever|stuff|more)\b", re.I)
 SERVICES = {
@@ -824,7 +824,7 @@ def run(intent, message, hist, pick=None, llm=False):
         yield rep.say(f"Something went wrong doing that ({type(e).__name__}). Nothing was changed.")
     if not rep.text:
         yield rep.say("Done.")
-    engine = chat.engine_label() if intent.get("by") == "model" or rep.used_llm else "Marquee (rules)"
+    engine = chat.engine_label() if intent.get("by") == "model" or rep.used_llm else "Atlas (rules)"
     chat._append({"role": "user", "text": message, "at": now},
                  {"role": "assistant", "text": rep.text, "cards": rep.cards, "actions": rep.actions,
                   "subject": rep.subject, "intent": {k: v for k, v in intent.items() if k != "by"},
@@ -1071,7 +1071,7 @@ def _watched(intent, rep, how, r):
         yield rep.say(f"{label} isn't marked watched.")
         return
     if on:
-        yield rep.say(f"Mark {what} as watched? It isn't in your library, so Marquee keeps it as watched on this PC "
+        yield rep.say(f"Mark {what} as watched? It isn't in your library, so Atlas keeps it as watched on this PC "
                       f"and your taste profile learns from it. Tap to confirm.")
     else:
         yield rep.say(f"Mark {what} as unwatched? Tap to confirm.")
@@ -1188,7 +1188,7 @@ def _doctor_answer(intent, rep, pick):
             lines.append("Some of them are stalled (nobody is sharing them right now).")
     if doc:
         who = "the Media Hub's request doctor" if snap.get("source") == "hub" and not (snap.get("doctor") or {}).get("local") \
-            else "what Marquee can see"
+            else "what Atlas can see"
         lines.append(f"According to {who} ({_ago((snap.get('doctor') or {}).get('time'))}): {doc.get('reason') or doc.get('state')}.")
         for f in doc.get("fixed") or []:
             lines.append(f"It already fixed something: {f}.")
@@ -1283,13 +1283,13 @@ def _facts(snap, intent):
                         lines.append(f"Address at home: {s['home']}")
         else:
             lines.append("Remote access (Tailscale) status: not reported" + (" by this hub." if snap.get("hub") else
-                                                                             " (Marquee can't check it without the Media Hub)."))
+                                                                             " (Atlas can't check it without the Media Hub)."))
         probs = [p for p in snap.get("problems") or [] if p["app"] == (svc or "jellyfin")]
         return lines, probs
     if topic == "service" and svc and svc not in ("all", "hub"):
         a = next((x for x in apps if x["id"] == svc), None)
         if not a:
-            lines.append(f"{svc}: not part of the checks Marquee has (not installed, or not known here).")
+            lines.append(f"{svc}: not part of the checks Atlas has (not installed, or not known here).")
             return lines, []
         lines.append(f"{a['name']}: status {a['status']}" + (f", version {a['version']}" if a.get("version") else "") +
                      (f", answered in {a['ms']} ms" if a.get("ms") is not None else "") + f". {a.get('summary') or ''}")
@@ -1335,7 +1335,7 @@ def _facts(snap, intent):
     return lines, [p for p in snap.get("problems") or [] if p["level"] in ("error", "warn")]
 
 
-STACK_SYSTEM = """You are Marquee, a home media app, explaining the state of the person's media server.
+STACK_SYSTEM = """You are Atlas, a home media app, explaining the state of the person's media server.
 Use ONLY the facts given (they come from the server's own health checks). Never guess a status that isn't listed;
 if something wasn't checked, say so. Explain in plain, friendly words what is wrong (if anything), why it matters
 for watching or downloading, and what they can do. Mention a Fix button only when one is listed (never mention that there is none). No markdown headings,
@@ -1354,7 +1354,7 @@ def _template(intent, snap, lines, probs):
         if s.get("level") == "ok":
             out = f"Everything's running: {s.get('apps')} apps checked, no problems reported."
         elif s.get("level") == "unknown":
-            out = "I don't know any part of your stack yet. Point Marquee at the Media Hub in Your stack."
+            out = "I don't know any part of your stack yet. Point Atlas at the Media Hub in Your stack."
         else:
             out = s.get("text", "") + "."
             names = list(dict.fromkeys(p["name"] for p in probs))
@@ -1384,7 +1384,7 @@ def _stack_answer(intent, rep, llm):
     snap = _snap()
     lines, probs = _facts(snap, intent)
     src = ("from the Media Hub's checks" if snap.get("source") == "hub" else
-           "from Marquee's own read-only checks (no Media Hub found)")
+           "from Atlas's own read-only checks (no Media Hub found)")
     fixes = []
     seen = set()
     for p in probs:

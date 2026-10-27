@@ -103,7 +103,7 @@ def api_cmd():
     except CastError as e:
         return fail(e, 409)
     except NotImplementedError:
-        return fail("This TV doesn't take that from Marquee", 409)
+        return fail("This TV doesn't take that from Atlas", 409)
     except Exception as e:
         print("cast command failed:", b.get("action"), type(e).__name__, e)
         return fail(f"The TV didn't take that ({type(e).__name__})", 502)

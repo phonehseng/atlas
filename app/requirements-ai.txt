@@ -1,5 +1,5 @@
 # Optional: the media index (scene search, sensitive-content ranges, chapter and intro detection).
-# Without these, Marquee works as usual and /api/index/install can fetch the same pinned wheels itself.
+# Without these, Atlas works as usual and /api/index/install can fetch the same pinned wheels itself.
 numpy==2.5.4
 onnxruntime-directml==1.24.4
 tokenizers==0.23.3
@@ -12,5 +12,5 @@ faster-whisper>=1.0
 nvidia-cublas-cu12
 nvidia-cudnn-cu12==9.*
 nvidia-cuda-nvrtc-cu12
-# Optional: wake-word spotter (the default "Hey Marquee" detection needs nothing extra)
+# Optional: wake-word spotter (the default "Hey Atlas" detection needs nothing extra)
 # openwakeword>=0.6

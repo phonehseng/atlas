@@ -38,7 +38,7 @@ func remoteFields(c *Ctx) []Field {
 	if !c.St.Docker() {
 		label := "Let phones and TVs connect through Windows Firewall (Jellyfin, Seerr, jfa-go, Media Hub)"
 		if marqueeWanted(c.St) {
-			label = "Let phones and TVs connect through Windows Firewall (Jellyfin, Seerr, jfa-go, Media Hub, and Marquee Mobile over Tailscale)"
+			label = "Let phones and TVs connect through Windows Firewall (Jellyfin, Seerr, jfa-go, Media Hub, and Atlas Mobile over Tailscale)"
 		}
 		f = append(f, Field{Name: "firewall", Type: "checkbox", Default: "true", Label: label})
 	}
@@ -103,37 +103,52 @@ if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw ("Tailscale's installer
 `, psQuote(args), psQuote(logFile))
 }
 
-// MarqueeRuleName is the Windows Firewall rule that lets phones reach Marquee Mobile over Tailscale.
-func MarqueeRuleName(st *core.Stack) string {
+// MarqueeRuleName is the Windows Firewall rule that lets phones reach Atlas Mobile over Tailscale.
+func MarqueeRuleName(st *core.Stack) string { return mobileRuleName(st, "Atlas") }
+
+// LegacyRuleName is that rule's name from before the rename (Marquee Mobile); it's replaced when found.
+func LegacyRuleName(st *core.Stack) string { return mobileRuleName(st, "Marquee") }
+
+func mobileRuleName(st *core.Stack, app string) string {
 	if st.Name != "Media Stack" {
-		return "Marquee Mobile (Tailscale) (" + st.Name + ")"
+		return app + " Mobile (Tailscale) (" + st.Name + ")"
 	}
-	return "Marquee Mobile (Tailscale)"
+	return app + " Mobile (Tailscale)"
 }
 
-// MarqueeMobilePort is Marquee Mobile's port (Marquee's remote_port default).
+// MarqueeMobilePort is Atlas Mobile's port (Atlas's remote_port default).
 const MarqueeMobilePort = 8737
 
+// firewallRule writes the PowerShell that (re)creates one inbound rule.
+func firewallRule(b *strings.Builder, name string, port int, profile, program string) {
+	fmt.Fprintf(b, "Get-NetFirewallRule -DisplayName %s -ErrorAction SilentlyContinue | Remove-NetFirewallRule\n", psQuote(name))
+	prog := ""
+	if program != "" {
+		prog = " -Program " + psQuote(program)
+	}
+	fmt.Fprintf(b, "New-NetFirewallRule -DisplayName %s -Direction Inbound -Protocol TCP -LocalPort %d%s -Action Allow -Profile %s | Out-Null\n",
+		psQuote(name), port, prog, profile)
+}
+
+// marqueeRuleScript (re)creates Atlas Mobile's rule and removes the one from before the rename.
+func marqueeRuleScript(st *core.Stack) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Get-NetFirewallRule -DisplayName %s -ErrorAction SilentlyContinue | Remove-NetFirewallRule\n", psQuote(LegacyRuleName(st)))
+	firewallRule(&b, MarqueeRuleName(st), MarqueeMobilePort, "Private", MarqueeExe(st))
+	return b.String()
+}
+
 // FirewallScript adds the inbound rules for phones and TVs (run elevated). Tailscale's network counts as
-// Private, so Marquee Mobile's rule is Private only, and only for Marquee.exe.
+// Private, so Atlas Mobile's rule is Private only, and only for Atlas.exe.
 func FirewallScript(st *core.Stack) string {
 	var b strings.Builder
-	rule := func(name string, port int, profile, program string) {
-		fmt.Fprintf(&b, "Get-NetFirewallRule -DisplayName %s -ErrorAction SilentlyContinue | Remove-NetFirewallRule\n", psQuote(name))
-		prog := ""
-		if program != "" {
-			prog = " -Program " + psQuote(program)
-		}
-		fmt.Fprintf(&b, "New-NetFirewallRule -DisplayName %s -Direction Inbound -Protocol TCP -LocalPort %d%s -Action Allow -Profile %s | Out-Null\n",
-			psQuote(name), port, prog, profile)
-	}
 	for _, r := range []struct{ id, profile string }{{"jellyfin", "Any"}, {"seerr", "Any"}, {"jfago", "Any"}, {"hub", "Private"}} {
 		if st.IsDeployed(r.id) {
-			rule(fmt.Sprintf("%s - %s", st.Name, platform.Get(r.id).Name), st.Port(r.id), r.profile, "")
+			firewallRule(&b, fmt.Sprintf("%s - %s", st.Name, platform.Get(r.id).Name), st.Port(r.id), r.profile, "")
 		}
 	}
 	if marqueeWanted(st) {
-		rule(MarqueeRuleName(st), MarqueeMobilePort, "Private", MarqueeExe(st))
+		b.WriteString(marqueeRuleScript(st))
 	}
 	return b.String()
 }
@@ -168,7 +183,7 @@ func runRemote(c *Ctx) error {
 		if c.In["firewall"] == "true" {
 			c.J.OK("Windows Firewall lets phones and TVs reach Jellyfin, Seerr and jfa-go (and the Media Hub over Tailscale)")
 			if marqueeWanted(st) {
-				c.J.OK("Windows Firewall rule %q: Marquee Mobile (port %d) on private networks, which includes Tailscale",
+				c.J.OK("Windows Firewall rule %q: Atlas Mobile (port %d) on private networks, which includes Tailscale",
 					MarqueeRuleName(st), MarqueeMobilePort)
 			}
 		}

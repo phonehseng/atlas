@@ -30,6 +30,9 @@ func Unprotect([]byte) ([]byte, error) { return nil, errors.New("only on Windows
 // ProgramsDir is Windows-only.
 func ProgramsDir() string { return "" }
 
+// FirewallRuleExists is Windows-only.
+func FirewallRuleExists(string) bool { return false }
+
 // Shortcut describes a Windows .lnk file.
 type Shortcut struct {
 	Target, Args, WorkDir, Icon, Description string

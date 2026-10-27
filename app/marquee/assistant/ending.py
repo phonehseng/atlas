@@ -494,11 +494,11 @@ def _look_at_end(item, credits_at):
 
 # ------------------------------------------------------------------ how the ending was received (optional)
 def web_search_on():
-    """Setting "ai_web_search": default on with Atlas on this PC, off with a third-party key."""
+    """Setting "ai_web_search": default on with the LocalAI assistant, off with a third-party key."""
     val = settings.load().get("ai_web_search")
     if val is None:
         p = llm.provider()
-        return bool(p and p.get("name") == "Atlas")
+        return bool(p and p.get("kind") == "atlas")
     return bool(val)
 
 

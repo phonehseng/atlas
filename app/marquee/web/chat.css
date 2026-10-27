@@ -1,4 +1,4 @@
-/* Ask Marquee (chat page) and the Classic finder. Liquid-glass bubbles on app.css' tokens; title cards under each
+/* Ask Atlas (chat page) and the Classic finder. Liquid-glass bubbles on app.css' tokens; title cards under each
    answer like ClearHome's listings under its chat bubble. */
 .page-chat { padding: 0 var(--gutter); }
 .chat-wrap { max-width: 920px; margin: 0 auto; }

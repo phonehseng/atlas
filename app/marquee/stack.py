@@ -1,15 +1,15 @@
-"""Your stack: the media stack (Jellyfin, Seerr, Sonarr, Radarr, Prowlarr, qBittorrent...) as Marquee sees it.
+"""Your stack: the media stack (Jellyfin, Seerr, Sonarr, Radarr, Prowlarr, qBittorrent...) as Atlas sees it.
 
-Marquee is the stack's app, not its caretaker. The Media Hub (mediahub/hub.py from Media Stack Setup) keeps doing
+Atlas is the stack's app, not its caretaker. The Media Hub (mediahub/hub.py from Media Stack Setup) keeps doing
 the work headless: the watchdog, the VPN leak check, webhooks, the hourly health check and nightly backups (scheduled
 tasks on Windows, the hub container on Linux). This module only reads the hub's JSON API and presses the hub's own
 buttons (restart an app, re-run the request doctor, back up now, restore). Nothing here monitors in the background.
 
 Where the hub is: settings "hub_url", else "stack_config" (<root>/config/shared/mediastack.json, written into
-Marquee's settings by the installer) -> apps.hub.url, else a quick look at http://127.0.0.1:8585 (the default port).
+Atlas's settings by the installer) -> apps.hub.url, else a quick look at http://127.0.0.1:8585 (the default port).
 A hub on another computer wants its token (settings "hub_token", GET /api/token on the hub).
 
-Without a hub, Marquee still answers read-only: it pings each service it knows (mediastack.json, else its own
+Without a hub, Atlas still answers read-only: it pings each service it knows (mediastack.json, else its own
 settings), asks Seerr, Radarr/Sonarr and qBittorrent for their status, health and queue, and reads the disks. It
 never invents a status: anything it couldn't check is "unknown"."""
 import json
@@ -31,7 +31,7 @@ _mem = {}
 _lock = threading.Lock()
 _pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="stack")
 LEVEL_ORDER = {"error": 0, "down": 0, "warn": 1, "setup": 2, "unknown": 3, "ok": 4}
-# Hub actions Marquee may press, with what the button says and whether it asks first.
+# Hub actions Atlas may press, with what the button says and whether it asks first.
 ACTIONS = {
     "restart": ("Restart {name}", True),
     "retry-imports": ("Retry failed imports", False),
@@ -95,14 +95,14 @@ class Hub:
         if r.status_code == 404:
             raise LookupError(path)
         if r.status_code in (401, 403):
-            raise PermissionError("The Media Hub refused Marquee (it needs the hub's token for a hub on another computer)")
+            raise PermissionError("The Media Hub refused Atlas (it needs the hub's token for a hub on another computer)")
         r.raise_for_status()
         return r.json()
 
     def post(self, path, body=None, timeout=30, **params):
         r = self.s.post(self.base + path, json=body or {}, params=params or None, timeout=timeout)
         if r.status_code in (401, 403):
-            raise PermissionError("The Media Hub refused Marquee (it needs the hub's token for a hub on another computer)")
+            raise PermissionError("The Media Hub refused Atlas (it needs the hub's token for a hub on another computer)")
         try:
             data = r.json()
         except ValueError:
@@ -298,7 +298,7 @@ def _from_hub(h):
 
 # ------------------------------------------------------------------ without a hub: read-only checks
 def _services(app):
-    """id -> {name, role, url, key} from mediastack.json, else from Marquee's own settings."""
+    """id -> {name, role, url, key} from mediastack.json, else from Atlas's own settings."""
     cfg = stack_config()
     out = {}
     if cfg:
@@ -354,7 +354,7 @@ def _check_one(aid, svc):
         elif aid == "qbittorrent":
             r = requests.get(base + "/api/v2/app/version", timeout=4)
             if r.status_code == 403:
-                res["summary"] = "Answering (Marquee can't read it without its login)"
+                res["summary"] = "Answering (Atlas can't read it without its login)"
             else:
                 res["version"] = r.text.strip()
                 tr = requests.get(base + "/api/v2/transfer/info", timeout=4).json()
@@ -475,7 +475,7 @@ def _local_doctor(app, downloads):
         elif m.get("status") == 4:
             state, reason = "partial", "partly in your library; nothing for it is downloading right now"
         else:
-            state, reason = "searching", ("not downloading right now. Marquee can't see why without the Media Hub "
+            state, reason = "searching", ("not downloading right now. Atlas can't see why without the Media Hub "
                                           "(its request doctor checks the indexers).")
         items.append({"key": f"{kind}:{m.get('tmdbId')}", "type": kind, "tmdb": m.get("tmdbId"), "title": title,
                       "year": int(date[:4]) if date[:4].isdigit() else None, "state": state, "reason": reason,
@@ -550,7 +550,7 @@ def _summarise(snap):
     elif warns:
         level, text = "warn", f"Running, with {len(warns)} warning{'s' if len(warns) != 1 else ''}"
     elif not snap["apps"]:
-        level, text = "unknown", "Marquee doesn't know any part of your stack yet"
+        level, text = "unknown", "Atlas doesn't know any part of your stack yet"
     else:
         level, text = "ok", "Everything's running"
     snap["problems"] = probs
@@ -591,7 +591,7 @@ def action(app, verb, arg=""):
         raise ValueError("Unknown action")
     h = hub()
     if not h:
-        raise PermissionError("This needs the Media Hub (it does the work in the background), and Marquee can't "
+        raise PermissionError("This needs the Media Hub (it does the work in the background), and Atlas can't "
                               "find it. Set its address in Your stack > Settings.")
     if arg and not re.fullmatch(r"[a-z0-9_-]{1,40}", arg):
         raise ValueError("Unknown app")
@@ -617,7 +617,7 @@ def phone(app, changes=None, test=False):
     """ntfy phone alerts (the hub sends them). changes: {phone, notifications, watchdog, ntfy_server, new_topic, ui}."""
     h = hub()
     if not h:
-        raise PermissionError("Phone alerts are sent by the Media Hub, and Marquee can't find it")
+        raise PermissionError("Phone alerts are sent by the Media Hub, and Atlas can't find it")
     if test:
         res = h.post("/api/phone/test")
         if not res.get("ok"):

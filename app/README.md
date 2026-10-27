@@ -1,6 +1,6 @@
-# Marquee (the app)
+# Atlas (the app)
 
-Marquee is a Windows desktop player for your own films and shows: a Netflix-style front end on a
+Atlas is a Windows desktop player for your own films and shows: a Netflix-style front end on a
 [Jellyfin](https://jellyfin.org) library that plays local files directly with [mpv](https://mpv.io), requests
 through [Seerr](https://github.com/seerr-team/seerr), and shows the media stack's dashboard. What it does is
 described in the [main README](../README.md); this page is about installing it on its own and working on it.
@@ -8,9 +8,9 @@ described in the [main README](../README.md); this page is about installing it o
 ## Install
 
 - **With the whole stack**: run `MediaStackSetup.exe` from the [Releases](../../../releases) page and keep
-  Marquee ticked on *Choose your stack*. It's installed, given shortcuts and connected for you.
-- **On its own**, for an existing Jellyfin server: download `Marquee-windows-x64.zip`, unzip it anywhere you can
-  write to (so it can update itself) and run `Marquee.exe`. Sign in with your Jellyfin address and account, and
+  Atlas ticked on *Choose your stack*. It's installed, given shortcuts and connected for you.
+- **On its own**, for an existing Jellyfin server: download `Atlas-windows-x64.zip`, unzip it anywhere you can
+  write to (so it can update itself) and run `Atlas.exe`. Sign in with your Jellyfin address and account, and
   your Seerr address if you use it.
 
 Requirements: Windows 10 or 11 (64-bit) with Microsoft Edge WebView2 (Windows 11 has it). For RTX Super
@@ -19,7 +19,7 @@ Resolution, an NVIDIA RTX GPU with *RTX Video Enhancement* available in the NVID
 Settings live in `%APPDATA%\Marquee`; your Jellyfin token, Seerr session and keys are encrypted with Windows
 DPAPI (only your Windows account can read them). Updates replace the program folder and never touch them.
 
-Other programs on this PC (such as the Atlas assistant) can mark titles watched through a small token-protected
+Other programs on this PC (such as the separate LocalAI assistant) can mark titles watched through a small token-protected
 local API; see [docs/local-api.md](docs/local-api.md).
 
 ## Keyboard (player)
@@ -40,7 +40,7 @@ local API; see [docs/local-api.md](docs/local-api.md).
 | B | bookmark (or undo a scene jump) |
 | X | clip tool (I / O set in and out, Enter adds a slice) |
 | A | Ask Atlas: pauses and asks about the picture |
-| F8 (held) | talk to Marquee (when voice is on) |
+| F8 (held) | talk to Atlas (when voice is on) |
 | Hold the mouse on the picture | 2x while held |
 | Esc / Backspace | close a menu / back to browsing |
 
@@ -61,9 +61,9 @@ video plays unless you ask it something. **Classic** mode (Settings > AI > Off) 
 ## Sharing
 
 **Share** uploads a film, episode or clip to your own Google Drive and gives you a private link: only people who
-have it can open it, it isn't searchable, and you can make it expire, stop sharing or delete it from Marquee.
+have it can open it, it isn't searchable, and you can make it expire, stop sharing or delete it from Atlas.
 It needs a free Google OAuth client of your own (about 5 minutes, once): see
-[docs/google-drive.md](docs/google-drive.md). Marquee only gets access to the files it uploads.
+[docs/google-drive.md](docs/google-drive.md). Atlas only gets access to the files it uploads.
 
 You are responsible for having the rights to anything you share. Google may limit or remove files it considers
 copyrighted, and may temporarily block downloads of a file that many people open ("download quota exceeded").
@@ -77,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File tools\get_mpv.ps1   # libmpv into vendo
 .venv\Scripts\python -m marquee
 ```
 
-`build.ps1` makes `dist\Marquee\Marquee.exe` and `dist\Marquee-windows-x64.zip`. `tools\release.ps1 -Version x.y.z`
+`build.ps1` makes `dist\Atlas\Atlas.exe` and `dist\Atlas-windows-x64.zip`. `tools\release.ps1 -Version x.y.z`
 builds and publishes a release with its update manifest (see [docs/updates.md](docs/updates.md); try `-DryRun`
 first). `requirements-ai.txt` installs the optional AI packages into the venv for development.
 
@@ -90,15 +90,15 @@ first). `requirements-ai.txt` installs the optional AI packages into the venv fo
 | `marquee/catalog.py` | the local copy of the library (SQLite) and image cache, so browsing and playback never wait on Jellyfin |
 | `marquee/player.py`, `osc/` | mpv inside the window and its controls, drawn by mpv itself so they sit on the video |
 | `marquee/jellyfin.py`, `seerr.py`, `live.py`, `arrivals.py` | the servers, live library updates, downloads that are ready before Jellyfin has them |
-| `marquee/ai.py`, `localllm.py`, `scripted.py` | AI providers (Atlas, your key, built-in) and Classic mode's prepared lines |
+| `marquee/ai.py`, `localllm.py`, `scripted.py` | AI providers (built-in, your key, the LocalAI assistant) and Classic mode's prepared lines |
 | `marquee/assistant/` | voice and Ask Atlas: speech-to-text, vision, scene jumps, end-of-title comments |
 | `marquee/index/` | the media index: scene search, chapters, intro/credits, sensitive-content ranges |
-| `marquee/taste.py`, `chat.py`, `letterboxd.py` | the taste profile, Ask Marquee, Letterboxd import |
+| `marquee/taste.py`, `chat.py`, `letterboxd.py` | the taste profile, Ask Atlas, Letterboxd import |
 | `marquee/storage.py`, `smart.py` | request quality and size estimates, storage limit, clean-up, smart season requests |
-| `marquee/mobile/`, `remote.py` | Marquee Mobile: phone browsing, streaming (direct, remux or NVENC transcode) and remote |
+| `marquee/mobile/`, `remote.py` | Atlas Mobile: phone browsing, streaming (direct, remux or NVENC transcode) and remote |
 | `marquee/stack.py`, `share.py`, `updater.py` | Your stack (the Media Hub), Google Drive sharing, self-updates |
 | `marquee/web/` | the browsing UI |
 
 ## Licence
 
-GPL-3.0-or-later (Marquee ships libmpv, which is GPL). See [LICENSE](LICENSE).
+GPL-3.0-or-later (Atlas ships libmpv, which is GPL). See [LICENSE](LICENSE).

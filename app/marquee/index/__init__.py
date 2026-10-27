@@ -1,4 +1,4 @@
-"""Marquee's optional media index: a small local frame index per title for scene search, sensitive-content
+"""Atlas's optional media index: a small local frame index per title for scene search, sensitive-content
 ranges (blur/skip), chapter suggestions and intro/outro detection.
 
 Everything heavy (numpy, ONNX Runtime, the CLIP model) is loaded only when used, and fetched on request when

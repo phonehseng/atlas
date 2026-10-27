@@ -9,7 +9,7 @@ from marquee.assistant.intents import duration, parse  # noqa: E402
 # (phrase, expected intent or None, {argument: expected value})
 CASES = [
     ("pause", "pause", {"mode": "pause"}),
-    ("Hey Marquee, pause the movie", "pause", {"mode": "pause"}),
+    ("Hey Atlas, pause the movie", "pause", {"mode": "pause"}),
     ("hold on", "pause", {"mode": "pause"}),
     ("stop", "pause", {"mode": "pause"}),
     ("resume", "pause", {"mode": "resume"}),
@@ -96,7 +96,7 @@ CASES = [
     ("when does the movie end", "time_left", {}),
     ("who is that actor", "cast", {}),
     # scene jumps (a seek), the picker and undo
-    ("hey marquee go to the part where spiderman gets shot", "scene", {"query": "spiderman gets shot"}),
+    ("hey atlas go to the part where spiderman gets shot", "scene", {"query": "spiderman gets shot"}),
     ("skip to the scene where the tank gets hit", "scene", {"query": "the tank gets hit"}),
     ("jump to when they eat breakfast", "scene", {"query": "they eat breakfast"}),
     ("rewind to when he says best job I ever had", "scene", {"query": "he says best job i ever had"}),

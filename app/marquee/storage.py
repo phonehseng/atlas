@@ -605,7 +605,7 @@ def request_options(app, kind, tmdb, seasons="all"):
             "servers": servers, "choice": choice, "prefs": prefs, "storage": _slim_usage(stat),
             "arr_available": any(s["arr"] for s in servers),
             "explain": None if any(s["arr"] for s in servers) else
-            "Sizes are rough: Marquee can't read Radarr/Sonarr yet (connect them in Settings > Storage)."}
+            "Sizes are rough: Atlas can't read Radarr/Sonarr yet (connect them in Settings > Storage)."}
 
 
 def _seerr_services(sr, service):
@@ -1077,11 +1077,11 @@ def plan(app, s=None, simulate=None, at=None, lib=None):
     grace = float(s.get("delete_after_watch_days") or 0) * DAY
     can_delete, why_not = True, None
     if not arrs(app) or not lib["ok"]:
-        can_delete, why_not = False, "Radarr/Sonarr aren't connected, so Marquee can't remove anything (Settings > Storage)."
+        can_delete, why_not = False, "Radarr/Sonarr aren't connected, so Atlas can't remove anything (Settings > Storage)."
     elif not view["ok"]:
-        can_delete, why_not = False, "Jellyfin isn't answering, so Marquee can't check what everyone has watched."
+        can_delete, why_not = False, "Jellyfin isn't answering, so Atlas can't check what everyone has watched."
     elif not view["all_users"]:
-        can_delete, why_not = False, ("Marquee can only see your own watch history (sign in as a Jellyfin admin), so "
+        can_delete, why_not = False, ("Atlas can only see your own watch history (sign in as a Jellyfin admin), so "
                                       "it can't check whether someone else is still watching.")
     could, items, skipped = [], [], []
 
@@ -1566,7 +1566,7 @@ def remove(app, item, s=None, view=None, also_torrent=None, keep_monitored=False
     record_history(app, item, view, reason=item.get("reason"))
     hashes = _torrent_hashes(arr, item) if (also_torrent and arr) else set()
     steps = []
-    if arr is None:  # a file only Marquee knows (a library folder, a provisional download)
+    if arr is None:  # a file only Atlas knows (a library folder, a provisional download)
         gone = recycle(item.get("paths") or [])
         if len(gone) != len(item.get("paths") or []):
             raise RuntimeError("Windows couldn't move the file to the Recycle Bin")

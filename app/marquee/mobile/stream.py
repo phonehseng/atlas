@@ -84,7 +84,7 @@ _job_handle = None
 
 
 def _tie_to_us(proc):
-    """Put a child process in a Job Object that is closed (and its processes killed) when Marquee exits, so an
+    """Put a child process in a Job Object that is closed (and its processes killed) when Atlas exits, so an
     encoder can never outlive the app, even after a crash."""
     global _job_handle
     try:
@@ -789,7 +789,7 @@ def create(item, path, info, plan, device, keyframes=None, start=0.0):
             busy = [s for s in sessions.values() if s.active()]
             if len(busy) >= setting_max():
                 raise OverflowError(f"{len(busy)} phones are already streaming from this PC (the limit is "
-                                    f"{setting_max()}; change it in Settings > Marquee Mobile)")
+                                    f"{setting_max()}; change it in Settings > Atlas Mobile)")
             if plan["mode"] == "transcode":
                 enc = encoders()
                 plan["encoder"] = (enc["hevc"][0] if plan.get("hevc") and enc["hevc"] else enc["h264"][0])

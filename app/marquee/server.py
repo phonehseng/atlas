@@ -802,7 +802,7 @@ def _trailers_bp():
     return bp
 
 
-_register("trailers", _trailers_bp)  # trailers of titles not in the library, played by Marquee (marquee.trailers)
+_register("trailers", _trailers_bp)  # trailers of titles not in the library, played by Atlas (marquee.trailers)
 
 
 def _stack_bp():
@@ -810,7 +810,7 @@ def _stack_bp():
     return bp
 
 
-_register("your stack", _stack_bp)  # the Media Hub's dashboard inside Marquee (reads the hub; no background work)
+_register("your stack", _stack_bp)  # the Media Hub's dashboard inside Atlas (reads the hub; no background work)
 
 
 def _update_bp():
