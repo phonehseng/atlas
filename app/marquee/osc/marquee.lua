@@ -134,8 +134,10 @@ end
 local function text(ass, x, y, an, size, str, color, a, font, extra)
   if (a or 1) <= 0.003 then return end
   ass:new_event()
-  ass:append(string.format("{\\pos(%.2f,%.2f)\\an%d\\fs%.2f\\fn%s\\bord0\\shad0\\1c&H%s&\\1a&H%s&%s}",
-    x, y, an, size, font or FONT, color or WHITE, alpha(a or 1), extra or ""))
+  -- on a clear glass panel the moving picture shows through: a soft shadow keeps the words readable
+  local soft = state.legible and string.format("\\shad%.1f\\4c&H000000&\\4a&H%s&", 1.4 * S, alpha(0.55 * (a or 1))) or "\\shad0"
+  ass:append(string.format("{\\pos(%.2f,%.2f)\\an%d\\fs%.2f\\fn%s\\bord0%s\\1c&H%s&\\1a&H%s&%s}",
+    x, y, an, size, font or FONT, soft, color or WHITE, alpha(a or 1), extra or ""))
   ass:append(str)
 end
 
@@ -476,7 +478,8 @@ local function draw_menu(ass, name, k, m, interactive)
   local mh = #rows * rh + 16 * S
   local mx = W - m - 12 * S - mw
   local my = (state.above or (H - 128 * S)) - mh + (1 - k) * 18 * S
-  glass(ass, mx, my, mw, mh, 22 * S, k, {tint = 0.72, keep = 0.75})
+  glass(ass, mx, my, mw, mh, 22 * S, k, {tint = 0.36, keep = 0.5})  -- clear liquid glass: the movie shows through
+  state.legible = true
   if interactive then state.rows = {} end
   for i, r in ipairs(rows) do
     local ry = my + 8 * S + (i - 1) * rh
@@ -545,6 +548,7 @@ local function draw_menu(ass, name, k, m, interactive)
       end
     end
   end
+  state.legible = false
 end
 
 local function set_cursor(show)
@@ -1586,6 +1590,7 @@ end
 bind_keys()
 
 mp.register_script_message("marquee-toast", function(msg) state.toast = msg; state.toast_t = now() end)
+mp.register_script_message("marquee-open-menu", function(name) open_menu(name ~= "" and name or "settings") end)
 mp.register_script_message("marquee-volume", function() state.vol_flash_t = now() end)
 mp.register_script_message("marquee-keep-credits", function() state.next_cancelled = true end)
 mp.register_script_message("marquee-clip-progress", function(label, f)
