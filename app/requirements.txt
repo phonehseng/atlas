@@ -9,3 +9,7 @@ qrcode>=7.4
 guessit>=3.8
 watchdog>=4.0
 pillow>=10
+pychromecast>=14.0
+zeroconf>=0.150
+# AirPlay casting; the packaged app downloads it on first use (marquee/wheels.py, group "airplay"), not bundled
+pyatv>=0.16

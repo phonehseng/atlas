@@ -1,7 +1,7 @@
 """Optional Python packages fetched as pinned wheels and unpacked, without pip.
 
-Used by the media index (index/deps.py) and the assistant (assistant/installer.py). Every wheel is pinned to an exact
-files.pythonhosted.org URL, size and SHA-256 (CPython 3.12, Windows x64: the packaged app's Python) and unpacked,
+Used by the media index (index/deps.py), the assistant (assistant/installer.py) and AirPlay casting (cast/).
+Every wheel is pinned to an exact files.pythonhosted.org URL, size and SHA-256 (CPython 3.12, Windows x64: the packaged app's Python) and unpacked,
 .dist-info included, into %APPDATA%\\Marquee\\ai\\py312, which is appended to sys.path. That works the same in the
 packaged app (no pip there) and from source. A wheel is skipped when its module is importable already: from the
 environment (the dev venv), from the packaged app itself (PyInstaller bundles a few shared ones, e.g. packaging,
@@ -143,6 +143,83 @@ WHEELS = {
         "sha256": "f2ecb68b7b7b259d2ef3112ae760149f9b5a1e7c0fbb73d539da6250a648a614",
         "url": _P + "88/ea/33814eb0ec96775eda4c1d30b0d86e91d7d2cd0d84c66d3915aef0e06fa3/"
                "onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl"},
+    # AirPlay casting (marquee.cast): pyatv and what it needs beyond what the app bundles
+    "pyatv": {"version": "0.18.0", "module": "pyatv", "licence": "MIT", "size": 475244,
+        "sha256": "3df6af5679eea809ff17954cf9f5d33c7e5ed5a8d1c90fa14090a0425ce5cd8a",
+        "url": _P + "89/fa/5334e26d22cacd518a5d58836f48f1372126aba2711e93dca239906ed6ce/"
+               "pyatv-0.18.0-py3-none-any.whl"},
+    "aiohttp": {"version": "3.14.5", "module": "aiohttp", "licence": "Apache-2.0 AND MIT", "size": 506141,
+        "sha256": "2cc38a4f2b516bef1714e690df87a0e043faf1a7693c82d860091684453d5111",
+        "url": _P + "ae/ce/1f08114679d49655b30a6e0a29858375c94b82c1de1a0bd0a20c2fee8b02/"
+               "aiohttp-3.14.5-cp312-cp312-win_amd64.whl"},
+    "multidict": {"version": "7.2.1", "module": "multidict", "licence": "Apache-2.0", "size": 95372,
+        "sha256": "781ca5dfc2f1d58e47f52216a0c1c7e1ba91ce8aa235459e20de2d402af77fb3",
+        "url": _P + "68/d5/64108a33c21bde81454b5a400d16baa1378a7d01599de64b131c3e3e3114/"
+               "multidict-7.2.1-cp312-cp312-win_amd64.whl"},
+    "yarl": {"version": "1.25.1", "module": "yarl", "licence": "Apache-2.0", "size": 102593,
+        "sha256": "7d575b54cb3863ef9bc290ea4b009999d55dc237326131e4853cf33e888fee03",
+        "url": _P + "bb/cc/51a7b4abf4ac593b8e7eb3794b28e5a35ae26eed8bc04787628d215af82f/"
+               "yarl-1.25.1-cp312-cp312-win_amd64.whl"},
+    "aiohappyeyeballs": {"version": "2.7.1", "module": "aiohappyeyeballs", "licence": "PSF-2.0", "size": 15038,
+        "sha256": "9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472",
+        "url": _P + "71/43/1947f06babed6b3f1d7f38b0c767f52df66bfb2bc10b468c4a7de9eceff2/"
+               "aiohappyeyeballs-2.7.1-py3-none-any.whl"},
+    "aiosignal": {"version": "1.4.0", "module": "aiosignal", "licence": "Apache-2.0", "size": 7490,
+        "sha256": "053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e",
+        "url": _P + "fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/"
+               "aiosignal-1.4.0-py3-none-any.whl"},
+    "attrs": {"version": "26.1.0", "module": "attrs", "licence": "MIT", "size": 67548,
+        "sha256": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309",
+        "url": _P + "64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/"
+               "attrs-26.1.0-py3-none-any.whl"},
+    "chacha20poly1305-reuseable": {"version": "0.13.2", "module": "chacha20poly1305_reuseable", "licence": "Apache-2.0 OR BSD-3-Clause", "size": 8587,
+        "sha256": "c7dba7c3604a9fa51bcfef9e4bfdaa3bfaadd88b6c5436a27be1c7e9c4081048",
+        "url": _P + "fa/30/a4e44159996e832512f93ec6db89756ed72fe454ce3de1978e3a39c10bcd/"
+               "chacha20poly1305_reuseable-0.13.2-py3-none-any.whl"},
+    "cryptography": {"version": "50.0.2", "module": "cryptography", "licence": "Apache-2.0 OR BSD-3-Clause", "size": 3824692,
+        "sha256": "7afa5a6602a9f29af1f3a2965f831bae7c9d5d597b7cbb716d41ab3b7d89879c",
+        "url": _P + "9a/4f/adfc442765721292fff86d314ce385d3249d22db42295c0dd057727b60f3/"
+               "cryptography-50.0.2-cp311-abi3-win_amd64.whl"},
+    "frozenlist": {"version": "1.8.0", "module": "frozenlist", "licence": "Apache-2.0", "size": 44591,
+        "sha256": "34187385b08f866104f0c0617404c8eb08165ab1272e884abc89c112e9c00746",
+        "url": _P + "b8/af/38e51a553dd66eb064cdf193841f16f077585d4d28394c2fa6235cb41765/"
+               "frozenlist-1.8.0-cp312-cp312-win_amd64.whl"},
+    "miniaudio": {"version": "1.71", "module": "miniaudio", "licence": "MIT", "size": 274252,
+        "sha256": "f4a44b70b66628b0c307e40ae0ae857695978cae18462179b806d8edc807d416",
+        "url": _P + "fd/cf/c1a19e6800e725b6e2b4576407620a798d69e3528ebdea9aea84d69d7088/"
+               "miniaudio-1.71-cp312-cp312-win_amd64.whl"},
+    "propcache": {"version": "0.5.4", "module": "propcache", "licence": "Apache-2.0", "size": 46190,
+        "sha256": "98914de2c4d7f0f9f4a8c6ea4bf05841f4175796941e3ef7d47eb718f22311fb",
+        "url": _P + "58/7b/6e8ef26f6d510a7916064fec68d55fcbfbdf7eb01e377480d66a122152d8/"
+               "propcache-0.5.4-cp312-cp312-win_amd64.whl"},
+    "pydantic": {"version": "2.14.1", "module": "pydantic", "licence": "MIT", "size": 488106,
+        "sha256": "9195d967ec791692a04438115466764fb8b9a27b31f14a760437694f40d6b454",
+        "url": _P + "35/ea/a56b9fe5066f3537b7882f77e9c5dfb26d8c2eefdaed9b5fc73d57b4dc22/"
+               "pydantic-2.14.1-py3-none-any.whl"},
+    "pydantic-core": {"version": "2.50.1", "module": "pydantic_core", "licence": "MIT", "size": 2172522,
+        "sha256": "132529c83901437ff642f585216831bf5fd7a91df66829907e155192ead62498",
+        "url": _P + "c5/17/8bbd530b8659e9d963f5b16f6cb8e159f4cd174b4d6304e48969ab12dba8/"
+               "pydantic_core-2.50.1-cp312-cp312-win_amd64.whl"},
+    "annotated-types": {"version": "0.8.0", "module": "annotated_types", "licence": "MIT", "size": 13427,
+        "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0",
+        "url": _P + "99/91/8acff4f5e50511b911bbccb72b8628a49c68ce14148cd9f6431094859a90/"
+               "annotated_types-0.8.0-py3-none-any.whl"},
+    "srptools": {"version": "2.0.0", "module": "srptools", "licence": "BSD-3-Clause", "size": 13220,
+        "sha256": "566b1cc55964996296b6389294c61f7ee8072f12de800bff4be625f79d930c9b",
+        "url": _P + "72/90/a87a3f65f5d201e8732ad4ad9473ec24dc73c0e32764380b83604b8764e6/"
+               "srptools-2.0.0-py3-none-any.whl"},
+    "tabulate": {"version": "0.10.0", "module": "tabulate", "licence": "MIT", "size": 39814,
+        "sha256": "f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3",
+        "url": _P + "99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/"
+               "tabulate-0.10.0-py3-none-any.whl"},
+    "tinytag": {"version": "2.3.2", "module": "tinytag", "licence": "MIT", "size": 37171,
+        "sha256": "ebaf957915266b9c20414a10f8c5170a345aa039a794650d39d66e7d6b96199f",
+        "url": _P + "6b/54/d378858d14e5c5c7b921cb9ffccf27be3d34f3d6d010c57404ddd634685d/"
+               "tinytag-2.3.2-py3-none-any.whl"},
+    "typing-inspection": {"version": "0.4.4", "module": "typing_inspection", "licence": "MIT", "size": 14750,
+        "sha256": "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147",
+        "url": _P + "67/81/4add07e5172b7ac40d8ed5ff580409a7801a4fe26d529bdd915401dabfbe/"
+               "typing_inspection-0.4.4-py3-none-any.whl"},
 }
 
 GROUPS = {
@@ -157,6 +234,11 @@ GROUPS = {
               "click", "filelock", "fsspec", "packaging", "typing-extensions"],
     # CUDA 12 / cuDNN 9 runtime for faster-whisper on NVIDIA GPUs (large)
     "gpu": ["nvidia-cublas-cu12", "nvidia-cudnn-cu12", "nvidia-cuda-nvrtc-cu12"],
+    # AirPlay casting (marquee.cast.blueprint.AIRPLAY_WHEELS): pyatv, fetched the first time an AirPlay TV is picked
+    "airplay": ["pyatv", "aiohttp", "multidict", "yarl", "propcache", "frozenlist", "aiosignal", "aiohappyeyeballs",
+                "attrs", "idna", "cryptography", "cffi", "pycparser", "chacha20poly1305-reuseable", "miniaudio",
+                "pydantic", "pydantic-core", "annotated-types", "typing-inspection", "typing-extensions", "srptools",
+                "tabulate", "tinytag"],
 }
 
 _lock = threading.Lock()

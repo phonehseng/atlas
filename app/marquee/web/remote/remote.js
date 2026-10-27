@@ -91,6 +91,12 @@
     const nl = $('#next-line');
     nl.hidden = !S.next;
     if (S.next) nl.innerHTML = `Up next: <b>${esc(S.next.title)}</b>`;
+    // casting from the PC to a TV: this remote controls the TV (no window to make fullscreen or small)
+    $('#t-full').disabled = $('#t-pip').disabled = !!S.casting;
+    let cl = $('#cast-line');
+    if (!cl) { cl = document.createElement('p'); cl.id = 'cast-line'; cl.className = 'next-line'; nl.before(cl); }
+    cl.hidden = !S.casting;
+    if (S.casting) cl.innerHTML = `Playing on <b>${esc(S.casting)}</b>`;
   }
 
   let frameOn = false;

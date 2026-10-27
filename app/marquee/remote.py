@@ -557,7 +557,67 @@ def _subs_on():
     return bool(sid) and sid not in ("no", False)
 
 
+def _cast():
+    """The cast in progress (marquee.cast), or None: while casting, the Remote tab controls the TV."""
+    try:
+        from .cast import session
+        cs = session.get()
+        return cs if cs is not None and cs.state not in ("ended", "stopped", "error") else None
+    except Exception:
+        return None
+
+
+def cast_state(cs):
+    st = cs.public()
+    item = None
+    if st.get("item") and st["item"].get("id"):
+        c = server.catalog().get(st["item"]["id"])
+        item = _trim(server.catalog().card(c)) if c else None
+    nxt = st.get("next")
+    return {"playing": bool(item), "paused": st["state"] == "paused", "position": st["position"],
+            "duration": st["duration"], "volume": round((st["volume"] or 0) * 100), "muted": bool(st["muted"]),
+            "subs": bool(st["sub"]) and any(s["id"] == st["sub"] and s["kind"] == "text" for s in st["subs"]),
+            "has_subs": any(s["kind"] == "text" for s in st["subs"]), "fullscreen": False, "pip": False,
+            "buffering": st["state"] in ("buffering", "loading", "connecting"),
+            "next": {"id": nxt["id"], "title": nxt["title"]} if nxt else None, "item": item,
+            "casting": st["device"]["name"]}
+
+
+def _cast_cmd(cs, action, value, b):
+    from .cast import session
+    if action == "pause":
+        mode = value if value in ("toggle", "pause", "play") else "toggle"
+        session.command(mode)
+    elif action == "seek":
+        session.command("seek_rel" if b.get("relative") else "seek", float(value or 0))
+    elif action == "volume":
+        session.command("volume", max(0.0, min(100.0, float(value or 0))) / 100)
+    elif action == "mute":
+        session.command("mute", value)
+    elif action == "subs":
+        st = cs.public()
+        texts = [s for s in st["subs"] if s["kind"] == "text"]
+        if st["sub"]:
+            _last_sid["cast:" + str((st["item"] or {}).get("id"))] = st["sub"]
+            session.command("sub", "off")
+        elif texts:
+            want = _last_sid.get("cast:" + str((st["item"] or {}).get("id")))
+            session.command("sub", want if any(s["id"] == want for s in texts) else texts[0]["id"])
+        else:
+            raise ValueError("This video has no subtitles the TV can show")
+    elif action == "next":
+        session.command("next")
+    elif action == "stop":
+        session.command("stop")
+    else:
+        return jsonify(ok=False, message="Not while casting to a TV"), 409
+    return ok()
+
+
 def player_state():
+    cs = _cast()
+    if cs is not None:
+        return cast_state(cs)
     p = _player()
     item = getattr(p, "item", None)
     playing = bool(getattr(p, "playing", False) and item)
@@ -603,6 +663,12 @@ def api_state():
 def api_cmd():
     b = request.get_json(force=True, silent=True) or {}
     action, value = str(b.get("action", "")), b.get("value")
+    cs = _cast()
+    if cs is not None:
+        try:
+            return _cast_cmd(cs, action, value, b)
+        except Exception as e:
+            return jsonify(ok=False, message=str(e) or "The TV didn't take that"), 409
     p, m = _player(), _mpv()
     if not getattr(p, "playing", False) and action not in ("fullscreen",):
         return jsonify(ok=False, message="Nothing is playing"), 409

@@ -19,7 +19,7 @@ local G = {
   back = u(0xE72B), ff = u(0xEB9D), rew = u(0xEB9E), check = u(0xE73E), chev = u(0xE76C), chevl = u(0xE76B),
   pip = u(0xEE49), unpip = u(0xEE47), close = u(0xE711), playf = u(0xF5B0), pausef = u(0xF8AE),
   sparkle = u(0xF4A5), bookmark = u(0xE8EC), scissors = u(0xE8C6), folder = u(0xE838), stop = u(0xE71A),
-  add = u(0xE710), loop = u(0xE8EE),
+  add = u(0xE710), loop = u(0xE8EE), cast = u(0xEC15),
 }
 
 local ov = mp.create_osd_overlay("ass-events")
@@ -386,6 +386,20 @@ local function menu_rows(m)
           checked = d.name == dev, act = function() send("audio_device", d.name) end})
       end
     end
+  elseif m == "cast" then
+    -- TVs on the home network (the app looks while this menu is open); picking one hands the video over
+    local devs = ud("cast_devices", {})
+    local searching = ud("cast_searching", false)
+    local head
+    if searching then head = "Looking for TVs" .. string.rep(".", math.floor(now() * 2.5) % 4)
+    elseif #devs == 0 then head = "No TVs found on this network"
+    else head = "Play on a TV from here" end
+    table.insert(rows, {info = true, disabled = true, label = head})
+    for _, d in ipairs(devs) do
+      table.insert(rows, {label = d.name or "TV", tag = d.type or "", act = function() send("cast", d.id) end})
+    end
+    local note = ud("cast_note", "")
+    if note ~= "" then table.insert(rows, {info = true, disabled = true, label = note}) end
   elseif m == "playback" then
     table.insert(rows, {label = "Playback", back = "settings"})
     if ud("has_next", false) then
@@ -412,6 +426,7 @@ local function open_menu(name)
   state.closing_menu = nil
   state.menu = name; state.menu_anim = now()
   if name == "settings" then state.gear_spin = now() end
+  if name == "cast" then send("cast-scan") end
 end
 
 -- ------------------------------------------------------------------------------- drawing
@@ -803,10 +818,14 @@ local function draw()
     end
     rctl("full", ud("fullscreen", false) and G.unfull or G.full, 18 * S, function() send("fullscreen") end)
     rctl("pip", G.pip, 19 * S, function() send("pip") end)
+    if ud("cast_on", false) then
+      rctl("cast", G.cast, 19 * S, function() open_menu("cast") end, false, nil, state.menu == "cast")
+    end
     local spin = clamp((t - state.gear_spin) / 0.5, 0, 1)
-    local deg = state.menu and ease(spin) * 90 or (1 - ease(spin)) * 90
+    local gear_menu = state.menu and state.menu ~= "captions" and state.menu ~= "cast"
+    local deg = gear_menu and ease(spin) * 90 or (1 - ease(spin)) * 90
     rctl("settings", G.gear, 20 * S, function() open_menu("settings") end, false,
-      string.format("\\frz%.1f", -deg), state.menu and state.menu ~= "captions")
+      string.format("\\frz%.1f", -deg), gear_menu)
     local sid = prop("sid", false)
     rctl("captions", G.cc, 20 * S, function() open_menu("captions") end, sid ~= "no" and sid ~= false, nil,
       state.menu == "captions")

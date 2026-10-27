@@ -524,29 +524,18 @@ MIME = {"mp4": "video/mp4", "m4v": "video/mp4", "mov": "video/quicktime", "mkv":
         "webm": "video/webm"}
 
 
-@bp.get("/r/s/<sid>/<key>/file.<ext>")
-def media_file(sid, key, ext):
-    s = _session(sid, key)
-    if not s or s.mode != "direct":
-        return Response(status=404)
+# The responses themselves are shared with casting (marquee.cast.endpoint), which serves the same sessions to a TV.
+def serve_file(s):
     s.last_access = time.time()
     return send_file_range(s.path, MIME.get(s.info.get("container"), "video/mp4"))
 
 
-@bp.get("/r/s/<sid>/<key>/index.m3u8")
-def media_playlist(sid, key):
-    s = _session(sid, key)
-    if not s or s.mode == "direct":
-        return Response(status=404)
+def serve_playlist(s):
     s.last_access = time.time()
     return Response(s.playlist(), mimetype="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
 
 
-@bp.get("/r/s/<sid>/<key>/init.mp4")
-def media_init(sid, key):
-    s = _session(sid, key)
-    if not s or s.mode == "direct":
-        return Response(status=404)
+def serve_init(s):
     try:
         path = s.get_init()
     except Exception as e:
@@ -554,11 +543,7 @@ def media_init(sid, key):
     return Response(path.read_bytes(), mimetype="video/mp4", headers={"Cache-Control": "no-store"})
 
 
-@bp.get("/r/s/<sid>/<key>/seg/<int:n>.m4s")
-def media_segment(sid, key, n):
-    s = _session(sid, key)
-    if not s or s.mode == "direct":
-        return Response(status=404)
+def serve_segment(s, n):
     try:
         units = s.get_segment(n)
     except KeyError:
@@ -598,20 +583,62 @@ def media_segment(sid, key, n):
                     headers={"Content-Length": str(total), "Cache-Control": "no-store"})
 
 
-@bp.get("/r/s/<sid>/<key>/sub/<sub_id>.vtt")
-def media_sub(sid, key, sub_id):
-    s = _session(sid, key)
-    if not s:
-        return Response(status=404)
+def serve_sub(s, sub_id, wait=0.0):
+    """A text subtitle track as WebVTT. wait: seconds to hold the request while the track is still being extracted
+    (a TV asks once and gives up on an error; the phone retries by itself)."""
     sub = next((x for x in s.info["subs"] if x["id"] == sub_id and x["kind"] == "text"), None)
     if not sub:
         return Response(status=404)
+    deadline = time.time() + wait
     state, path = media.subtitle_vtt(s.path, sub)
+    while state == "pending" and time.time() < deadline:
+        time.sleep(0.5)
+        state, path = media.subtitle_vtt(s.path, sub)
     if state == "pending":
         return jsonify(ok=False, pending=True, message="Getting the subtitles ready"), 202
     if state != "ready":
         return Response(status=404)
     return Response(path.read_bytes(), mimetype="text/vtt", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@bp.get("/r/s/<sid>/<key>/file.<ext>")
+def media_file(sid, key, ext):
+    s = _session(sid, key)
+    if not s or s.mode != "direct":
+        return Response(status=404)
+    return serve_file(s)
+
+
+@bp.get("/r/s/<sid>/<key>/index.m3u8")
+def media_playlist(sid, key):
+    s = _session(sid, key)
+    if not s or s.mode == "direct":
+        return Response(status=404)
+    return serve_playlist(s)
+
+
+@bp.get("/r/s/<sid>/<key>/init.mp4")
+def media_init(sid, key):
+    s = _session(sid, key)
+    if not s or s.mode == "direct":
+        return Response(status=404)
+    return serve_init(s)
+
+
+@bp.get("/r/s/<sid>/<key>/seg/<int:n>.m4s")
+def media_segment(sid, key, n):
+    s = _session(sid, key)
+    if not s or s.mode == "direct":
+        return Response(status=404)
+    return serve_segment(s, n)
+
+
+@bp.get("/r/s/<sid>/<key>/sub/<sub_id>.vtt")
+def media_sub(sid, key, sub_id):
+    s = _session(sid, key)
+    if not s:
+        return Response(status=404)
+    return serve_sub(s, sub_id)
 
 
 # ------------------------------------------------------------------ downloads for offline

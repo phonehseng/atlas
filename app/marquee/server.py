@@ -178,6 +178,12 @@ def save_settings():
             continue
         changes[k] = v
     s = settings.save(changes)
+    if any(k.startswith("cast") for k in changes):
+        try:
+            from .cast import blueprint as cast
+            cast.settings_changed(changes)
+        except Exception as e:
+            print("casting:", e)
     if "remote" in changes or "remote_port" in changes or any(k.startswith("mobile") for k in changes):
         try:
             from . import remote
@@ -780,6 +786,14 @@ def _update_bp():
 
 
 _register("updates", _update_bp)  # update checks, download, restart to update (marquee.updater)
+
+
+def _cast_bp():
+    from .cast.blueprint import bp
+    return bp
+
+
+_register("casting", _cast_bp)  # Chromecast / AirPlay (marquee.cast): picker, casting bar, Settings
 
 
 def serve(port):

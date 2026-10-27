@@ -58,6 +58,10 @@ DEFAULTS = {
     "mobile_quality": "auto",  # default phone quality: auto | original | 1080 | 720 | 480
     "mobile_jellyfin_signin": False,  # friends may sign in on the phone app with their own Jellyfin account
     "mobile_https": False,   # HTTPS through `tailscale serve` (set by the Settings button, not by hand)
+    "cast": True,            # casting to TVs (Chromecast / Google Cast, AirPlay): the Cast buttons and the picker
+    "cast_quality": "auto",  # auto (the best the TV plays) | original (never convert for size) | 1080 | 720
+    "cast_4k_hdr": True,     # send 4K and HDR to TVs that play them (off: at most 1080p, HDR tone-mapped)
+    "cast_port": 8738,       # the port TVs pull the video from (this PC's home-network address only)
     "mylist_sync_favorites": True,  # My List <-> Jellyfin favourites, both ways (off: My List stays on this PC)
     "details_autoplay": True,  # the details page plays a silent preview of the title behind its artwork
     "gdrive_client_id": "",      # Share to Google Drive: the user's own OAuth "Desktop app" client (docs/google-drive.md)

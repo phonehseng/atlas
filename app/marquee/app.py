@@ -94,6 +94,11 @@ class App:
             remote.apply(self)
         except Exception as e:
             print("phone remote unavailable:", type(e).__name__, e)
+        try:  # casting to TVs (nothing runs until a TV is looked for)
+            from .cast import blueprint as cast
+            cast.init(self)
+        except Exception as e:
+            print("casting unavailable:", type(e).__name__, e)
         for part in (self.arrivals, self.live):
             if part is self.arrivals and os.environ.get("MARQUEE_DEV_NO_ARRIVALS"):
                 continue  # development runs of the player: leave the downloads alone
@@ -118,6 +123,11 @@ class App:
         try:
             from . import share
             share.shutdown()
+        except Exception:
+            pass
+        try:  # a cast stops with the app (the TV goes back to its home screen)
+            from .cast import blueprint as cast
+            cast.shutdown()
         except Exception:
             pass
         try:  # the built-in AI's llama-server (it also dies with the process; this is just tidy)

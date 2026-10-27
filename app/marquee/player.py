@@ -496,6 +496,7 @@ class Player:
         self._set("sdr_to_hdr", "auto" if (st.get("sdr_to_hdr", "auto") == "auto" or st["rtx_hdr"]) else "off")
         self._set("anime4k", bool(_anime4k_files()))
         self._set("clips_ok", bool(clips.tools()[0]))
+        self._set("cast_on", bool(st.get("cast", True)))
 
     def _details(self, item_id):
         """After the first frame: the full item (trickplay, streams), intro/credits markers and the next episode
@@ -826,6 +827,12 @@ class Player:
                 self.restore_full()
             elif action == "mini":
                 self.to_mini()
+            elif action == "cast-scan":   # the Cast menu opened: look for TVs (marquee.cast)
+                from .cast import blueprint as cast
+                cast.osc_scan(self)
+            elif action == "cast":        # a TV was picked: hand the video over at this position
+                from .cast import blueprint as cast
+                cast.osc_cast(self, value)
             elif action == "pip-drag":
                 self._pip_track("move")
             elif action == "pip-resize":

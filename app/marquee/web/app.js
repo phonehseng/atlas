@@ -43,6 +43,7 @@ window.marquee = {
     try {
       if (window.MarqueeStorage && MarqueeStorage.onEvent(name, data)) return;
       if (window.MarqueeUpdate && MarqueeUpdate.onEvent(name, data)) return;
+      if (window.MarqueeCast && MarqueeCast.onEvent(name, data)) return;
       if (name === 'playback-ended') { fetch('/api/taste/update', { method: 'POST' }).catch(() => {}); closeUpNext(); afterPlayback(data && data.id); }
       else if (name === 'library-changed') onLibraryChanged(data);
       else if (name === 'userdata-changed') onUserdataChanged(data);
@@ -335,6 +336,9 @@ function applyTheme(t) {
 async function play(id, start, label) {
   closePop();
   const it = S.items.get(id) || {};
+  if (window.MarqueeCast && MarqueeCast.active()) {   // casting: Play buttons play on the TV
+    return MarqueeCast.castItem(id, start, label || [titleOf(it), it.type === 'Episode' ? epCode(it) : ''].filter(Boolean).join(' · '));
+  }
   try {
     await api('/api/play', start == null ? { id } : { id, start });
     toast(`Starting ${label || titleOf(it)}${it.type === 'Episode' ? ' · ' + epCode(it) : ''}…`, { icon: 'film' });
@@ -1271,6 +1275,7 @@ function copyHTML(v, partial) {
     ${v.genres.length ? `<div class="dx-genres">${v.genres.slice(0, 4).map(esc).join(' · ')}</div>` : ''}
     <div class="dx-actions">${primary}${extra}${mlBtn(v.mlKey)}
       <button class="btn on-dark dx-trailer" data-act="dx-trailer" hidden>${icon('film')} Trailer</button>${watched}
+      ${isItem && window.MarqueeCast && S.settings.cast !== false && (v.type === 'Series' ? !!v.nextUp : v.available !== false) ? MarqueeCast.button(v.type === 'Series' ? v.nextUp.id : v.id, v.type === 'Series' ? `${v.title} · ${epCode(v.nextUp)}` : v.title) : ''}
       ${isItem && window.MarqueeStorage && (v.type === 'Series' || v.available) ? `<span class="more-wrap"><button class="btn round on-dark" data-act="more-menu" aria-haspopup="menu" aria-expanded="false" title="More" aria-label="More">${icon('dots')}</button>
         <span class="more-menu glass" role="menu" hidden><button role="menuitem" data-act="delete-local" data-id="${esc(v.id)}" data-name="${esc(v.title)}" data-type="${esc(v.type)}">${icon('close', 15)} Delete from this PC…</button></span></span>` : ''}
       ${isItem && v.type === 'Movie' && S.shareOn ? `<button class="btn round on-dark" data-act="share" data-id="${esc(v.id)}" data-name="${esc(v.title)}" ${v.available ? '' : 'disabled'} title="${v.available ? 'Share as a Google Drive link' : 'Only files on this PC can be shared'}" aria-label="Share">${icon('share')}</button>` : ''}</div>
@@ -2604,6 +2609,7 @@ function renderSettings(page) {
     <section class="panel glass taste-panel" id="taste-panel" style="--i:6"></section>
     <div id="storage-settings" class="mqs-settings"></div>
     ${remotePanel(s)}
+    <div id="cast-settings-slot"></div>
     <section class="panel glass" style="--i:6"><h2>${icon('plus')} My List</h2>
       <p>Titles you save for later, in your library or not.</p>
       ${has('mylist_sync_favorites') ? sw('mylist_sync_favorites', 'Sync with Jellyfin favourites', 'Your list follows your favourites on every Jellyfin app, both ways. Titles you haven’t got yet join once they arrive.') : ''}
@@ -2628,6 +2634,7 @@ function renderSettings(page) {
   loadRemote();
   window.MarqueeTaste && window.MarqueeTaste.renderSettings($('#taste-panel'));
   window.MarqueeStorage && MarqueeStorage.mountSettings($('#storage-settings'));
+  window.MarqueeCast && MarqueeCast.mountSettings($('#cast-settings-slot'), S.settings);
   loadIndexPanel();
   loadSharePanel();
   loadBuiltin();
