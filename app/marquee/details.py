@@ -768,8 +768,13 @@ def preview_subs(item_id):
     except ValueError:
         start = 0.0
     shift = start if request.args.get("absolute") else 0.0
+    try:  # ?len=: a longer window (the title page's two-minute preview)
+        length = max(10.0, min(float(request.args.get("len") or SUB_WINDOW), 600.0))
+    except ValueError:
+        length = float(SUB_WINDOW)
     key = re.sub(r"[^A-Za-z0-9_-]", "_", (target or {}).get("id", item_id))[:60]
-    cache = PREVIEW_DIR / f"{key}_{int(start)}_{settings.load().get('sub_lang') or 'eng'}.cues.json"
+    win = "" if length == SUB_WINDOW else f"_{int(length)}"
+    cache = PREVIEW_DIR / f"{key}_{int(start)}{win}_{settings.load().get('sub_lang') or 'eng'}.cues.json"
     cues = None
     if cache.exists():
         try:
@@ -777,7 +782,7 @@ def preview_subs(item_id):
         except ValueError:
             cues = None
     if cues is None:
-        cues = preview_cues(target, start) if target else []
+        cues = preview_cues(target, start, length) if target else []
         try:
             PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
             cache.write_text(__import__("json").dumps(cues), "utf-8")
@@ -806,6 +811,18 @@ def preview(item_id):
     path = target.get("path")
     exists = bool(path and os.path.exists(path))
     tid = target["id"]
+    if request.args.get("hero") and exists:  # the title page's hero: about two minutes, not the cards' short clip
+        hero = {"hero": True, "length": HERO_SECONDS, "id": tid, "start": start,
+                "ep": f"S{target.get('season_no')}:E{target.get('episode_no')}" if target.get("type") == "Episode" else ""}
+        if _browser_native(target):
+            return ok(available=True, url=f"/api/preview/file/{tid}", seek=True, kind="file",
+                      subs=_subs_url(tid, start, absolute=True) + f"&len={HERO_SECONDS}", **hero)
+        if _hero_file(tid, start).exists() or _ffmpeg():
+            if _ENCODERS is None and _ffmpeg():   # the first probe takes seconds: done while the page waits to start
+                _pool.submit(_encoders, _ffmpeg())
+            if not _player_busy():
+                return ok(available=True, url=f"/api/preview/hero/{tid}?start={start}", seek=False, kind="clip",
+                          subs=_subs_url(tid, start) + f"&len={HERO_SECONDS}", **hero)
     if exists and _browser_native(target):
         return ok(available=True, url=f"/api/preview/file/{tid}", start=start, seek=True, kind="file",
                   subs=_subs_url(tid, start, absolute=True))
@@ -853,6 +870,12 @@ def _image_sub_stream(ff, path):
 def _encoders(ff):
     """Video encoders this ffmpeg can actually open on this PC (NVENC first: a 1080p clip in a couple of seconds)."""
     global _ENCODERS
+    with _enc_lock:   # asked by a page while a warm-up probe runs: wait for that one
+        return _ENCODERS or _probe_encoders(ff)
+
+
+def _probe_encoders(ff):
+    global _ENCODERS
     if _ENCODERS is None:
         out = []
         for enc in ("h264_nvenc", "h264_qsv", "h264_amf"):
@@ -869,6 +892,7 @@ def _encoders(ff):
 
 
 _ENCODERS = None
+_enc_lock = threading.Lock()
 ENC_ARGS = {"h264_nvenc": ["-preset", "p4", "-cq", "23", "-b:v", "0"], "h264_qsv": ["-global_quality", "24"],
             "h264_amf": ["-quality", "balanced", "-rc", "cqp", "-qp_i", "22", "-qp_p", "24"],
             "libx264": ["-preset", "veryfast", "-crf", "23"]}
@@ -903,39 +927,46 @@ def make_clip(item_id, start):
         if out.exists():
             return out
         PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
-        hdr = ((r.get("extra") or {}).get("media") or {}).get("hdr")
         part = out.with_suffix(".part.mp4")
-        # 1080p (upscaled when the source is smaller), tone-mapped from HDR; picture subtitles burned in when the title
-        # has no text ones (those go alongside as WebVTT instead).
-        burn = None
-        if not _sidecar_subs(r["path"]) and _embedded_sub_stream(ff, r["path"]) is None:
-            burn = _image_sub_stream(ff, r["path"])
-        scale = "scale=1920:1080:force_original_aspect_ratio=decrease:flags=lanczos,pad=ceil(iw/2)*2:ceil(ih/2)*2"
-        tones = ["tonemapx=tonemap=bt2390:t=bt709:m=bt709:p=bt709:format=yuv420p", "format=yuv420p"] if hdr else ["format=yuv420p"]
-        for enc in _encoders(ff):
-            for tone in tones:
-                for with_subs in ([True, False] if burn is not None else [False]):
-                    if with_subs:  # the subtitle canvas is scaled to the picture, then laid over it
-                        fc = (f"[0:v:0]{scale},{tone}[v];[0:{burn}][v]scale2ref=w=iw:h=ih[s][v2];"
-                              f"[v2][s]overlay=0:0:format=auto,format=yuv420p[out]")
-                        vmap = ["-filter_complex", fc, "-map", "[out]"]
-                    else:
-                        vmap = ["-map", "0:v:0", "-vf", f"{scale},{tone}"]
-                    cmd = [ff, "-hide_banner", "-loglevel", "error", "-y", "-ss", str(start), "-i", r["path"], "-t", str(CLIP_SECONDS),
-                           *vmap, "-map", "0:a:0?", "-map_chapters", "-1", "-sn", "-dn", "-c:v", enc, *ENC_ARGS[enc],
-                           "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-movflags", "+faststart", str(part)]
-                    try:
-                        p = subprocess.run(cmd, capture_output=True, timeout=120,
-                                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-                    except (OSError, subprocess.TimeoutExpired) as e:
-                        print("preview clip failed:", e)
-                        continue
-                    if p.returncode == 0 and part.exists() and part.stat().st_size > 10_000:
-                        part.replace(out)
-                        _prune_previews()
-                        return out
+        for cmd in _clip_cmds(r, ff, start, CLIP_SECONDS, ["-movflags", "+faststart", str(part)]):
+            try:
+                p = subprocess.run(cmd, capture_output=True, timeout=120,
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            except (OSError, subprocess.TimeoutExpired) as e:
+                print("preview clip failed:", e)
+                continue
+            if p.returncode == 0 and part.exists() and part.stat().st_size > 10_000:
+                part.replace(out)
+                _prune_previews()
+                return out
         part.unlink(missing_ok=True)
     return None
+
+
+def _clip_cmds(r, ff, start, seconds, output):
+    """ffmpeg commands for a 1080p H.264 preview clip of `seconds` from `start`, best first (each later one drops
+    something the one before may have failed on: the GPU encoder, tone-mapping, burned-in subtitles). output: the
+    muxer arguments and the output path."""
+    hdr = ((r.get("extra") or {}).get("media") or {}).get("hdr")
+    # 1080p (upscaled when the source is smaller), tone-mapped from HDR; picture subtitles burned in when the title
+    # has no text ones (those go alongside as WebVTT instead).
+    burn = None
+    if not _sidecar_subs(r["path"]) and _embedded_sub_stream(ff, r["path"]) is None:
+        burn = _image_sub_stream(ff, r["path"])
+    scale = "scale=1920:1080:force_original_aspect_ratio=decrease:flags=lanczos,pad=ceil(iw/2)*2:ceil(ih/2)*2"
+    tones = ["tonemapx=tonemap=bt2390:t=bt709:m=bt709:p=bt709:format=yuv420p", "format=yuv420p"] if hdr else ["format=yuv420p"]
+    for enc in _encoders(ff):
+        for tone in tones:
+            for with_subs in ([True, False] if burn is not None else [False]):
+                if with_subs:  # the subtitle canvas is scaled to the picture, then laid over it
+                    fc = (f"[0:v:0]{scale},{tone}[v];[0:{burn}][v]scale2ref=w=iw:h=ih[s][v2];"
+                          f"[v2][s]overlay=0:0:format=auto,format=yuv420p[out]")
+                    vmap = ["-filter_complex", fc, "-map", "[out]"]
+                else:
+                    vmap = ["-map", "0:v:0", "-vf", f"{scale},{tone}"]
+                yield [ff, "-hide_banner", "-loglevel", "error", "-y", "-ss", str(start), "-i", r["path"], "-t", str(seconds),
+                       *vmap, "-map", "0:a:0?", "-map_chapters", "-1", "-sn", "-dn", "-c:v", enc, *ENC_ARGS[enc],
+                       "-c:a", "aac", "-b:a", "128k", "-ac", "2", *output]
 
 
 @bp.get("/api/preview/clip/<item_id>")
@@ -950,6 +981,180 @@ def preview_clip(item_id):
     r = send_file(f, mimetype="video/mp4", conditional=True, max_age=0)
     r.headers["Cache-Control"] = "private, max-age=3600"
     return r
+
+
+# ------------------------------------------------------------------ the title page's hero: a two-minute clip
+# The hero plays about two minutes of the title (hover cards and episode thumbnails keep their short clip). A file the
+# browser plays as it is is played directly and stopped after HERO_SECONDS; anything else is cut like the cards' clip
+# (1080p H.264, HDR tone-mapped), but as a fragmented MP4 that the page plays while ffmpeg is still writing it, so the
+# picture starts in a second or two instead of after the whole cut. Once finished it is kept (made seekable) for next
+# time. One cut at a time; it stops when the page stops the preview and never runs while the player plays.
+HERO_SECONDS = 120
+_hero_lock = threading.Lock()
+_hero_job = None
+
+
+def _hero_file(item_id, start):
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", item_id)[:60]
+    return PREVIEW_DIR / f"{safe}_{int(start)}_1080s{HERO_SECONDS}.mp4"
+
+
+def _player_busy():
+    try:
+        return bool(getattr(APP().player, "playing", False))
+    except Exception:
+        return False
+
+
+class _HeroCut:
+    def __init__(self, r, ff, start, out):
+        self.out = out
+        self.part = out.with_name(out.stem + ".hero-part")   # not *.mp4: the cache pruner leaves it alone
+        self.proc = None
+        self.attempt = 0
+        self.readers = 0
+        self.done = self.ok = self.stopped = False
+        self.lock = threading.Lock()
+        threading.Thread(target=self._run, args=(r, ff, start), daemon=True, name="hero-clip").start()
+
+    def _run(self, r, ff, start):
+        PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        # one-second fragments (and a keyframe every two seconds): the first bytes are playable almost at once
+        output = ["-g", "48", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-frag_duration", "1000000",
+                  "-f", "mp4", str(self.part)]
+        try:
+            for cmd in _clip_cmds(r, ff, start, HERO_SECONDS, output):
+                with self.lock:
+                    if self.stopped:
+                        break
+                    self.attempt += 1
+                    self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                                 stderr=subprocess.DEVNULL,
+                                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                try:
+                    from .mobile.stream import _tie_to_us   # an encoder never outlives the app
+                    _tie_to_us(self.proc)
+                except Exception:
+                    pass
+                rc = self.proc.wait()
+                if self.stopped:
+                    break
+                if rc == 0 and self.part.exists() and self.part.stat().st_size > 10_000:
+                    self.ok = True
+                    self._keep()
+                    break
+                if self.part.exists() and self.part.stat().st_size > 512 * 1024:
+                    break   # it failed part-way through what the page is already playing: don't start over
+        finally:
+            self.done = True
+            self._tidy()
+
+    def _keep(self):
+        """The finished cut, made seekable (moov in front) for next time."""
+        tmp = self.out.with_suffix(".part.mp4")
+        try:
+            p = subprocess.run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(self.part), "-c", "copy",
+                                "-movflags", "+faststart", str(tmp)], capture_output=True, timeout=60,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if p.returncode == 0 and tmp.exists():
+                tmp.replace(self.out)
+                _prune_previews()
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print("hero clip: couldn't keep it:", e)
+        tmp.unlink(missing_ok=True)
+
+    def stop(self):
+        with self.lock:
+            self.stopped = True
+            if self.proc and self.proc.poll() is None:
+                try:
+                    self.proc.kill()
+                except OSError:
+                    pass
+        self._tidy()
+
+    def _tidy(self):
+        if self.done and self.readers <= 0:
+            try:
+                self.part.unlink(missing_ok=True)
+            except OSError:
+                pass   # still open somewhere: the next cut's tidy or the cache pruner gets it
+
+    def stream(self):
+        """The growing file, as it is written (ends when ffmpeg does)."""
+        self.readers += 1
+        try:
+            deadline = time.time() + 30
+            while not self.done and time.time() < deadline and not (self.part.exists() and self.part.stat().st_size > 256 * 1024):
+                time.sleep(0.05)
+            if not self.part.exists() or (self.done and not self.ok and self.part.stat().st_size < 10_000):
+                return
+            attempt = self.attempt
+            with open(self.part, "rb") as f:
+                while True:
+                    b = f.read(256 * 1024)
+                    if b:
+                        yield b
+                        continue
+                    if self.stopped or self.attempt != attempt:
+                        return
+                    if self.done or self.proc.poll() is not None:
+                        b = f.read()
+                        if b:
+                            yield b
+                        return
+                    time.sleep(0.08)
+        finally:
+            self.readers -= 1
+            self._tidy()
+
+
+def stop_hero_clip():
+    """Stop the title page's clip being cut (the preview stopped, or the player is about to play)."""
+    global _hero_job
+    with _hero_lock:
+        job, _hero_job = _hero_job, None
+    if job and not job.done:
+        job.stop()
+
+
+@bp.get("/api/preview/hero/<item_id>")
+def preview_hero(item_id):
+    global _hero_job
+    try:
+        start = float(request.args.get("start", 0))
+    except ValueError:
+        start = 0
+    out = _hero_file(item_id, start)
+    if out.exists():
+        r = send_file(out, mimetype="video/mp4", conditional=True, max_age=0)
+        r.headers["Cache-Control"] = "private, max-age=3600"
+        return r
+    r, ff = cat().get(item_id), _ffmpeg()
+    if not r or not ff or not r.get("path") or not os.path.exists(r["path"]) or _player_busy():
+        return Response(status=404)
+    with _hero_lock:
+        job = _hero_job
+        if not (job and job.out == out and not job.stopped and (not job.done or job.ok)):
+            old, job = job, _HeroCut(r, ff, start, out)
+            _hero_job = job
+        else:
+            old = None
+        job.token = request.args.get("t") or ""   # the page load it belongs to now (see preview_hero_stop)
+    if old and not old.done:
+        old.stop()
+    return Response(job.stream(), mimetype="video/mp4", direct_passthrough=True,
+                    headers={"Cache-Control": "no-store", "Accept-Ranges": "none"})
+
+
+@bp.post("/api/preview/hero/stop")
+def preview_hero_stop():
+    """?t=: only when the cut still belongs to that page load (a stop can arrive after the page asked again)."""
+    t = request.args.get("t") or ""
+    job = _hero_job
+    if job and (not t or getattr(job, "token", "") == t):
+        stop_hero_clip()
+    return ok()
 
 
 @bp.get("/api/preview/stream/<item_id>")

@@ -116,6 +116,7 @@ class Player:
         self._subs = deque(maxlen=400)   # (time, text) of subtitle lines as they were shown
         self._emit_at = 0
         self._dev_mute = bool(os.environ.get("MARQUEE_DEV_MUTE"))
+        self._fs_before = False  # the window was already fullscreen when playback started (then it stays so)
 
     # ------------------------------------------------------------------ setup (GUI thread)
     def attach(self, form):
@@ -266,6 +267,8 @@ class Player:
             item = jf.get(f"/Items/{item_id}", userId=jf.user, Fields=FIELDS + ",Trickplay", timeout=8)
         local = bool(item.get("_local"))
         st = settings.load()
+        if not self.item:  # starting from the browsing UI (not the next episode or a quality switch)
+            self._fs_before = bool(self.app.fullscreen)
         if self.item:  # switching video or quality: close the old session first
             self._report("Stopped", self._position())
         switching_quality = bool(self.item and self.item["Id"] == item["Id"] and quality)
@@ -307,6 +310,9 @@ class Player:
         self._last_report = time.time()
         self._pos = max(0.0, start)
         self._ui(self._show)
+        if st.get("fullscreen_on_play", True) and not self.app.fullscreen and not self.pip and not self.mini:
+            self.app.toggle_fullscreen()   # "Fullscreen when playing"; stop() goes back to a window
+            self._set("fullscreen", True)
         self._report("", start)
         if item.get("_segments"):
             self._publish_segments(item["Id"], [{"Type": g.get("type"), "StartTicks": int(g.get("start", 0) * TICKS),
@@ -645,7 +651,7 @@ class Player:
             self._report("Stopped", pos, session=session, item=item)
         if self.pip:
             self._ui(self._pip_exit)
-        if self.app.fullscreen:
+        if self.app.fullscreen and not self._fs_before:   # back to a window, unless it was fullscreen before playing
             self.app.toggle_fullscreen()
         self._ui(self._hide)
         self.app.notify_ui("playback-ended", {"id": item["Id"]})
@@ -1209,18 +1215,15 @@ class Player:
     def credits_start(self):
         """Where the credits begin: Jellyfin/catalog/chapter markers, then the media index's outro (or a film's
         subtitles), then a closing stretch of black screen with text found in the file itself. Episodes with none
-        of those get no credits screen (the normal end-of-episode autoplay takes over); films fall back to the
-        last 2.5 %."""
+        of those get no credits screen: the title plays to its end and the normal autoplay takes over. (No guessing:
+        a guess lands in the middle of a quiet finale.)"""
         if self._credits:
             return self._credits
         if self._index_outro:
             return self._index_outro
         if getattr(self, "_black_credits", None):
             return self._black_credits
-        dur = (self.mpv.duration if self.mpv else 0) or 0
-        if not dur or (self.item or {}).get("Type") == "Episode":
-            return None
-        return dur * 0.975
+        return None
 
     def _credits_tick(self, pos):
         last, self._last_tick_pos = self._last_tick_pos, pos
@@ -1319,14 +1322,52 @@ class Player:
                 p = subprocess.run([ff, "-hide_banner", "-loglevel", "error", "-ss", f"{offset:.1f}", "-i", path,
                                     "-map", f"0:{idx}", "-f", "srt", "pipe:1"], capture_output=True, timeout=120)
                 cues = details._parse_cues(p.stdout.decode("utf-8", "replace")) if p.returncode == 0 else []
-            start = credits_from_cues([(a + offset, b + offset, t) for a, b, t in cues], dur)
-            if start and self.item and self.item.get("Id") == item_id:
-                self._index_outro = start
-                print(f"credits: film credits from subtitles at {start / 60:.1f} min", flush=True)
-            elif self.item and self.item.get("Id") == item_id:
-                self._find_black_credits(item_id, dur, 900)
+            hint = credits_from_cues([(a + offset, b + offset, t) for a, b, t in cues], dur)
         except Exception as e:
             print("credits from subtitles failed:", e)
+            hint = None
+        # The picture decides: the closing credits crawl is a long black stretch that runs to the very end. The
+        # subtitles' "the talking stops here" only pulls the start earlier when titles roll over images first.
+        # Nothing found: no credits screen (the film just ends), never a guess in the middle of the finale.
+        try:
+            block = self._film_black_block(dur)
+        except Exception as e:
+            print("credits from black frames failed:", e)
+            block = None
+        start = None
+        if block:
+            start = block
+            if hint and block - 300 <= hint < block and hint >= dur - 15 * 60:
+                start = hint
+        elif hint and hint >= dur - 12 * 60:
+            start = hint
+        if start and self.item and self.item.get("Id") == item_id:
+            self._index_outro = start
+            print(f"credits: film credits at {start / 60:.1f} min (black {block and round(block / 60, 1)}, "
+                  f"subtitles {hint and round(hint / 60, 1)})", flush=True)
+        elif self.item and self.item.get("Id") == item_id:
+            self._index_outro = None
+            self._no_credits = True
+            print("credits: none found; the film plays to its end", flush=True)
+
+    def _film_black_block(self, dur, scan=15 * 60):
+        """Start of the last long mostly-black stretch (30 s+ runs, joined across breaks of up to 4 minutes) that
+        reaches the end of the film, from its keyframes only (fast: no full decode). None if there isn't one."""
+        path = self.mpv.path if self.mpv else None
+        if not path or not os.path.exists(str(path)):
+            return None
+        from . import details
+        ff = details._ffmpeg()
+        if not ff:
+            return None
+        start = max(0.0, dur - scan)
+        p = subprocess.run([ff, "-hide_banner", "-nostats", "-skip_frame", "nokey", "-ss", f"{start:.1f}", "-i", path,
+                            "-an", "-sn", "-dn", "-vf", "scale=320:-2,showinfo,blackframe=amount=70:threshold=40",
+                            "-vsync", "0", "-f", "null", "-"], capture_output=True, timeout=900)
+        err = p.stderr.decode("utf-8", "replace")
+        keys = sorted({round(start + float(x), 1) for x in re.findall(r"showinfo.*?pts_time:([\d.]+)", err)})
+        black = {round(start + float(x), 1) for x in re.findall(r"blackframe.*? t:([\d.]+)", err)}
+        return credits_block(keys, black, dur)
 
     def _find_black_credits(self, item_id, dur, scan):
         """Credits rolling as text on a black screen, from the file's last `scan` seconds (one small frame a second,
@@ -2147,3 +2188,28 @@ def credits_from_black(black_seconds, scan_start, dur, run=6, rest=0.6):
             if len(left) and sum(1 for x in left if x in secs) / len(left) >= rest:
                 return float(t)
     return None
+
+
+def credits_block(keys, black, dur, min_run=30, max_gap=240, end_slack=25, min_final=60):
+    """keys: keyframe times; black: those that were mostly black. Runs of consecutive black keyframes lasting
+    min_run+ seconds; the last one must reach the end (within end_slack) and last min_final+; earlier runs join it
+    across breaks of up to max_gap (titles over pictures between the crawls). Returns where that block starts."""
+    runs, cur = [], None
+    for k in keys:
+        if k in black:
+            cur = [k, k] if cur is None else [cur[0], k]
+        else:
+            if cur and cur[1] - cur[0] >= min_run:
+                runs.append(cur)
+            cur = None
+    if cur and cur[1] - cur[0] >= min_run:
+        runs.append(cur)
+    if not runs or dur - runs[-1][1] > end_slack or runs[-1][1] - runs[-1][0] < min_final:
+        return None
+    start = runs[-1][0]
+    for a, b in reversed(runs[:-1]):
+        if start - b <= max_gap:
+            start = a
+        else:
+            break
+    return float(start)

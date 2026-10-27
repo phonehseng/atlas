@@ -121,7 +121,8 @@ def summaries(app, item, build=True, workers=4, deadline=None):
         with cf.ThreadPoolExecutor(workers) as ex:
             lines = list(ex.map(one, parts))
         result = [{"i": w["i"], "start": w["start"], "end": w["end"], "summary": s or ""} for w, s in zip(parts, lines)]
-        d = {"v": SUMMARY_VERSION, "cues": len(cues), "stretches": result}
+        d = {"v": SUMMARY_VERSION, "cues": len(cues), "stretches": result,
+             "texts": [_condense(w["cues"], 1200) for w in parts]}
         try:
             from . import embed
             vs = embed.embed([r["summary"] for r in result])
@@ -162,15 +163,46 @@ def rank_stretches(item, d, event, k=3, dialogue_only=False):
                 return [(parts[i], float(sc[i])) for i in order]
         except Exception as e:
             print("stretch ranking failed:", e)
-    listing = "\n".join(f"{n}. [{clock(p['start'])}] {p['summary']}" for n, p in enumerate(parts, 1))
-    out, _ms, _ = llm.complete(
-        [{"role": "system", "content": f"Numbered stretches of {_title(item)} with one-line summaries. Which stretches "
-                                       "could the requested event happen in? Up to 3 numbers, best first. Reply JSON "
-                                       'only: {"stretches": [numbers]}'},
-         {"role": "user", "content": f"{listing}\n\nEvent: {event}"}], max_tokens=40, temperature=0.0, timeout=30,
-        json_mode=True)
-    nums = [int(x) for x in _json(out).get("stretches") or [] if str(x).isdigit()]
-    return [(parts[n - 1], 0.0) for n in nums if 1 <= n <= len(parts)][:k]
+    # no embedding model (the built-in AI): the model's own pick from the summaries, then the word ranking
+    picked = []
+    try:
+        listing = "\n".join(f"{n}. [{clock(p['start'])}] {p['summary']}" for n, p in enumerate(parts, 1))
+        out, _ms, _ = llm.complete(
+            [{"role": "system", "content": f"Numbered stretches of {_title(item)} with one-line summaries. Which "
+                                           "stretches could the requested event happen in? Up to 3 numbers, best first. "
+                                           'Reply JSON only: {"stretches": [numbers]}'},
+             {"role": "user", "content": f"{listing}\n\nEvent: {event}"}], max_tokens=40, temperature=0.0, timeout=30,
+            json_mode=True)
+        nums = [int(x) for x in _json(out).get("stretches") or [] if str(x).isdigit()]
+        picked = [(parts[n - 1], 0.5) for n in nums if 1 <= n <= len(parts)][:2]
+    except Exception as e:
+        print("stretch pick failed:", e)
+    seen = {p["i"] for p, _ in picked}
+    for p, sc in lexical_rank(parts, d.get("texts") or [], event, k):
+        if p["i"] not in seen and len(picked) < k:
+            picked.append((p, sc))
+            seen.add(p["i"])
+    return picked[:k]
+
+
+def lexical_rank(parts, texts, event, k=3):
+    """Without an embedding model: stretches by shared (stemmed) words with the request, rarer words counting more
+    (TF-IDF over each stretch's summary + its dialogue and sound cues)."""
+    import math
+
+    from .scenes import _words
+    docs = []
+    for i, p in enumerate(parts):
+        words = _words(p.get("summary", "")) + _words(texts[i] if i < len(texts) else "")
+        docs.append(set(words))
+    want = set(_words(event))
+    if not want or not docs:
+        return []
+    n = len(docs)
+    idf = {w: math.log(1 + n / (1 + sum(1 for d in docs if w in d))) for w in want}
+    scores = [sum(idf[w] for w in want if w in d) / (sum(idf.values()) or 1) for d in docs]
+    order = sorted(range(n), key=lambda i: -scores[i])[:k]
+    return [(parts[i], scores[i]) for i in order if scores[i] > 0]
 
 
 # ------------------------------------------------------------------ model calls
@@ -242,16 +274,25 @@ def find(app, item, text, credits_at=None, budget=12.0):
     def visual():
         if dialogue_mode:
             return [text], None, {"indexed": clip_search(item["Id"], [text])["indexed"], "hits": []}
+        core = core_variants(text)
         qs, spoken, _ = visual_queries(text)
-        return qs, spoken, clip_search(item["Id"], qs)
+        allq = core + [q for q in qs if q.lower() not in {c.lower() for c in core}][:3]
+        res = clip_search(item["Id"], allq)
+        for h in res["hits"]:
+            h["core"] = h["q"] in core
+        return allq, spoken, res
 
     def story():
         d = summaries(app, item, build=True, deadline=t0 + 90) if cues and ai else None
         if not d:
             return []
+        if not d.get("texts"):  # caches made before the word ranking existed
+            by_i = {w["i"]: _condense(w["cues"], 1200) for w in stretches(cues)}
+            d = {**d, "texts": [by_i.get(p["i"], "") for p in d["stretches"]]}
         if credits_at:
             keep = [i for i, p in enumerate(d["stretches"]) if p["start"] < credits_at]
             d = {**d, "stretches": [d["stretches"][i] for i in keep],
+                 "texts": [d["texts"][i] for i in keep if i < len(d.get("texts") or [])],
                  **({"vec_sum": [d["vec_sum"][i] for i in keep], "vec_dlg": [d["vec_dlg"][i] for i in keep]}
                     if d.get("vec_sum") else {})}
         return rank_stretches(item, d, quoted or text, dialogue_only=dialogue_mode)
@@ -312,14 +353,19 @@ def find(app, item, text, credits_at=None, budget=12.0):
             found = list(ex.map(lambda a: in_stretch(*a), [(r, p) for r, (p, _s) in enumerate(ranked[:3], 1)]))
         for rank, p, ln, pics in found:
             if ln:
-                add(ln[0]["start"], ln[0]["start"], "line", text=ln[0]["text"], rank=rank, stretch=p["summary"])
+                k = next((j for j, c in enumerate(cues) if c is ln[0]), None)
+                around = " ".join(c["text"] for c in cues[max(0, k - 1):k + 2]) if k is not None else ln[0]["text"]
+                add(ln[0]["start"], ln[0]["start"], "line", text=ln[0]["text"], rank=rank, stretch=p["summary"],
+                    context=around)
             if pics and pics[0]["z"] >= 2.3:
                 add(pics[0]["time"], pics[0]["start"], "picture_in", z=pics[0]["z"], rank=rank, stretch=p["summary"])
-        for h in sorted(clip, key=lambda h: -h["z"])[:3]:
-            if h["z"] >= 3.3:
-                c = add(h["time"], h["start"], "picture", z=h["z"])
+        for cl in clip_clusters(clip)[:4]:
+            if cl["z"] >= 3.3:
+                c = add(cl["time"], cl["start"], "picture", z=cl["z"])
+                c["nq4"] = max(c.get("nq4", 0), cl["nq4"])
+                c["clip_strong"] = c.get("clip_strong") or cl["strong"]
                 for r, (p, _s) in enumerate(ranked[:3], 1):
-                    if p["start"] - 300 <= h["time"] <= p["end"] + 300:
+                    if p["start"] - 300 <= cl["time"] <= p["end"] + 300:
                         c["near_rank"] = min(c.get("near_rank", 9), r)
     timing["lines"] = round(time.time() - t0, 1)
 
@@ -328,13 +374,17 @@ def find(app, item, text, credits_at=None, budget=12.0):
         # the two best story candidates and the two strongest pictures elsewhere; a picture is looked at twice
         # (its frame and ~8 s before, since a shot found by its look often comes just after the moment)
         story_c = sorted([c for c in cands if c.get("rank")], key=lambda c: (-len(c["signals"]), c["rank"]))[:2]
-        pics = sorted([c for c in cands if c.get("z") and c not in story_c], key=lambda c: -c["z"])[:2]
+        pics = sorted([c for c in cands if c.get("z") and c not in story_c],
+                      key=lambda c: (-bool(c.get("clip_strong")), -c["z"]))[:2]
+        from . import vision as _v
+        if (_v.provider() or {}).get("builtin"):  # the small built-in model: 3 frames, no double look
+            story_c, pics = story_c[:1], pics[:2]
         order = story_c + pics
         times, owner = [], []
         for c in order:
             times.append(c["time"] + 1)
             owner.append(c)
-            if c in pics:
+            if c in pics and not (_v.provider() or {}).get("builtin"):
                 times.append(max(0.0, c["time"] - 8))
                 owner.append(c)
         try:
@@ -348,8 +398,12 @@ def find(app, item, text, credits_at=None, budget=12.0):
                 c["look"], c["describe"] = v["verdict"], v["describe"]
     timing["look"] = round(time.time() - t0, 1)
 
+    from . import vision
+    vp = vision.provider() or {}
+    trusted = not vp.get("builtin")  # the small built-in model's "no" is too unreliable to veto strong pictures
     for c in cands:
         c["request"] = text
+        c["look_trusted"] = trusted
     kind, chosen, why = decide(cands, bool(cues), res["indexed"], dialogue_mode)
     for c in chosen:
         c["target"] = max(0.0, c["jump"] - 3)
@@ -369,18 +423,99 @@ def _agrees(c):
     return bool(want & seen)
 
 
+PRONOUNS = re.compile(r"^(?:they|he|she|we|you|i|someone|somebody|people|everyone|the (?:guy|man|woman|kid|kids|"
+                      r"girl|boy|people|characters?|hero|heroes))\s+", re.I)
+
+
+def core_variants(text):
+    """The request as said, without its subject ("fire a rocket launcher"), and its last noun phrase
+    ("rocket launcher"): what CLIP matches best. These count fully; the small model's rewrites count less."""
+    from .scenes import STOP
+    t = re.sub(r"\s+", " ", (text or "").strip())
+    out = [t]
+    bare = PRONOUNS.sub("", t)
+    if bare and bare.lower() != t.lower():
+        out.append(bare)
+    words = [w for w in re.findall(r"[A-Za-z0-9'-]+", bare)]
+    tail = []
+    for w in reversed(words):
+        if w.lower() in STOP or w.lower() in ("a", "an", "the"):
+            break
+        tail.insert(0, w)
+    if 2 <= len(tail) <= 3 and len(words) > len(tail) and " ".join(tail).lower() not in (x.lower() for x in out):
+        out.append(" ".join(tail))
+    return out[:3]
+
+
+def clip_clusters(hits, gap=60.0):
+    """CLIP hits grouped by time (across the query variants): best z, how many variants reach z 4, strong or not.
+    Strong = z >= 4 for 2+ core variants (the words as said), or one z >= 4.5 there; a rewrite by the model adds
+    support only when a core variant already reaches z 3.8 in the same place."""
+    out = []
+    for h in sorted(hits, key=lambda h: h["time"]):
+        if out and h["time"] - out[-1]["hits"][-1]["time"] <= gap:
+            out[-1]["hits"].append(h)
+        else:
+            out.append({"hits": [h]})
+    clusters = []
+    for g in out:
+        best = max(g["hits"], key=lambda h: h["z"])
+        core = [h for h in g["hits"] if h.get("core", True)]
+        core_z = max((h["z"] for h in core), default=0.0)
+        nq4 = len({h["q"] for h in core if h["z"] >= 4.0})
+        if core_z >= 3.8:
+            nq4 += len({h["q"] for h in g["hits"] if not h.get("core", True) and h["z"] >= 4.0})
+        strong = nq4 >= 2 or core_z >= 4.5 or (best["z"] >= 4.5 and core_z >= 3.8)
+        clusters.append({"time": best["time"], "start": best["start"], "z": best["z"], "nq4": nq4, "strong": strong})
+    clusters.sort(key=lambda c: (-c["strong"], -(c["z"] + 0.3 * max(0, c["nq4"] - 1))))
+    return clusters
+
+
+def lexical(c):
+    """Share of the request's words that appear in the matched line (and the lines right around it); words match
+    on a shared stem ("freed" ~ "free", "firing" ~ "fire")."""
+    from .scenes import _words
+    want = {w for w in _words(c.get("request", "")) if len(w) > 2}
+    ctx = c.get("context") or c.get("text") or ""
+    have = set(_words(ctx)) | set(re.findall(r"[a-z0-9]+", ctx.lower().replace("'", "")))
+    if not want:
+        return 0.0
+
+    def hit(w):
+        return any(h == w or (len(w) >= 4 and len(h) >= 4 and (h.startswith(w) or w.startswith(h))) for h in have)
+    return sum(1 for w in want if hit(w)) / len(want)
+
+
 def strength(c, dialogue_mode=False):
     s, lk = c["signals"], c.get("look", "")
     if "quote" in s:
         return 3
     if dialogue_mode:
         return 2 if "paraphrase" in s else 0
-    if lk.startswith("no"):
-        return 0
     line, pin, pic = "line" in s, "picture_in" in s, "picture" in s
-    yes, related = lk.startswith("yes"), lk.startswith("related")
+    yes, related, no = lk.startswith("yes"), lk.startswith("related"), lk.startswith("no")
     rank = c.get("rank", 9)
-    if yes and (pin or (line and _agrees(c))) and rank <= 3:
+    strong_clip = bool(c.get("clip_strong"))
+    agree = (c.get("nq4") or 0) >= 2
+    trusted = c.get("look_trusted", True)        # a weak (built-in) look can't veto strong CLIP agreement
+    if strong_clip:
+        if no and trusted and not agree:
+            return 0
+        if no and not agree:
+            return 1
+        if (yes and trusted) or (yes and agree) or (line and lexical(c) >= 0.5 and agree):
+            return 3
+        return 2
+    if no and trusted:
+        return 0
+    if no:                                       # an untrusted "no" is just no look
+        yes = related = False
+        lk = ""
+    lex = lexical(c) if line else 0.0
+    weak_line = line and lex < 0.34 and not yes  # the words aren't in or around that line
+    if weak_line:
+        line = False
+    if yes and (pin or (line and _agrees(c) and lex >= 0.5)) and rank <= 3:
         return 3                     # the story and the picture check agree
     if yes and line and rank <= 3:
         return 2                     # a line + a "yes" whose description shares nothing with the request: offer only
@@ -396,7 +531,9 @@ def strength(c, dialogue_mode=False):
     if related and (line or pin) and rank <= 3:
         return 2
     if line and rank <= 2 and not lk:
-        return 2                     # nothing to look at (no index / no vision): offer, don't jump
+        return 2                     # no (trusted) look: offer, don't jump
+    if weak_line and rank == 1 and not lk:
+        return 2                     # the story's best guess, without the words: offered last, never jumped to
     return 0
 
 
@@ -404,8 +541,17 @@ def decide(cands, have_subs, indexed, dialogue_mode=False):
     for c in cands:
         c["strength"] = strength(c, dialogue_mode)
     ranked = sorted([c for c in cands if c["strength"] > 0],
-                    key=lambda c: (-c["strength"], c.get("rank", 9), -(c.get("z") or 0)))
+                    key=lambda c: (-c["strength"], -bool(c.get("clip_strong")), -lexical(c) if "line" in c["signals"]
+                                   else 0, c.get("rank", 9), -(c.get("z") or 0)))
+    strong = sorted([c for c in ranked if c.get("clip_strong")], key=lambda c: (-(c.get("nq4") or 0), -(c.get("z") or 0)))
     sure = [c for c in ranked if c["strength"] >= 3]
+    if sure and sure[0].get("clip_strong") and "quote" not in sure[0]["signals"]:
+        rivals = [c for c in strong if c is not sure[0] and (c.get("nq4") or 0) >= (sure[0].get("nq4") or 0)
+                  and abs(c["time"] - sure[0]["time"]) > 300]
+        if rivals:  # other places the pictures agree on just as well: let them choose
+            return "choices", ([sure[0]] + rivals)[:3], None
+    if not sure and strong:
+        return "choices", (strong + [c for c in ranked if c not in strong and c["strength"] >= 2])[:3], None
     if sure:
         quotes = sorted([c for c in sure if "quote" in c["signals"]], key=lambda c: c["time"])
         if len(quotes) > 1:          # the line is said more than once

@@ -337,14 +337,14 @@ function applyTheme(t) {
 }
 
 /* ================================================================== playback */
-async function play(id, start, label) {
+async function play(id, start, label, extra) {
   closePop();
   const it = S.items.get(id) || {};
   if (window.MarqueeCast && MarqueeCast.active()) {   // casting: Play buttons play on the TV
     return MarqueeCast.castItem(id, start, label || [titleOf(it), it.type === 'Episode' ? epCode(it) : ''].filter(Boolean).join(' · '));
   }
   try {
-    await api('/api/play', start == null ? { id } : { id, start });
+    await api('/api/play', start == null ? { id } : { id, start, ...(extra || {}) });
     toast(`Starting ${label || titleOf(it)}${it.type === 'Episode' ? ' · ' + epCode(it) : ''}…`, { icon: 'film' });
   } catch (e) {
     toast(`Couldn't start playback: ${e.message}`);
@@ -501,15 +501,34 @@ function addPreviewSubs(v, url) {
   v.append(t);
   try { t.track.mode = 'showing'; } catch (e) { /* not ready */ }
 }
+/* A playing preview that is about to shrink away (a pop clicked open into its title page): a still of the current
+   frame is laid over the video, which is paused and hidden but only unloaded once the title page has finished
+   growing (closePop). Tearing a visible video down while its layer was being scaled, with the title page growing
+   over it, made WebView2 flash and draw lines across the preview. */
+function freezeVideo(v) {
+  if (!v || !v.isConnected) return;
+  if (v.classList.contains('playing') && v.readyState >= 2 && v.videoWidth) {
+    try {
+      const c = document.createElement('canvas');
+      c.width = Math.min(v.videoWidth, 960); c.height = Math.round(c.width * v.videoHeight / v.videoWidth);
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none';
+      v.after(c);
+    } catch (e) { /* no still: the artwork underneath shows */ }
+  }
+  try { v.pause(); } catch (e) { /* gone */ }
+  v.style.visibility = 'hidden';
+}
 function closePop(instant) {
   const P = pv.pop;
   if (!P) return;
   pv.pop = null;
   pv.lastClose = Date.now();
-  unloadVideo(P.video);
-  if (instant) { P.el.remove(); return; }
+  if (instant) { unloadVideo(P.video); P.el.remove(); return; }
+  freezeVideo(P.video);
   P.el.classList.add('closing');
-  setTimeout(() => P.el.remove(), 260);
+  setTimeout(() => { P.el.style.visibility = 'hidden'; }, 260);
+  setTimeout(() => { unloadVideo(P.video); P.el.remove(); }, 900);   // after a title page's grow-in (flyIn, 560 ms)
 }
 
 /* Poster tilt + sheen follows the pointer. */
@@ -1762,6 +1781,12 @@ function stopHero(instant) {
   if (!m) return;
   clearTimeout(m.timer);
   if (m.unfit) m.unfit();
+  if (m.src.hero) {
+    heroPlayLabel(null);
+    $('.dx-vtime')?.remove(); $('.dx-vbar')?.remove();
+    // a clip still being cut: stop the cut (the server keeps a finished one for next time)
+    if (!m.src.seek) fetch(`/api/preview/hero/stop?t=${m.token}`, { method: 'POST', keepalive: true }).catch(() => {});
+  }
   const el = m.el;
   const kill = () => { if (el.tagName === 'VIDEO') unloadVideo(el); el.remove(); };
   if (instant || reduced.matches) kill(); else setTimeout(kill, 600);
@@ -1770,7 +1795,11 @@ async function heroPreview(seq) {
   if (S.settings.details_autoplay === false) return;
   let src = null;
   if (D.kind === 'item') {
-    try { const r = await api(`/api/preview/${encodeURIComponent(D.id)}`); if (r.available && r.url) src = { kind: 'video', url: r.url, start: r.start, seek: r.seek, subs: r.subs }; } catch (e) { /* artwork only */ }
+    try {
+      const r = await api(`/api/preview/${encodeURIComponent(D.id)}?hero=1`);
+      if (r.available && r.url) src = { kind: 'video', url: r.url, start: r.start, seek: r.seek, subs: r.subs,
+        hero: !!r.hero, length: r.length || 0, tid: r.id, ep: r.ep || '' };
+    } catch (e) { /* artwork only */ }
   } else {
     const v = ((D.extras && D.extras.videos) || []).find(x => x.type === 'Trailer' || x.type === 'Teaser');
     if (v) src = await trailerSrc(v.key);
@@ -1813,11 +1842,13 @@ function startHeroMedia(src) {
     }, { once: true });
     if (src.seek) v.addEventListener('loadedmetadata', () => { try { v.currentTime = src.start || 0; } catch (e) { /* not seekable */ } }, { once: true });
     addPreviewSubs(v, src.subs);
-    v.src = src.url;
+    m.token = Math.random().toString(36).slice(2);
+    v.src = src.hero && !src.seek ? `${src.url}&t=${m.token}` : src.url;
     m.el = v;
     host.append(v);
     v.play().catch(() => {});
-    if (src.seek) m.timer = setTimeout(() => { if (D.media === m) endHero(); }, 32000);   // a whole file: stop after ~30 s
+    if (src.hero) heroClock(m);
+    else if (src.seek) m.timer = setTimeout(() => { if (D.media === m) endHero(); }, 32000);   // a whole file: stop after ~30 s
   } else {   // last resort (trailerSrc): YouTube's own player, when Marquee couldn't fetch the trailer itself
     const f = document.createElement('iframe');
     const origin = encodeURIComponent(location.origin);
@@ -1835,6 +1866,45 @@ function startHeroMedia(src) {
     host.append(f);
     m.timer = setTimeout(() => { if (D.media === m && m.ytState == null) { hero.classList.add('playing'); setVctl(false); } }, 2600);
   }
+}
+/* The title page's preview runs about two minutes (src.length): a small clock and a thin line show where it is, it
+   stops by itself at the end, and once it has played a little Play carries on from there in the real player. */
+function heroClock(m) {
+  const v = m.el, hero = $('.dx-hero'), c = $('.dx-vctl');
+  if (!hero || !c) return;
+  c.insertAdjacentHTML('afterbegin', '<span class="dx-vtime" aria-hidden="true"></span>');
+  hero.insertAdjacentHTML('beforeend', '<div class="dx-vbar" aria-hidden="true"><i></i></div>');
+  const len = m.src.length || 120, t0 = m.src.seek ? (m.src.start || 0) : 0;
+  let last = -1;
+  v.addEventListener('timeupdate', () => {
+    if (D.media !== m) return;
+    const into = Math.max(0, v.currentTime - t0);
+    if (into >= len) { v.pause(); return endHero(); }
+    $('.dx-vbar i')?.style.setProperty('--p', Math.min(1, into / len).toFixed(4));
+    const s = Math.floor(into);
+    if (s === last) return;
+    last = s;
+    const t = $('.dx-vtime');
+    if (t) t.textContent = `${fmtClock(into)} / ${fmtClock(len)}`;
+    heroPlayLabel(heroPos());
+  });
+}
+/* Where the preview is in the title (seconds, ~2 s back for context), once it has played past its start; else null. */
+function heroPos() {
+  const m = D.media;
+  if (!m || !m.src.hero || m.el.tagName !== 'VIDEO' || !m.el.currentTime) return null;
+  const into = m.el.currentTime - (m.src.seek ? (m.src.start || 0) : 0);
+  if (into < 3) return null;
+  return Math.max(0, (m.src.start || 0) + into - 2);
+}
+/* The page's main Play button says "Play from 1:12:30" while the preview runs (pos null: back to what it said). */
+function heroPlayLabel(pos) {
+  const b = $('.dx-copy .dx-play');
+  if (!b || b.classList.contains('is-static')) return;
+  if (pos == null) { if (b.dataset.orig != null) { b.innerHTML = b.dataset.orig; delete b.dataset.orig; } return; }
+  if (b.dataset.orig == null) b.dataset.orig = b.innerHTML;
+  const ep = D.media && D.media.src.ep;
+  b.innerHTML = `${icon('play')} Play from <span class="sub">${fmtClock(pos)}${ep ? ' · ' + esc(ep.replace(':', ' · ')) : ''}</span>`;
 }
 function endHero() {
   const m = D.media;
@@ -1875,6 +1945,7 @@ function toggleMute() {
 }
 function replayHero() {
   const m = D.media;
+  if (m && m.src.hero && !m.src.seek) return startHeroMedia(m.src);   // a clip still being cut can't seek: load it again
   if (m && m.el.tagName === 'VIDEO') { try { m.el.currentTime = m.src.seek ? (m.src.start || 0) : 0; m.el.play(); } catch (e) { /* ignore */ } return; }
   if (m && m.ytState === 2) { ytCommand('playVideo'); return; }   // paused trailer: carry on
   if (m) { ytCommand('seekTo', [0, true]); ytCommand('playVideo'); return; }
@@ -2613,6 +2684,8 @@ function playbackPane(s) {
       ${seg('upscaler', up, 'Upscaler', 'Sharpens lower-resolution video.')}
       ${has('sdr_to_hdr') ? seg('sdr_to_hdr', [['auto', 'Auto'], ['off', 'Off']], 'SDR to HDR', 'Brightens standard video on an HDR screen.') : sw('rtx_hdr', 'RTX HDR', 'Turns SDR video into HDR on supported NVIDIA cards.')}`;
   const watching = `
+      ${has('fullscreen_on_play') ? sw('fullscreen_on_play', 'Fullscreen when playing', 'Playing something fills the screen; Marquee goes back to a window when it ends.') : ''}
+      ${has('ai_while_watching') ? sw('ai_while_watching', 'AI while watching', 'Off: nothing runs in the background during a film (the AI frees its graphics memory; end-of-film comments use prepared lines). Questions you ask still work.') : ''}
       ${sw('autoplay_next', 'Autoplay next episode', '')}
       ${has('credits_mini') ? sw('credits_mini', 'Up next during the credits', 'When the credits roll, the video shrinks to a corner and what to watch next appears.') : ''}
       ${sw('skip_intros', 'Skip intros automatically', 'The Skip Intro button shows either way.')}`;
@@ -2853,7 +2926,8 @@ async function loadBuiltin() {
     ${busy ? `<div><span class="muted-note">${esc(dl.state === 'downloading' ? `Downloading ${dl.file || ''}` : dl.state === 'verifying' ? 'Checking the download…' : 'Unpacking…')}${dl.total ? ` · ${gb(dl.done)} of ${gb(dl.total)}` : ''}</span><div class="index-bar"><i style="--p:${p.toFixed(3)}"></i></div></div>` : ''}
     ${dl.state === 'error' ? `<p class="muted-note">Download failed: ${esc(dl.error || 'unknown error')}</p>` : ''}
     ${anyInstalled ? setAdv('builtin', `${seg('ai_builtin_size', [['standard', 'Standard'], ['small', 'Small']], 'Model size', 'Small is quicker on modest PCs.')}
-      ${sw('ai_builtin_gpu', 'Use graphics card', 'Much faster. Turn off if games or videos stutter while it thinks.')}`) : ''}</div>`;
+      ${sw('ai_builtin_gpu', 'Use graphics card', 'Much faster. Turn off if games or videos stutter while it thinks.')}
+      ${seg('ai_vram_gb', [[0, 'No limit'], [2, '2 GB'], [3, '3 GB'], [4, '4 GB'], [6, '6 GB']], 'Graphics memory limit', 'The most video memory the built-in AI may use. Lower leaves more for games and 4K playback; it runs slower.')}`) : ''}</div>`;
   if (busy) builtinPoll = setTimeout(loadBuiltin, 1500);
 }
 document.addEventListener('click', async e => {
@@ -3579,10 +3653,12 @@ document.addEventListener('click', e => {
     case 'share-disconnect': return shareDisconnect(el);
     case 'share-exp': return shareExpiry(el.dataset.sid, +el.dataset.v);
     case 'play': return play(id);
-    case 'play-item': return playItem(id);
-    case 'play-ep': return play(id);
-    case 'resume': return play(id);
-    case 'restart': return play(id, 0);
+    case 'play-item': case 'play-ep': case 'resume': case 'restart': {
+      // the title page's main Play while its preview has been running: carry on from where the preview got to
+      const from = el.classList.contains('dx-play') ? heroPos() : null;
+      if (from != null) { const tid = D.media.src.tid; stopHero(true); return play(tid, from, null, { from_preview: true }); }
+      return act === 'play-item' ? playItem(id) : act === 'restart' ? play(id, 0) : play(id);
+    }
     case 'watched': e.stopPropagation(); return toggleWatched(id, el);
     case 'watched-tmdb': e.stopPropagation(); return toggleWatchedTmdb(el.dataset.tmdb, el);
     case 'wv-unmark': e.stopPropagation(); return unmarkWatched(el);

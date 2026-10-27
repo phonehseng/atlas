@@ -178,6 +178,12 @@ def save_settings():
             continue
         changes[k] = v
     s = settings.save(changes)
+    if {"ai_vram_gb", "ai_builtin_gpu", "ai_builtin_size"} & set(changes):
+        try:  # the built-in AI picks up its new memory limit / device / model on its next start
+            from . import localllm
+            localllm.ENGINE.stop()
+        except Exception as e:
+            print("built-in AI restart:", e)
     if any(k.startswith("cast") for k in changes):
         try:
             from .cast import blueprint as cast
@@ -526,8 +532,19 @@ def play_card(info):
 def play():
     b = request.get_json(force=True) or {}
     item_id, start = b["id"], b.get("start")
+    try:  # the title page's preview gives the GPU back to the player
+        from .details import stop_hero_clip
+        stop_hero_clip()
+    except Exception:
+        pass
     info = catalog().lookup(item_id)
     touch_index(info["id"] if info else item_id)
+    if info and b.get("from_preview") and start is not None:
+        # carrying on from the title page's preview: where it got to is the new resume point
+        try:
+            catalog().save_position(info["id"], float(start), played=False)
+        except (TypeError, ValueError):
+            pass
     online = info.get("source") != "local" and APP.jf.fresh_online(45) if info else jf_ready()
     if info and not online:
         # Jellyfin isn't needed for a file on this PC: play it straight from the catalog

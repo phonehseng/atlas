@@ -70,7 +70,8 @@ LOG = AI_DIR / "llama-server.log"
 
 CTX = 8192
 IDLE_STOP = 5 * 60          # stop the server after this long without a request
-IDLE_STOP_PLAYING = 60      # ...or sooner while a video plays (gives the GPU back to the player)
+IDLE_STOP_PLAYING = 5       # ...or almost at once while a video plays (gives the GPU and its memory back to the player)
+LAYERS = {"standard": 36, "small": 28}   # transformer layers per model, for a graphics-memory cap
 START_TIMEOUT = 180
 
 CREATE_NO_WINDOW = 0x08000000
@@ -421,8 +422,25 @@ class Engine:
         m = MODELS[size]
         return [str(exe), "-m", str(MODEL_DIR / m["model"]["file"]), "--mmproj", str(MODEL_DIR / m["mmproj"]["file"]),
                 "--host", "127.0.0.1", "--port", str(self.port), "-c", str(CTX), "-np", "1",
-                "-ngl", "999" if device else "0", "-dev", device["id"] if device else "none",
-                "--alias", m["alias"], "--no-webui"] + ([] if device else ["--no-mmproj-offload"])
+                "-ngl", str(self._gpu_layers(size)) if device else "0", "-dev", device["id"] if device else "none",
+                "--alias", m["alias"], "--no-webui"] + ([] if device and not self._mmproj_on_cpu(size) else ["--no-mmproj-offload"])
+
+    @staticmethod
+    def _gpu_layers(size):
+        """All layers on the graphics card, unless Settings caps its memory: then as many as fit (the rest run on
+        the CPU, slower but leaving the memory to everything else)."""
+        cap = float(settings.load().get("ai_vram_gb") or 0)
+        if cap <= 0:
+            return 999
+        m = MODELS[size]
+        per_layer = m["model"]["size"] / 1e9 / LAYERS.get(size, 32)
+        room = cap - 0.6 - (m["mmproj"]["size"] / 1e9 if not Engine._mmproj_on_cpu(size) else 0)  # 0.6: context
+        return max(0, min(LAYERS.get(size, 32), int(room / per_layer)))
+
+    @staticmethod
+    def _mmproj_on_cpu(size):
+        cap = float(settings.load().get("ai_vram_gb") or 0)
+        return 0 < cap < 2.5
 
     def _start(self):
         backend, size = _backend(), _size()

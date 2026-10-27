@@ -25,6 +25,7 @@ DEFAULTS = {
     "rtx_hdr": False,
     "stable_volume": True,
     "autoplay_next": True,
+    "fullscreen_on_play": True,  # playing a video makes the window fullscreen (back to a window when it ends)
     "skip_intros": False,    # skip automatically (the Skip Intro button shows either way)
     "previews": True,
     "sub_lang": "eng",
@@ -49,6 +50,8 @@ DEFAULTS = {
     "ai_model": "",
     "ai_builtin_size": "standard",  # built-in AI model: standard (Qwen3-VL 4B) | small (Qwen3-VL 2B, weaker PCs)
     "ai_builtin_gpu": True,  # built-in AI on the graphics card (off: CPU only)
+    "ai_while_watching": False,  # background AI while a video plays (off: only questions you ask)
+    "ai_vram_gb": 0,  # most graphics memory the built-in AI may use, in GB (0: as much as it needs)
     "library_folders": [],   # folders of films/shows to play without Jellyfin (scanned into the local catalog)
     "remote": False,         # phone remote (LAN listener, paired by QR code)
     "remote_port": 8737,

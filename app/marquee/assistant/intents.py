@@ -198,6 +198,12 @@ def _parse(t):  # noqa: C901 - one flat table of rules reads best
                                   r"(?:part|scene|bit|moment|point) (?:where|when|with|in which)\s+(.+)$", t)
     if m and not scene:
         scene = m.group(1)
+    if not scene:  # without "where": "go to the part percy gives the bolt back", "skip to the bit with the dragon"
+        m = re.search(r"^(?:go|jump|skip|take me|bring me|rewind|seek|fast forward|head|play|start|get me)\s*"
+                      r"(?:back|forward|ahead)?\s*(?:to|from)\s+(?:the|that)\s+(?:part|scene|bit|moment|point|spot|place)"
+                      r"(?:\s+(?:that|with|in which|of|after|before))?\s+(.+)$", t)
+        if m and not re.match(rf"^{DUR}$", m.group(1)):
+            scene = m.group(1)
     if scene:
         scene = re.sub(r"\s+(?:happens|happened|happen|takes place|is)$", "", scene).strip()
         if scene:

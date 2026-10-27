@@ -49,6 +49,8 @@ CASES = [
     (EDGE, "skip to where the dragon attacks", None),
     (FURY, "go to the part where they ride horses on the beach", None),
     (HP, "go to the part where spiderman gets shot", None),
+    # a live failure: the CLIP index has it (Fremen firing a shoulder launcher; a harvester under rocket attack)
+    ("Dune: Part Two", "go to the scene where they fire a rocket launcher", [("1:27:00", "1:30:00"), ("35:00", "38:00")]),
 ]
 
 
@@ -70,6 +72,14 @@ def main():
     if "--only" in sys.argv:
         only = {int(x) for x in sys.argv[sys.argv.index("--only") + 1].split(",")}
     frames = Path(sys.argv[sys.argv.index("--frames") + 1]) if "--frames" in sys.argv else None
+    if "--prepare" in sys.argv:  # the story summaries are made ahead (title page opened), not timed here
+        from marquee.assistant import scene_search
+        for title in sorted({c[0] for c in CASES}):
+            it = app.jf.items(searchTerm=title, Recursive="true", IncludeItemTypes="Movie,Episode", Limit=1, Fields=FIELDS)[0]
+            t0 = time.time()
+            d = scene_search.summaries(app, it, build=True, deadline=time.time() + 900)
+            print(f"prepared {title}: {len(d['stretches']) if d else 0} stretches, embeddings "
+                  f"{bool(d and d.get('vec_sum'))}, {time.time() - t0:.0f} s", flush=True)
     sc = scenes.Scenes.__new__(scenes.Scenes)
     sc.app = app
     items = {}

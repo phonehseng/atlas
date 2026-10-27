@@ -95,6 +95,15 @@ def _low_priority():
         pass
 
 
+def _watching():
+    """Is a video playing right now? (Background AI waits; the credits comment then comes from prepared lines.)"""
+    try:
+        from .. import server
+        return bool(getattr(getattr(server.APP, "player", None), "playing", False))
+    except Exception:
+        return False
+
+
 def _work(app, job):
     _low_priority()
     try:
@@ -109,7 +118,8 @@ def _work(app, job):
             return
         _notify(app, job)
         from .. import ai, scripted
-        if ai.mode() == "classic":  # no model: a prepared, spoiler-free line and rule-made reasons
+        quiet = _watching() and not settings.load().get("ai_while_watching")
+        if ai.mode() == "classic" or quiet:  # no model (or a film is on): a prepared, spoiler-free line and rule-made reasons
             comment, whys = scripted.ending_comment(app, item, job.picks)
             job.comment = comment
             for p in job.picks:
