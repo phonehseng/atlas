@@ -75,6 +75,7 @@ DEFAULTS = {
     "taste_learning": True,      # the taste profile learns from watch history (off: only what you tell it)
     "storage_limit_gb": 0,       # media storage limit in GB (0 = no limit), measured over the library folders
     "storage_enforce": "warn",   # over the limit: warn | block (refuse new requests) | auto (free space by the cleanup rules)
+    "shrink_4k_watched": False,  # re-encode a 4K film to 1080p once you've watched it (marquee.shrink)
     "delete_after_watch": False, # remove titles once everyone has watched them (after delete_after_watch_days)
     "delete_after_watch_days": 3,
     "delete_whole_seasons": False,  # TV: remove a season only once it's fully watched (off: watched episodes one by one)

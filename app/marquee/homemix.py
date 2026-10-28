@@ -746,7 +746,7 @@ def discover_page(app, kind, page=1, sort="popular", genre=None):
         card = ctx.req_card(c, allow_requested=True, browse=True)
         if card and is_req(card):
             items.append(card)
-    return {"items": items, "more": int(page) < min(int(data.get("pages") or 1), 50), "online": True}
+    return {"items": items, "more": int(page) < min(int(data.get("pages") or 1), 500), "online": True}
 
 
 # ------------------------------------------------------------------ warming the cache (background)

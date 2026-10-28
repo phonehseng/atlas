@@ -27,6 +27,7 @@ ask_atlas = nil  -- defined with the key bindings below
 scene_pick_close, scene_undo_now = nil, nil  -- the scene picker / Undo (also defined below)
 clip_mode, clip_set, clip_add, clip_loop, clip_save = nil, nil, nil, nil, nil
 local W, H = 1280, 720
+local pip_zone  -- defined with the mouse handling below
 local S = 1                    -- UI scale (1 at 1080p height)
 local state = {
   visible = 1, last_move = 0, mouse = {x = -1, y = -1}, inside = false, menu = nil, menu_anim = 0,
@@ -588,6 +589,9 @@ local function draw()
   state.buttons = {}
   W, H = mp.get_osd_size()
   if not W or W <= 0 or H <= 0 then return end
+  if W ~= state.last_w or H ~= state.last_h then  -- the window is changing size (going fullscreen, PiP, ...)
+    state.last_w, state.last_h, state.size_t = W, H, mp.get_time()
+  end
   if prop("idle-active", false) then
     if state.last_ass ~= "" then ov.data = ""; ov:update(); state.last_ass = "" end
     state.glass_rects = {}
@@ -611,6 +615,10 @@ local function draw()
   local idle = (not paused) and (t - state.last_move) > 2.5 and not state.menu and not state.scrub and not state.vol_drag
     and not state.clip and not state.prompt
   if state.held or state.mini then idle = true end  -- the credits tile shows just the picture
+  -- a new video, or a size change still under way: nothing until it settles, then the controls fade in (a frame
+  -- drawn for the old size gets stretched by mpv and shows up as icons in the middle of the screen)
+  local settling = t - (state.start_t or -10) < 0.45 or t - (state.size_t or -10) < 0.18
+  if settling then state.visible = 0; idle = true end
   local target = idle and 0 or 1
   state.visible = lerp(state.visible, target, target > state.visible and 0.3 or 0.16)
   if math.abs(state.visible - target) < 0.01 then state.visible = target end
@@ -654,11 +662,57 @@ local function draw()
       local fb, fhv = button("pip-full", W - 10 * P - cd, 10 * P, cd, cd, function() send("pip") end)
       glass_circle(ass, fb.x, fb.y, cd, v * (fhv and 1 or 0.7), fhv)
       icon(ass, fb.x + cd / 2, fb.y + cd / 2, 14 * P, G.unpip, v)
+      -- volume along the bottom: mute button + slider (drag or click)
+      local vol, muted = prop("volume", 100), prop("mute", false)
+      local vg = (muted or vol <= 0) and G.mute or (vol < 34 and G.vol1 or (vol < 67 and G.vol2 or G.vol))
+      local vy, md = H - 46 * P, 28 * P
+      local sw = math.min(150 * P, W - 2 * (28 * P) - md - 24 * P)
+      local mx0 = W / 2 - (md + 8 * P + sw) / 2
+      local mb, mhv = button("pip-mute", mx0, vy - md / 2, md, md, function() mp.commandv("cycle", "mute") end)
+      if mhv then glass_circle(ass, mb.x, mb.y, md, v, true) end
+      icon(ass, mb.x + md / 2, vy, 14 * P, vg, v)
+      local sx = mx0 + md + 8 * P
+      local vf = muted and 0 or clamp(vol / 100, 0, 1)
+      local th = math.max(3, 4 * P)
+      box(ass, sx, vy - th / 2, sw, th, th / 2, "FFFFFF", 0.3 * v)
+      box(ass, sx, vy - th / 2, sw * vf, th, th / 2, WHITE, v)
+      local kd = 11 * P
+      box(ass, sx + sw * vf - kd / 2, vy - kd / 2, kd, kd, kd / 2, WHITE, v)
+      table.insert(state.buttons, {id = "pip-vol", x = sx - 6 * P, y = vy - 12 * P, w = sw + 12 * P, h = 24 * P,
+        slider = true, sx = sx, sw = sw})
     end
-    -- the progress line stays, like a mini player's
+    -- the progress line stays, like a mini player's; hovering the bottom turns it into a seek bar (above the
+    -- 12 px resize edge, which still works under it)
+    local bx, bw = 14 * P, W - 28 * P
+    local by = H - math.max(20, 22 * P)
+    local bar = {x = bx, y = by - math.max(8, 9 * P), w = bw, h = 2 * math.max(8, 9 * P)}
+    local near = state.inside and state.mouse.y > H - 64 * P and not pip_zone()
+    state.bar = (v > 0.05) and bar or nil
+    state.pip_bar = lerp(state.pip_bar or 0, ((near or state.scrub) and v > 0.05) and 1 or 0, 0.3)
+    if state.pip_bar < 0.01 then state.pip_bar = 0 end
+    local k = state.pip_bar
+    local frac = dur > 0 and clamp((state.scrub or pos) / dur, 0, 1) or 0
+    if k > 0 then
+      local hov = hit(bar) or state.scrub ~= nil
+      local bh = (hov and 6 or 4) * P
+      local cache = prop("demuxer-cache-time", pos) or pos
+      box(ass, bx, by - bh / 2, bw, bh, bh / 2, "FFFFFF", 0.25 * k)
+      if dur > 0 then box(ass, bx, by - bh / 2, bw * clamp(math.max(cache, pos) / dur, 0, 1), bh, bh / 2, "FFFFFF", 0.25 * k) end
+      box(ass, bx, by - bh / 2, math.max(bw * frac, bh), bh, bh / 2, RED, k)
+      if hov then
+        local kd = 13 * P
+        box(ass, bx + bw * frac - kd / 2, by - kd / 2, kd, kd, kd / 2, RED, k)
+        local mx = clamp(state.mouse.x, bx, bx + bw)
+        local at = state.scrub or (dur * (mx - bx) / bw)
+        shadow_text(ass, clamp(state.scrub and bx + bw * frac or mx, bx + 24 * P, bx + bw - 24 * P), by - 14 * P, 2, 13 * P,
+          fmt(at), WHITE, k, FONT)
+      end
+    end
     local lh = math.max(2, 3 * P)
-    box(ass, 0, H - lh, W, lh, 0, "FFFFFF", 0.25)
-    if dur > 0 then box(ass, 0, H - lh, W * clamp(pos / dur, 0, 1), lh, 0, RED, 1) end
+    if k < 1 then
+      box(ass, 0, H - lh, W, lh, 0, "FFFFFF", 0.25 * (1 - k))
+      if dur > 0 then box(ass, 0, H - lh, W * frac, lh, 0, RED, 1 - k) end
+    end
   elseif v > 0.003 then
     -- a soft scrim behind the capsule and the title
     -- (bands on whole pixels that touch but never overlap: overlaps show up as dark lines)
@@ -1248,6 +1302,21 @@ local function slider_at(b)
   set_volume(100 * clamp((state.mouse.x - b.sx) / b.sw, 0, 1))
 end
 
+-- PiP: the resize zone under the mouse - corners (a bigger grab zone) "tl"/"tr"/"bl"/"br" and edges (12 px)
+-- "l"/"r"/"t"/"b" - or nil over a button or the middle. Shift while resizing = any shape.
+pip_zone = function()
+  if not state.pip or not state.inside then return nil end
+  for _, b in ipairs(state.buttons) do if hit(b) then return nil end end
+  for _, r in ipairs(state.rows) do if hit(r) then return nil end end
+  local mx, my, c, e = state.mouse.x, state.mouse.y, 20 * clamp(H / 300, 0.6, 1.6), 12
+  local vert = (my < c and "t" or (my > H - c and "b" or nil))
+  local horz = (mx < c and "l" or (mx > W - c and "r" or nil))
+  if vert and horz then return vert .. horz end
+  if mx < e then return "l" elseif mx > W - e then return "r" end
+  if my < e then return "t" elseif my > H - e then return "b" end
+  return nil
+end
+
 local function click_at()
   for _, r in ipairs(state.rows) do
     if hit(r) then
@@ -1303,15 +1372,8 @@ on_left = function(e)
     if state.pip then
       state.pip_moved = false
       if click_at() then down_at = nil; down_on_video = false; return end
-      -- corners resize, anywhere else drags (once the mouse actually moves)
-      -- corners (a bigger grab zone) and edges (12 px) resize; Shift while resizing = any shape
-      local mx, my, c, e = state.mouse.x, state.mouse.y, 20 * clamp(H / 300, 0.6, 1.6), 12
-      local vert = (my < c and "t" or (my > H - c and "b" or nil))
-      local horz = (mx < c and "l" or (mx > W - c and "r" or nil))
-      local zone = nil
-      if vert and horz then zone = vert .. horz
-      elseif mx < e then zone = "l" elseif mx > W - e then zone = "r"
-      elseif my < e then zone = "t" elseif my > H - e then zone = "b" end
+      -- corners and edges resize, anywhere else drags (once the mouse actually moves)
+      local zone = pip_zone()
       if zone then
         state.pip_moved = true
         send("pip-resize", zone)
@@ -1385,12 +1447,18 @@ mp.observe_property("mouse-pos", "native", function(_, mp_)
   if not inside then
     if state.inside then state.last_move = now() - 1.9 end -- left the window: hide soon
     state.inside = false
+    if state.pip_cursor then state.pip_cursor = nil; send("pip-cursor", "") end
     return
   end
   local moved = mp_.x ~= state.mouse.x or mp_.y ~= state.mouse.y
   state.inside = true
   state.mouse = {x = mp_.x, y = mp_.y}
   if moved then poke() end
+  local zone = state.pip and pip_zone() or nil
+  if zone ~= state.pip_cursor then  -- mpv's window can't show resize arrows itself: the player does
+    state.pip_cursor = zone
+    send("pip-cursor", zone or "")
+  end
   if state.scrub and state.bar then
     state.scrub = prop("duration", 0) * clamp((mp_.x - state.bar.x) / state.bar.w, 0, 1)
   end
@@ -1649,6 +1717,7 @@ mp.register_script_message("marquee-reset", function()
   state.next_cancelled = false; state.next_sent = false; state.menu = nil; state.closing_menu = nil
   if state.clip then clip_mode(false) end
   state.held = false; state.scrub = nil; poke()
+  state.visible = 0; state.start_t = now()  -- fade in once the player has settled (see draw)
 end)
 
 mp.add_periodic_timer(1 / 60, draw)

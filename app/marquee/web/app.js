@@ -191,7 +191,15 @@ function rowHTML(row, n) {
 
 /* Rows animate in as they come into view; arrows show only when there's more to scroll. */
 const rowObserver = new IntersectionObserver(entries => {
-  for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); rowObserver.unobserve(e.target); updateArrows(e.target); }
+  for (const e of entries) if (e.isIntersecting) {
+    // snapping is off while the posters glide in (it would lock onto where they are mid-glide, 70 px right, and
+    // the row would jump when they land): start from the true left edge, snap again once they're in place
+    const r = e.target, sc = $('.scroller', r);
+    if (sc) sc.scrollLeft = 0;
+    r.classList.add('in', 'gliding');
+    setTimeout(() => { r.classList.remove('gliding'); updateArrows(r); }, 1200);
+    rowObserver.unobserve(r); updateArrows(r);
+  }
 }, { rootMargin: '0px 0px -60px 0px', threshold: 0.15 });
 function watchRows(scope) {
   let n = 0;
@@ -2471,7 +2479,7 @@ async function renderRequests(page, seq) {
   page.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow orange">Requests</span><h1 style="margin-top:8px">Find something new</h1>
       <p>Ask for films and shows that aren't in your library yet. They appear here once they've downloaded.</p></div>
       <label class="field-pill req-search">${icon('search', 17)}<input type="search" id="req-q" placeholder="Search any film or show" aria-label="Search films and shows to request"></label></div>
-    <div id="mine-wrap"></div><div class="rows" id="rows">${skeletonRows(3)}</div>`;
+    <div id="mine-wrap"></div><div class="rows" id="rows">${skeletonRows(3)}</div><div id="req-all"></div>`;
   let data;
   try { data = await api('/api/requests/discover'); }
   catch (e) {
@@ -2493,10 +2501,13 @@ async function renderRequests(page, seq) {
   const drawRows = () => { rows.innerHTML = rowsData.map(rowHTML).join(''); watchRows(rows); };
   drawRows();
   loadMine(page, seq);
+  const all = $('#req-all', page);
+  browseAll(all, seq);
   let t = 0, rseq = 0;
   $('#req-q', page).addEventListener('input', e => {
     clearTimeout(t);
     const q = e.target.value.trim();
+    all.hidden = !!q;   // search results replace the rows; the endless grid comes back with an empty box
     if (!q) { rseq++; return drawRows(); }
     t = setTimeout(async () => {
       const my = ++rseq;
@@ -2509,6 +2520,51 @@ async function renderRequests(page, seq) {
       } catch (err) { if (my === rseq) rows.innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
     }, 320);
   });
+}
+
+/* Requests: everything Seerr has, under the rows - films, shows or anime by popularity, newest or rating, one
+   page at a time as you scroll (titles you already own are left out by the server). */
+const BROWSE = { kind: 'movies', sort: 'popular' };
+function browseAll(box, seq) {
+  const kinds = [['movies', 'Films'], ['shows', 'Shows'], ['anime', 'Anime']];
+  const sorts = [['popular', 'Popular'], ['new', 'Newest'], ['rating', 'Top rated']];
+  const seg = (name, opts, cur) => `<div class="pill-toggle glass" role="group" aria-label="${name}">${opts.map(([v, n]) =>
+    `<button data-browse-${name.toLowerCase()}="${v}" aria-pressed="${cur === v}">${n}</button>`).join('')}</div>`;
+  box.innerHTML = `<div class="grid-tools browse-tools"><h2>Browse everything</h2>${seg('Kind', kinds, BROWSE.kind)}${seg('Sort', sorts, BROWSE.sort)}</div>
+    <div class="grid" id="browse-grid"></div><div class="grid-more" id="browse-more"><div class="skeleton-row">${'<i></i>'.repeat(8)}</div></div>`;
+  const grid = $('#browse-grid', box), moreEl = $('#browse-more', box);
+  const st = { page: 0, more: true, busy: false, gen: 0, seen: new Set() };
+  const load = async () => {
+    if (st.busy || !st.more || stale(seq) || box.hidden) return;
+    st.busy = true;
+    const gen = st.gen;
+    let d;
+    try { d = await api(`/api/discover/${BROWSE.kind}?page=${st.page + 1}&sort=${BROWSE.sort}`); } catch (e) { d = { items: [], more: false }; }
+    st.busy = false;
+    if (gen !== st.gen || !document.contains(box)) return;
+    st.page++;
+    st.more = !!d.more;
+    const fresh = (d.items || []).filter(c => { const k = `${c.type}:${c.id}`; if (st.seen.has(k)) return false; st.seen.add(k); return true; });
+    grid.insertAdjacentHTML('beforeend', fresh.map((c, k) => tmdbCard(c, Math.min(k, 12))).join(''));
+    if (!st.more && !grid.children.length) grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><span class="big">🔭</span>Nothing more to request here.</div>`;
+    moreEl.hidden = !st.more;
+    if (st.more && moreEl.getBoundingClientRect().top < innerHeight + 600) load();   // still short of the fold
+  };
+  const reset = () => { st.gen++; st.page = 0; st.more = true; st.busy = false; st.seen.clear(); grid.innerHTML = ''; moreEl.hidden = false; load(); };
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-browse-kind], [data-browse-sort]');
+    if (!b) return;
+    if (b.dataset.browseKind) BROWSE.kind = b.dataset.browseKind; else BROWSE.sort = b.dataset.browseSort;
+    $$('button', b.parentElement).forEach(x => x.setAttribute('aria-pressed', x === b));
+    reset();
+  });
+  new IntersectionObserver(ents => { if (ents.some(e => e.isIntersecting)) load(); }, { rootMargin: '0px 0px 800px 0px' }).observe(moreEl);
+  const onScroll = () => {   // backup for the observer: near the bottom = the next page
+    if (!document.contains(box)) return removeEventListener('scroll', onScroll, true);
+    if (!moreEl.hidden && moreEl.getBoundingClientRect().top < innerHeight + 800) load();
+  };
+  addEventListener('scroll', onScroll, { capture: true, passive: true });
+  load();
 }
 
 async function loadMine(page, seq) {
@@ -3185,8 +3241,8 @@ async function openUpNext(p) {
   closePop(true);
   let el = $('#upnext');
   if (!el) { el = document.createElement('div'); el.id = 'upnext'; el.className = 'upnext'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Up next'); document.body.append(el); }
-  el.innerHTML = `<div class="un-bg"></div><div class="un-shade"></div><div class="un-inner"><span class="eyebrow orange">Credits rolling</span>
-    <div class="skel dx-skel-title" style="margin-top:18px"></div><div class="skel dx-skel-line"></div><div class="skel dx-skel-line" style="width:40%"></div></div>`;
+  el.innerHTML = `<div class="un-bg"></div><div class="un-shade"></div><div class="un-stage"><div class="un-main"><span class="eyebrow orange">Credits rolling</span>
+    <div class="skel dx-skel-title" style="margin-top:18px"></div><div class="skel dx-skel-line"></div><div class="skel dx-skel-line" style="width:40%"></div></div></div>`;
   el.hidden = false;
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
   root.classList.add('locked');
@@ -3209,7 +3265,7 @@ async function loadMoments(id) {
 function drawMoments() {
   const box = $('#un-moments');
   if (!box) return;
-  const ms = UN.moments || [];
+  const ms = UN.rowKind === 'picks' ? [] : (UN.moments || []);
   box.hidden = !ms.length;
   if (!ms.length) return;
   box.innerHTML = `<div class="un-picks-head">Moments</div><div class="un-moments-row">${ms.map((m, k) => `
@@ -3260,19 +3316,25 @@ function drawUpNext() {
   const bd = hero && (hero.backdrop || hero.thumb);
   const auto = ep && p.autoplay !== false && S.settings.autoplay_next !== false;
   const sub = hero ? (ep ? [epCode(hero), hero.name, fmtRuntime(hero.runtime)] : [hero.year, hero.type === 'Series' ? 'Series' : fmtRuntime(hero.runtime), hero.age]).filter(Boolean).join(' · ') : '';
+  const others = picks.filter(x => !hero || (x.card.play_id || x.card.id) !== (hero.play_id || hero.id)).slice(0, 8);
+  UN.rowKind = ep ? 'moments' : 'picks';  // one row under the hero: the moments of an episode, picks after a film
   el.innerHTML = `<div class="un-bg">${bd ? `<img src="${esc(bd)}" alt="">` : ''}</div><div class="un-shade"></div>
-    <div class="un-inner">
-      <span class="eyebrow orange">${ep ? 'Next episode' : hero ? 'Up next' : 'That’s a wrap'}</span>
-      ${hero ? `<div class="un-hero">${hero.logo ? `<img class="un-logo logo-img" data-cls="un-title" src="${esc(hero.logo)}" alt="${esc(titleOf(hero))}">` : `<h1 class="un-title">${esc(titleOf(hero))}</h1>`}
-        <div class="un-sub">${esc(sub)}</div>${hero.overview ? `<p class="un-ov">${esc(hero.overview)}</p>` : ''}</div>` : `<h1 class="un-title">${esc(p.title || 'The end')}</h1>`}
-      <div class="un-actions">
-        ${hero ? `<button class="btn light un-play" data-action="upnext-play">${icon('play')} ${ep ? 'Play next' : 'Play'}${auto ? ' <span class="un-count" aria-live="polite"></span>' : ''}</button>` : ''}
-        ${p.after_credits && p.after_credits.length ? `<button class="btn on-dark" data-action="upnext-after">${icon('right')} Skip to after-credits scene</button>` : ''}
-        <button class="btn on-dark" data-action="upnext-full">${icon('film')} Keep watching credits</button>
-        <button class="btn on-dark" data-action="upnext-home">Home</button></div>
-      <div class="un-atlas glass" id="un-atlas" hidden></div>
-      <div class="un-moments" id="un-moments" hidden></div>
-      ${picks.some(x => !hero || (x.card.play_id || x.card.id) !== (hero.play_id || hero.id)) ? `<div class="un-picks-head">More for you</div><div class="un-picks">${picks.filter(x => !hero || (x.card.play_id || x.card.id) !== (hero.play_id || hero.id)).slice(0, 8).map((x, k) => unPick(x, k)).join('')}</div>` : ''}
+    <div class="un-stage">
+      <div class="un-main">
+        <span class="eyebrow orange">${ep ? (auto ? 'Next episode in <span class="un-count" aria-live="polite"></span>' : 'Next episode') : hero ? 'Up next' : 'That’s a wrap'}</span>
+        ${hero ? `<div class="un-hero">${hero.logo ? `<img class="un-logo logo-img" data-cls="un-title" src="${esc(hero.logo)}" alt="${esc(titleOf(hero))}">` : `<h1 class="un-title">${esc(titleOf(hero))}</h1>`}
+          <div class="un-sub">${esc(sub)}</div>${hero.overview ? `<p class="un-ov">${esc(hero.overview)}</p>` : ''}</div>` : `<h1 class="un-title">${esc(p.title || 'The end')}</h1>`}
+        <div class="un-atlas glass" id="un-atlas" hidden></div>
+        <div class="un-actions">
+          ${hero ? `<button class="btn light un-play${auto ? ' counting' : ''}" data-action="upnext-play"><span class="un-fill" aria-hidden="true"></span><span class="un-lbl">${icon('play')} ${ep ? 'Play next' : 'Play'}</span></button>` : ''}
+          ${p.after_credits && p.after_credits.length ? `<button class="btn on-dark" data-action="upnext-after">${icon('right')} After-credits scene</button>` : ''}
+          <button class="btn on-dark" data-action="upnext-full">${icon('film')} Keep watching credits</button>
+          <button class="btn on-dark" data-action="upnext-home">Home</button></div>
+      </div>
+      <div class="un-row">
+        <div class="un-moments" id="un-moments" hidden></div>
+        ${UN.rowKind === 'picks' && others.length ? `<div class="un-picks-head">More for you</div><div class="un-picks">${others.map((x, k) => unPick(x, k)).join('')}</div>` : ''}
+      </div>
     </div>`;
   drawAtlasComment();
   drawMoments();
@@ -3281,12 +3343,15 @@ function drawUpNext() {
     const tick = () => {
       const c = $('.un-count', el);
       if (!c || !UN.open) return clearInterval(UN.timer);
-      const left = Math.max(0, Math.ceil((UN.ends - performance.now()) / 1000));
-      c.textContent = left ? `· ${left}` : '· starting…';
+      const ms = Math.max(0, UN.ends - performance.now());
+      const left = Math.ceil(ms / 1000);
+      c.textContent = left ? `${left}` : 'a moment';
+      const b = $('.un-play', el);
+      if (b) b.style.setProperty('--p', (1 - ms / 10000).toFixed(3));
       if (!left) clearInterval(UN.timer);
     };
     tick();
-    UN.timer = setInterval(tick, 250);
+    UN.timer = setInterval(tick, 100);
   }
 }
 function unPick(x, k) {

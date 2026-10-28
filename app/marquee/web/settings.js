@@ -61,7 +61,7 @@ const KW = {
   mobile_quality: 'phone quality 1080p 720p bitrate', mobile_jellyfin_signin: 'friends jellyfin users accounts phone', 'mobile-https': 'https certificate iphone tailscale',
   'mobile-firewall': 'firewall windows blocked', 'paired phones': 'phone devices remove rename pair', cast: 'cast chromecast airplay tv television',
   cast_quality: 'cast tv quality 1080p 4k', cast_4k_hdr: '4k hdr tv cast', 'tvs on your network': 'tv chromecast airplay devices cast', network: 'firewall cast tv port',
-  storage_limit_gb: 'space disk storage limit gb full quota', storage_enforce: 'space full limit over', delete_after_watch: 'delete remove cleanup space watched auto',
+  storage_limit_gb: 'space disk storage limit gb full quota', storage_enforce: 'space full limit over', delete_after_watch: 'delete remove cleanup space watched auto', shrink_4k_watched: 'shrink 4k 2160p 1080p downgrade compress re-encode space save watched',
   delete_after_watch_days: 'delete wait days', delete_whole_seasons: 'delete seasons', delete_unwatched_days: 'delete unwatched cleanup space old',
   delete_torrents: 'delete torrent seeding qbittorrent hardlink space', smart_request: 'smart seasons next season request auto', smart_request_at: 'smart seasons percent request',
   radarr_url: 'radarr movies arr api key', radarr_key: 'radarr api key', sonarr_url: 'sonarr shows tv arr api key', sonarr_key: 'sonarr api key',

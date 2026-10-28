@@ -1979,6 +1979,11 @@ def start(app):
     if _job is None:
         _job = Job(app)
         _job.thread.start()
+        try:  # watched 4K films to 1080p (Settings > Storage)
+            from . import shrink
+            shrink.start(app)
+        except Exception as e:
+            print("shrink unavailable:", type(e).__name__, e)
     return _job
 
 
@@ -2001,7 +2006,15 @@ def status(app):
             "could": [_slim_item(c) for c in p["could"]][:30],
             "could_size": sum(c["size"] for c in p["could"]), "can_delete": p["can_delete"], "why_not": p["why_not"],
             "totals": p.get("totals"), "settings": settings_view(s), "log": read_log(20),
-            "arrs": [a.public() for a in arrs(app)], "deletes_allowed": deletes_allowed()}
+            "arrs": [a.public() for a in arrs(app)], "deletes_allowed": deletes_allowed(), "shrink": _shrink_status()}
+
+
+def _shrink_status():
+    try:
+        from . import shrink
+        return shrink.status()
+    except Exception:
+        return None
 
 
 def _slim_item(c):
@@ -2012,7 +2025,7 @@ def _slim_item(c):
 
 SETTING_KEYS = ("storage_limit_gb", "storage_enforce", "delete_after_watch", "delete_after_watch_days",
                 "delete_whole_seasons", "delete_unwatched_days", "delete_torrents", "radarr_url", "sonarr_url",
-                "smart_request", "smart_request_at")
+                "smart_request", "smart_request_at", "shrink_4k_watched")
 
 
 def settings_view(s):
@@ -2032,7 +2045,7 @@ def save_settings(changes):
             out[k] = v
         elif k == "smart_request_at":
             out[k] = max(10, min(100, int(v or 50)))
-        elif k in ("delete_after_watch", "delete_whole_seasons", "delete_torrents", "smart_request"):
+        elif k in ("delete_after_watch", "delete_whole_seasons", "delete_torrents", "smart_request", "shrink_4k_watched"):
             out[k] = bool(v)
         elif k == "delete_after_watch_days":
             out[k] = max(0, min(365, int(v or 0)))
@@ -2049,4 +2062,7 @@ def save_settings(changes):
     s = settings.save(out)
     forget()
     kick()
+    if out.get("shrink_4k_watched"):
+        from . import shrink
+        shrink.kick()
     return settings_view(s)

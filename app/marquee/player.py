@@ -304,12 +304,13 @@ class Player:
             src_path = (item.get("MediaSources") or [{}])[0].get("Path") or item.get("Path")
             self.thumbs.reset(item, src_path if src_path and os.path.exists(src_path) or local
                               else jf.stream_url(item, "original"))
+        self._sync_output(st)
         self.mpv.loadfile(url, start=f"{max(0.0, start):.3f}")
         self.mpv.pause = False
         self.playing = True
         self._last_report = time.time()
         self._pos = max(0.0, start)
-        self._ui(self._show)
+        self._ui(self._show_full)  # picked from the Up-next page: the credits tile goes back to full size first
         if st.get("fullscreen_on_play", True) and not self.app.fullscreen and not self.pip and not self.mini:
             self.app.toggle_fullscreen()   # "Fullscreen when playing"; stop() goes back to a window
             self._set("fullscreen", True)
@@ -587,6 +588,12 @@ class Player:
             print("subtitles failed:", e)
 
     # ------------------------------------------------------------------ window
+    def _show_full(self):
+        if self.mini:
+            self._unmini_now()
+            self.app.notify_ui("credits-closed", {"item_id": (self.item or {}).get("Id")})
+        self._show()
+
     def _show(self):
         self.app.webview_control().Visible = False
         self.panel.Visible = True
@@ -688,6 +695,9 @@ class Player:
                 self.thumbs.request(float(value), *[int(float(m)) for m in more[:5]])
             except (ValueError, TypeError):
                 pass
+            return
+        if action == "pip-cursor":  # PiP: the resize zone under the mouse ("" = none)
+            self._pip_cursor(value)
             return
         if action == "thumb-hide":
             self.thumbs.hide()
@@ -849,8 +859,26 @@ class Player:
         except Exception as e:
             print("player action failed:", action, e)
 
+    def _sync_output(self, st):
+        """The output device and exclusive mode from Settings, applied to the running mpv (it only reads them when
+        it's created, so without this a new device needed a restart). Changing them reopens the audio output."""
+        if not self.mpv or self._dev_mute:
+            return
+        want = st["audio_device"] or "auto"
+        try:
+            if (self.mpv.audio_device or "auto") != want:
+                self.mpv.audio_device = want
+            excl = "yes" if st["passthrough"] else "no"
+            if str(self.mpv.audio_exclusive).lower() not in (excl, "true" if excl == "yes" else "false"):
+                self.mpv.audio_exclusive = excl
+        except Exception as e:
+            print("audio output change failed:", e)
+        self._set("audio_device", want)
+
     def settings_changed(self):
         """Settings saved in the app: apply what affects a running video."""
+        if self.mpv:
+            self._sync_output(settings.load())   # also between videos: the next one plays on the new device
         if self.mpv and self.playing:
             st = settings.load()
             self._publish_settings(st)
@@ -1012,6 +1040,47 @@ class Player:
         except Exception:
             pass
 
+    def _pip_cursor(self, zone):
+        """Resize arrows over the mini player's edges and corners. The picture is mpv's own child window, which
+        sets a plain arrow on every WM_SETCURSOR, so its window procedure is subclassed (once) to answer that
+        message with the arrow for the zone the controls report."""
+        self._cursor_zone = zone or ""
+        u32 = ctypes.windll.user32
+        if getattr(self, "_cursor_hook", None) and not u32.IsWindow(ctypes.c_void_p(self._cursor_hwnd)):
+            self._cursor_hook = None  # mpv's window was recreated: hook the new one
+        if not getattr(self, "_cursor_hook", None):
+            hwnd = u32.FindWindowExW(ctypes.c_void_p(self.panel.Handle.ToInt64()), None, "mpv", None)
+            if not hwnd:
+                return
+            LRESULT = ctypes.c_ssize_t
+            WNDPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t)
+            u32.CallWindowProcW.restype = LRESULT
+            u32.CallWindowProcW.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t,
+                                            ctypes.c_ssize_t)
+            u32.SetWindowLongPtrW.restype = ctypes.c_void_p
+            u32.SetWindowLongPtrW.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
+            u32.LoadCursorW.restype = ctypes.c_void_p
+            u32.LoadCursorW.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+            u32.SetCursor.argtypes = (ctypes.c_void_p,)
+            # IDC_SIZENWSE, IDC_SIZENESW, IDC_SIZEWE, IDC_SIZENS
+            ids = {"tl": 32642, "br": 32642, "tr": 32643, "bl": 32643, "l": 32644, "r": 32644, "t": 32645, "b": 32645}
+            arrows = {z: u32.LoadCursorW(None, ctypes.c_void_p(i)) for z, i in ids.items()}
+
+            def proc(h, msg, wp, lp):
+                if msg == 0x0020 and (lp & 0xFFFF) == 1 and self.pip:  # WM_SETCURSOR over the client area
+                    cur = arrows.get(getattr(self, "_pip_drag_zone", None) or self._cursor_zone)
+                    if cur:
+                        u32.SetCursor(cur)
+                        return 1
+                return u32.CallWindowProcW(old, h, msg, wp, lp)
+
+            self._cursor_hook = WNDPROC(proc)  # kept alive for as long as the window lives
+            old = u32.SetWindowLongPtrW(ctypes.c_void_p(hwnd), -4, ctypes.cast(self._cursor_hook, ctypes.c_void_p))
+            self._cursor_hwnd = hwnd
+        # show it now rather than on the next mouse move (WM_SETCURSOR, HTCLIENT, WM_MOUSEMOVE)
+        u32.PostMessageW(ctypes.c_void_p(self._cursor_hwnd), 0x0020, ctypes.c_void_p(self._cursor_hwnd),
+                         ctypes.c_void_p((0x0200 << 16) | 1))
+
     def _pip_track(self, mode):
         """Move ("move") or resize the mini player while the left button is held: corners "tl"/"tr"/"bl"/"br" and
         edges "l"/"r"/"t"/"b", keeping the video's shape (hold Shift to resize freely), from 240 px wide up to
@@ -1047,6 +1116,7 @@ class Player:
         flags = 0x0004 | 0x0010  # SWP_NOZORDER | SWP_NOACTIVATE
         cur = POINT()
         last = None
+        self._pip_drag_zone = None if mode == "move" else mode  # the arrow stays put while the window resizes
         while u32.GetAsyncKeyState(0x01) & 0x8000 and self.pip:
             u32.GetCursorPos(ctypes.byref(cur))
             dx, dy = cur.x - start.x, cur.y - start.y
@@ -1080,6 +1150,7 @@ class Player:
                     u32.SetWindowPos(hwnd, None, x, y, w, h, flags)
             last = pos
             time.sleep(0.008)
+        self._pip_drag_zone = None
         u32.GetWindowRect(hwnd, ctypes.byref(rect))
         settings.save({"pip_bounds": [rect.l, rect.t, rect.r - rect.l, rect.b - rect.t]})
 

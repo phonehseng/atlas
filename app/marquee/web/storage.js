@@ -397,6 +397,8 @@ function mountSettings(el, opts = {}) {
       ${s.delete_after_watch ? sw('delete_whole_seasons', 'Whole seasons only', 'Shows: wait until a season is fully watched (off: watched episodes go one by one; never the next one up or the season being watched).', s.delete_whole_seasons) : ''}
       <div class="set stack"><div class="lbl"><b>Remove what nobody started</b><span>Titles nobody has started, a while after they arrived. Not ones requested recently.</span></div>
         <div class="opt-row">${[[0, 'Off'], [30, '30 days'], [60, '60 days'], [90, '90 days'], [180, '180 days']].map(([v, l]) => `<button class="opt" data-mqs-seg="delete_unwatched_days" data-v="${v}" aria-pressed="${+s.delete_unwatched_days === v}">${l}</button>`).join('')}</div></div>
+      ${sw('shrink_4k_watched', 'Shrink 4K films after watching', 'Once you’ve watched a 4K film, this PC re-encodes it to 1080p (HDR, audio and subtitles kept) and sends the 4K file to the Recycle Bin. Radarr stops monitoring it so it isn’t downloaded again. Runs only while nothing is playing.', s.shrink_4k_watched)}
+      ${shrinkLine(d.shrink)}
       ${sw('delete_torrents', 'Also remove the seeding torrent', 'A file hardlinked to a torrent only frees its space once the torrent goes too.', s.delete_torrents)}
       <div class="mqs-actions"><button class="btn small ghost" data-mqs-act="preview">${ico('search', 15)} Preview cleanup</button></div>
       <div class="mqs-plan" ${st.plan ? '' : 'hidden'}>${st.plan ? planHTML(st.plan) : ''}</div>
@@ -464,11 +466,20 @@ function mountSettings(el, opts = {}) {
   load();
 }
 
+/* What "Shrink 4K films" is doing: the film being encoded, else what it has saved so far. */
+function shrinkLine(sh) {
+  if (!sh) return '';
+  if (sh.current) return `<span class="mqs-line">Shrinking ${esc(sh.current.title)} · ${Math.round((sh.current.progress || 0) * 100)}%</span>`;
+  if (sh.saved > 0) return `<span class="mqs-line mqs-dim">${sh.done.length} film${sh.done.length === 1 ? '' : 's'} shrunk so far, ${esc(size(sh.saved))} freed.</span>`;
+  return '';
+}
+
 /* ================================================================== events from Python (app.notify_ui) */
 function onEvent(name, data) {
   data = data || {};
   if (name === 'storage-leaving') { toast(data.message || 'Some titles leave tomorrow to save space', { ms: 8000, action: 'Review', onAction: () => { location.hash = '#/settings/storage'; } }); return true; }
   if (name === 'storage-removed') { const n = (data.items || []).length; toast(`${n} title${n === 1 ? '' : 's'} removed to save space. Watch history is kept.`, { icon: 'check', ms: 6000 }); return true; }
+  if (name === 'storage-shrunk') { toast(data.message || 'A 4K film is now 1080p', { icon: 'check', ms: 7000 }); return true; }
   if (name === 'smart-request') { toast(data.message || 'Next season requested', { icon: 'sparkle', ms: 7000 }); return true; }
   return false;
 }

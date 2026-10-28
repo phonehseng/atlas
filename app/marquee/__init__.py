@@ -2,7 +2,7 @@
 import os
 import subprocess
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 
 if os.name == "nt":
     # Atlas is a windowed app: every helper it starts (ffmpeg, ffprobe, tailscale, powershell, llama-server...)
