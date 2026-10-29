@@ -3,6 +3,7 @@ package wizard
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -141,7 +142,7 @@ func (s *Server) Stop() {
 // page can't drive the installer).
 func (s *Server) api(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Setup-Token") != s.Token {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Setup-Token")), []byte(s.Token)) != 1 { // no timing hints on a LAN-facing server
 			writeJSON(w, 403, core.M{"error": "This page has expired - open the link the setup program printed."})
 			return
 		}
