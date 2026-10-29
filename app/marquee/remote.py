@@ -274,7 +274,9 @@ def _mtime():
 def _client_ip():
     ip = request.remote_addr or "?"
     if ip == "127.0.0.1" and request.headers.get("X-Forwarded-For"):  # through `tailscale serve`
-        ip = request.headers["X-Forwarded-For"].split(",")[0].strip() or ip
+        # The proxy appends the real address last; anything before it was sent by the client, so a guesser could
+        # otherwise give every try a new made-up address and never hit the failure limit.
+        ip = request.headers["X-Forwarded-For"].split(",")[-1].strip() or ip
     return ip
 
 
