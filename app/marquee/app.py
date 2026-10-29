@@ -52,6 +52,30 @@ class App:
     def toggle_fullscreen(self):
         self.window.toggle_fullscreen()
         self.fullscreen = not self.fullscreen
+        self._refresh_frame()
+
+    def _refresh_frame(self):
+        """pywebview turns Windows 11's rounded corners and window border off (or back on) only after it has
+        resized the window, and Windows applies those settings at the next size change: until then fullscreen
+        keeps a thin border and rounded corners. Set them again and nudge the size by a pixel so they take."""
+        try:
+            from System import Action
+            form = self.window.native
+
+            def apply():
+                hwnd = ctypes.c_void_p(form.Handle.ToInt64())
+                for attr, value in ((33, 1 if self.fullscreen else 0),  # corners: don't round / default
+                                    (34, 0xFFFFFFFE if self.fullscreen else 0xFFFFFFFF)):  # border: none / default
+                    v = ctypes.c_uint(value)
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), 4)
+                b = form.Bounds
+                flags = 0x0004 | 0x0010  # SWP_NOZORDER | SWP_NOACTIVATE
+                ctypes.windll.user32.SetWindowPos(hwnd, None, b.X, b.Y, b.Width, b.Height - 1, flags)
+                ctypes.windll.user32.SetWindowPos(hwnd, None, b.X, b.Y, b.Width, b.Height, flags)
+
+            form.Invoke(Action(apply))
+        except Exception as e:
+            print("window frame refresh failed:", e)
 
     def notify_ui(self, event, data=None):
         try:
